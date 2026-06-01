@@ -36,6 +36,26 @@
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
   }
 
+  /* Music on/off — always visible, top-right. */
+  #btn-mute {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: rgba(20,22,34,0.45);
+    color: #fff; font-size: 22px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  #btn-mute:active { transform: scale(0.92); }
+
   /* On-screen touch controls — hidden by default, shown on touch devices. */
   #touch-controls { display: none; }
   body.touch #touch-controls { display: block; }
@@ -76,6 +96,7 @@
 </head>
 <body>
 <canvas id="game" width="800" height="450"></canvas>
+<button id="btn-mute" aria-label="Toggle music">&#128266;</button>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
   <div id="btn-right" class="btn">&#9654;</div>
@@ -178,13 +199,13 @@ const RIGHT_KEYS = ["ArrowRight", "KeyD"];
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
-  if (e.code === "KeyR" && state === "gameover") resetGame();
-  if (state === "start" && (JUMP_KEYS.includes(e.code) || e.code === "Enter")) state = "playing";
+  if (e.code === "KeyR" && state === "gameover") { resetGame(); Music.start(); }
+  if (state === "start" && (JUMP_KEYS.includes(e.code) || e.code === "Enter")) { state = "playing"; Music.start(); }
 });
 window.addEventListener("keyup", (e) => { keys[e.code] = false; });
 canvas.addEventListener("mousedown", () => {
-  if (state === "start") state = "playing";
-  else if (state === "gameover") resetGame();
+  if (state === "start") { state = "playing"; Music.start(); }
+  else if (state === "gameover") { resetGame(); Music.start(); }
 });
 function anyKey(list) { return list.some(k => keys[k]); }
 
@@ -206,8 +227,8 @@ document.addEventListener("touchend", (e) => {
 
 // Start / restart the game from a tap (mirrors the click handler).
 function tapAdvance() {
-  if (state === "start") state = "playing";
-  else if (state === "gameover") resetGame();
+  if (state === "start") { state = "playing"; Music.start(); }
+  else if (state === "gameover") { resetGame(); Music.start(); }
 }
 canvas.addEventListener("pointerdown", tapAdvance);
 
@@ -237,6 +258,84 @@ function bindButton(id, code, onPress) {
 bindButton("btn-left",  "ArrowLeft");
 bindButton("btn-right", "ArrowRight");
 bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
+
+/* =============================================================
+   MUSIC — original cheerful 8-bit loop, synthesized live with the
+   Web Audio API (no audio files, no libraries). A lookahead
+   scheduler queues notes slightly ahead of the clock so timing
+   stays rock-solid regardless of frame rate.
+   ============================================================= */
+const Music = (() => {
+  const NOTE = {
+    E2:82.41, F2:87.31, G2:98.00, A2:110.00, B2:123.47,
+    C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+    C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+    C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
+    C6:1046.50
+  };
+  const M = n => NOTE[n] || 0;
+  // 32 eighth-notes over a I-V-vi-IV feel in C major (original melody).
+  const melody = ["C5",0,"E5","G5","C6",0,"G5",0, "B4",0,"D5","G5","B5",0,"G5",0,
+                  "A4",0,"C5","E5","A5",0,"E5",0, "F4",0,"A4","C5","F5",0,"C5","E5"].map(M);
+  const bass   = ["C3",0,0,0,"G3",0,0,0, "G2",0,0,0,"D3",0,0,0,
+                  "A2",0,0,0,"E3",0,0,0, "F2",0,0,0,"C3",0,0,0].map(M);
+  const STEP = 0.15;            // seconds per eighth note
+  let actx = null, master = null, enabled = true;
+  let step = 0, nextTime = 0, ticker = null;
+
+  function ensure() {
+    if (actx) return;
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    master = actx.createGain();
+    master.gain.value = 0.16;   // overall volume
+    master.connect(actx.destination);
+  }
+  function blip(freq, time, dur, type, vol) {
+    if (!freq) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(vol, time + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    o.connect(g); g.connect(master);
+    o.start(time); o.stop(time + dur + 0.02);
+  }
+  function schedule() {
+    while (nextTime < actx.currentTime + 0.12) {
+      blip(melody[step], nextTime, STEP * 0.9,  "square",   0.5);
+      blip(bass[step],   nextTime, STEP * 0.95, "triangle", 0.8);
+      nextTime += STEP;
+      step = (step + 1) % melody.length;
+    }
+  }
+  return {
+    start() {
+      if (!enabled) return;
+      ensure();
+      if (actx.state === "suspended") actx.resume();
+      if (ticker) return;                    // already playing
+      step = 0; nextTime = actx.currentTime + 0.06;
+      ticker = setInterval(schedule, 25);
+    },
+    stop() { if (ticker) { clearInterval(ticker); ticker = null; } },
+    toggle() {
+      enabled = !enabled;
+      if (!enabled) this.stop();
+      return enabled;
+    },
+    get enabled() { return enabled; }
+  };
+})();
+
+const muteBtn = document.getElementById("btn-mute");
+function refreshMute() { muteBtn.textContent = Music.enabled ? "\u{1F50A}" : "\u{1F507}"; }
+muteBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  const on = Music.toggle();
+  if (on && state === "playing") Music.start();
+  refreshMute();
+});
+refreshMute();
 
 /* =============================================================
    STATE
@@ -356,7 +455,7 @@ function loseLife() {
   if (invulnTimer > 0) return;
   lives -= 1;
   invulnTimer = INVULN_TIME;
-  if (lives <= 0) { lives = 0; state = "gameover"; }
+  if (lives <= 0) { lives = 0; state = "gameover"; Music.stop(); }
 }
 
 /* =============================================================
