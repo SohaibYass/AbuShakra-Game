@@ -45,6 +45,16 @@ no build step**. Must run by just opening the file or serving the folder.
   slide the sprite. Make sure lean/flip use the facing direction consistently.
 - Clean, organized code with section headers and tunable constants grouped at the top.
 
+**Game feel / "juice":**
+- Add a lightweight particle system (array of {x,y,vx,vy,grav,life,size,color}):
+  dust on hard landings, gold sparkle on coin pickup, a poof when an enemy is
+  stomped. Gate landing dust on impact speed so it doesn't spam while walking.
+- Add screen-shake: a magnitude that decays each frame; on a hit shake hard, on a
+  stomp shake a little. Apply it as a small random `ctx.translate` around the whole
+  draw, inside save/restore.
+- Run particles + shake every frame regardless of game state (cosmetic), so they
+  settle cleanly even on the game-over screen.
+
 **Music & sound (Web Audio API, no files):**
 - Synthesize an **original** cheerful 8-bit chiptune loop with the Web Audio API
   (oscillators + a small gain envelope per note, driven by a lookahead scheduler).
@@ -77,8 +87,18 @@ no build step**. Must run by just opening the file or serving the folder.
   when online, cached copy only as an offline fallback) and static assets
   cache-first. A fully cache-first shell makes phones keep a stale page for an
   extra load, so fixes look like they "didn't apply."
+- **Auto-reload on update:** in the page, listen for `controllerchange` and
+  `location.reload()` once (guard against loops), and call `reg.update()` on load.
+  With `skipWaiting()` + `clients.claim()` in the worker, a freshly deployed
+  version then applies within a single launch instead of the next one.
 - **Always bump the service-worker cache version when any file changes**, or
   installed clients keep serving the old version offline.
+- **One-time stale-SW caveat:** the auto-reload only helps *after* a worker that
+  contains it is installed. Going from an older cache-first worker to this setup
+  still needs one manual clear on the device (delete + re-add the home-screen app,
+  or clear the site's website data). Tell the user this so a live update that
+  "didn't show up on phone" isn't mistaken for a deploy failure — verify the
+  server with `curl` first, then it's almost always the device cache.
 
 **Deployment (optional):**
 - Set it up to deploy to GitHub Pages via a GitHub Actions workflow
