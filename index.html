@@ -129,6 +129,9 @@ const GROUND_Y = 392;          // top surface of the continuous ground
 const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
 const STOMP_BOUNCE   = -520;   // px/s bounce after a stomp
+const COYOTE_TIME    = 0.10;   // s after leaving a ledge you can still jump
+const JUMP_BUFFER    = 0.12;   // s a jump press is remembered before landing
+const JUMP_CUT       = 0.45;   // upward speed kept when jump is released early
 const PLAYER_SPEED   = 280;    // px/s walk speed
 const ENEMY_SPEED    = 90;     // px/s, enemies walk left
 const CAMERA_ANCHOR  = 0.35;   // player kept at 35% from left of screen
@@ -476,7 +479,8 @@ function updateEnemies(dt) {
    ============================================================= */
 function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
-             vx: 0, vy: 0, onGround: true, facing: 1, walkPhase: 0 };
+             vx: 0, vy: 0, onGround: true, facing: 1, walkPhase: 0,
+             coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false };
 }
 
 function updatePlayer(dt) {
@@ -489,11 +493,31 @@ function updatePlayer(dt) {
   // Advance the walk cycle only while moving on the ground.
   if (move !== 0 && player.onGround) player.walkPhase += dt * 11;
 
-  if (anyKey(JUMP_KEYS) && player.onGround) {
+  // --- Jump feel: coyote time, jump buffering, variable height ---
+  // Coyote: keep "can jump" alive briefly after walking off a ledge.
+  if (player.onGround) player.coyoteTimer = COYOTE_TIME;
+  else player.coyoteTimer = Math.max(0, player.coyoteTimer - dt);
+
+  const jumpHeld     = anyKey(JUMP_KEYS);
+  const jumpPressed  = jumpHeld && !player.prevJump;   // rising edge
+  const jumpReleased = !jumpHeld && player.prevJump;   // falling edge
+  player.prevJump = jumpHeld;
+
+  // Buffer a fresh press so it still fires if made just before landing.
+  if (jumpPressed) player.jumpBufferTimer = JUMP_BUFFER;
+  else if (player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
+
+  if (player.jumpBufferTimer > 0 && (player.onGround || player.coyoteTimer > 0)) {
     player.vy = JUMP_VELOCITY;
     player.onGround = false;
+    player.coyoteTimer = 0;
+    player.jumpBufferTimer = 0;
     Music.sfxJump();
   }
+
+  // Variable height: releasing the button early cuts the rise -> short hop.
+  if (jumpReleased && player.vy < 0) player.vy *= JUMP_CUT;
+
   player.vy += GRAVITY * dt;
 
   player.x += player.vx * dt;
