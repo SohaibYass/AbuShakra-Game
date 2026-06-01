@@ -41,20 +41,37 @@
   body.touch #touch-controls { display: block; }
   #touch-controls .btn {
     position: fixed;
-    bottom: max(18px, env(safe-area-inset-bottom));
-    width: 78px; height: 78px;
+    bottom: max(22px, env(safe-area-inset-bottom));
+    display: flex; align-items: center; justify-content: center;
+    width: 88px; height: 88px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.18);
-    border: 2px solid rgba(255,255,255,0.45);
+    background: rgba(20,22,34,0.42);
+    border: 2px solid rgba(255,255,255,0.6);
     color: #fff;
-    font-size: 34px; line-height: 74px; text-align: center;
+    font-size: 38px; font-weight: 700;
+    text-align: center;
     touch-action: none;
-    backdrop-filter: blur(2px);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25);
+    transition: transform 0.06s ease, background 0.06s ease;
+    cursor: pointer;
   }
-  #touch-controls .btn.pressed { background: rgba(255,255,255,0.42); }
-  #btn-left  { left: 18px; }
-  #btn-right { left: 110px; }
-  #btn-jump  { right: 18px; width: 92px; height: 92px; line-height: 88px; font-size: 26px; }
+  #touch-controls .btn.pressed {
+    background: rgba(120,180,255,0.7);
+    border-color: #fff;
+    transform: scale(0.92);
+  }
+  #touch-controls #btn-left  { left: max(20px, env(safe-area-inset-left)); }
+  #touch-controls #btn-right { left: calc(max(20px, env(safe-area-inset-left)) + 104px); }
+  #touch-controls #btn-jump  {
+    right: max(20px, env(safe-area-inset-right));
+    width: 104px; height: 104px;
+    font-size: 22px; letter-spacing: 1px;
+    background: rgba(60,150,90,0.5);
+  }
+  #touch-controls #btn-jump.pressed { background: rgba(90,220,130,0.8); }
 </style>
 </head>
 <body>
@@ -175,6 +192,18 @@ function anyKey(list) { return list.some(k => keys[k]); }
 const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
 if (isTouch) document.body.classList.add("touch");
 
+/* iOS Safari ignores `user-scalable=no`, so the page can still zoom while
+   playing. Block the two culprits: pinch (gesture* events) and double-tap. */
+["gesturestart", "gesturechange", "gestureend"].forEach((t) =>
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false })
+);
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 320) e.preventDefault();  // suppress double-tap zoom
+  lastTouchEnd = now;
+}, { passive: false });
+
 // Start / restart the game from a tap (mirrors the click handler).
 function tapAdvance() {
   if (state === "start") state = "playing";
@@ -182,15 +211,27 @@ function tapAdvance() {
 }
 canvas.addEventListener("pointerdown", tapAdvance);
 
-// Bind an on-screen button to a virtual key. Multi-touch safe.
+// Bind an on-screen button to a virtual key. Multi-touch safe; uses touch
+// events with preventDefault so iOS never treats taps as zoom/scroll.
 function bindButton(id, code, onPress) {
   const el = document.getElementById(id);
   if (!el) return;
-  const press = (e) => { e.preventDefault(); keys[code] = true; el.classList.add("pressed"); if (onPress) onPress(); };
-  const release = (e) => { e.preventDefault(); keys[code] = false; el.classList.remove("pressed"); };
+  const press = (e) => {
+    e.preventDefault();
+    if (keys[code]) return;
+    keys[code] = true; el.classList.add("pressed");
+    if (onPress) onPress();
+  };
+  const release = (e) => {
+    e.preventDefault();
+    keys[code] = false; el.classList.remove("pressed");
+  };
+  el.addEventListener("touchstart", press,   { passive: false });
+  el.addEventListener("touchend",   release, { passive: false });
+  el.addEventListener("touchcancel", release, { passive: false });
+  // Mouse fallback (desktop testing).
   el.addEventListener("pointerdown", press);
   el.addEventListener("pointerup", release);
-  el.addEventListener("pointercancel", release);
   el.addEventListener("pointerleave", release);
 }
 bindButton("btn-left",  "ArrowLeft");
