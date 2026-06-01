@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v4";
+const CACHE = "abushakra-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,16 +28,40 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// Cache-first, falling back to network (and caching new GETs).
+// The HTML/JS lives in index.html, so it changes often. Serve the page
+// network-first (always fresh when online, cached copy when offline) and
+// keep static assets (images, manifest, icons) cache-first for speed.
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET") return;
-  e.respondWith(
-    caches.match(e.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(e.request)
+  const req = e.request;
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+  const isDoc =
+    req.mode === "navigate" ||
+    url.pathname.endsWith("/") ||
+    url.pathname.endsWith("index.html");
+
+  if (isDoc) {
+    e.respondWith(
+      fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // Cache-first for everything else, caching new GETs as they arrive.
+  e.respondWith(
+    caches.match(req).then((hit) => {
+      if (hit) return hit;
+      return fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
           return res;
         })
         .catch(() => hit);
