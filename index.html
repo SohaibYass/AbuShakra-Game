@@ -285,10 +285,22 @@ const Music = (() => {
 
   function ensure() {
     if (actx) return;
-    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;            // very old browser -> silently no music
+    actx = new AC();
     master = actx.createGain();
     master.gain.value = 0.16;   // overall volume
     master.connect(actx.destination);
+  }
+  // iOS only starts audio from inside a user gesture. Create+resume the
+  // context and play one silent sample to "unlock" it for later use.
+  function unlock() {
+    ensure();
+    if (!actx) return;
+    if (actx.state === "suspended") actx.resume();
+    const b = actx.createBuffer(1, 1, 22050);
+    const s = actx.createBufferSource();
+    s.buffer = b; s.connect(actx.destination); s.start(0);
   }
   function blip(freq, time, dur, type, vol) {
     if (!freq) return;
@@ -301,6 +313,10 @@ const Music = (() => {
     o.start(time); o.stop(time + dur + 0.02);
   }
   function schedule() {
+    if (!actx) return;
+    // If the clock ran ahead of us (e.g. context was suspended while the
+    // phone was locked), don't queue notes in the past — catch up cleanly.
+    if (nextTime < actx.currentTime) nextTime = actx.currentTime + 0.05;
     while (nextTime < actx.currentTime + 0.12) {
       blip(melody[step], nextTime, STEP * 0.9,  "square",   0.5);
       blip(bass[step],   nextTime, STEP * 0.95, "triangle", 0.8);
@@ -309,14 +325,17 @@ const Music = (() => {
     }
   }
   return {
+    unlock,
     start() {
       if (!enabled) return;
       ensure();
+      if (!actx) return;
       if (actx.state === "suspended") actx.resume();
       if (ticker) return;                    // already playing
       step = 0; nextTime = actx.currentTime + 0.06;
       ticker = setInterval(schedule, 25);
     },
+    resume() { if (actx && actx.state === "suspended") actx.resume(); },
     stop() { if (ticker) { clearInterval(ticker); ticker = null; } },
     toggle() {
       enabled = !enabled;
@@ -336,6 +355,24 @@ muteBtn.addEventListener("click", (e) => {
   refreshMute();
 });
 refreshMute();
+
+// Unlock audio on the very first user interaction (covers iOS, which only
+// allows audio to begin from inside a gesture). Runs once.
+function firstGestureUnlock() {
+  Music.unlock();
+  window.removeEventListener("pointerdown", firstGestureUnlock);
+  window.removeEventListener("touchstart", firstGestureUnlock);
+  window.removeEventListener("keydown", firstGestureUnlock);
+}
+window.addEventListener("pointerdown", firstGestureUnlock, { passive: true });
+window.addEventListener("touchstart", firstGestureUnlock, { passive: true });
+window.addEventListener("keydown", firstGestureUnlock);
+
+// iOS suspends the audio context when the tab is backgrounded or the phone
+// locks; resume it when we come back and the game is still in play.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && state === "playing") Music.resume();
+});
 
 /* =============================================================
    STATE
