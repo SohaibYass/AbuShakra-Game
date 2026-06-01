@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>2D Platformer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>AbuShakra Adventure</title>
 <style>
   html, body {
     margin: 0;
@@ -14,6 +14,9 @@
     align-items: center;
     justify-content: center;
     font-family: "Segoe UI", Arial, sans-serif;
+    touch-action: none;            /* no scroll/zoom gestures while playing */
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   #game {
     image-rendering: pixelated;
@@ -22,10 +25,35 @@
     max-height: 100vh;
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
   }
+
+  /* On-screen touch controls — hidden by default, shown on touch devices. */
+  #touch-controls { display: none; }
+  body.touch #touch-controls { display: block; }
+  #touch-controls .btn {
+    position: fixed;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    width: 78px; height: 78px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.45);
+    color: #fff;
+    font-size: 34px; line-height: 74px; text-align: center;
+    touch-action: none;
+    backdrop-filter: blur(2px);
+  }
+  #touch-controls .btn.pressed { background: rgba(255,255,255,0.42); }
+  #btn-left  { left: 18px; }
+  #btn-right { left: 110px; }
+  #btn-jump  { right: 18px; width: 92px; height: 92px; line-height: 88px; font-size: 26px; }
 </style>
 </head>
 <body>
 <canvas id="game" width="800" height="450"></canvas>
+<div id="touch-controls">
+  <div id="btn-left"  class="btn">&#9664;</div>
+  <div id="btn-right" class="btn">&#9654;</div>
+  <div id="btn-jump"  class="btn">JUMP</div>
+</div>
 <script>
 "use strict";
 
@@ -54,13 +82,9 @@ const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
 const STOMP_BOUNCE   = -520;   // px/s bounce after a stomp
 const PLAYER_SPEED   = 280;    // px/s walk speed
-const CLIMB_SPEED    = 170;    // px/s vertical speed while on a rope
 const ENEMY_SPEED    = 90;     // px/s, enemies walk left
 const CAMERA_ANCHOR  = 0.35;   // player kept at 35% from left of screen
 const BG_PARALLAX     = 0.5;   // background scrolls at half camera speed
-
-const ROPE_CHANCE    = 0.55;   // chance a tall-enough platform spawns a rope
-const ROPE_GRAB_TOL  = 22;     // how close (px) the player's center must be to grab
 
 const COIN_POINTS    = 10;
 const STOMP_POINTS   = 50;
@@ -124,8 +148,6 @@ const keys = {};
 const JUMP_KEYS = ["Space", "ArrowUp", "KeyW"];
 const LEFT_KEYS = ["ArrowLeft", "KeyA"];
 const RIGHT_KEYS = ["ArrowRight", "KeyD"];
-const UP_KEYS = ["ArrowUp", "KeyW"];
-const DOWN_KEYS = ["ArrowDown", "KeyS"];
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
@@ -139,12 +161,38 @@ canvas.addEventListener("mousedown", () => {
 });
 function anyKey(list) { return list.some(k => keys[k]); }
 
+/* ---- Touch controls (phones / tablets) ---- */
+const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+if (isTouch) document.body.classList.add("touch");
+
+// Start / restart the game from a tap (mirrors the click handler).
+function tapAdvance() {
+  if (state === "start") state = "playing";
+  else if (state === "gameover") resetGame();
+}
+canvas.addEventListener("pointerdown", tapAdvance);
+
+// Bind an on-screen button to a virtual key. Multi-touch safe.
+function bindButton(id, code, onPress) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const press = (e) => { e.preventDefault(); keys[code] = true; el.classList.add("pressed"); if (onPress) onPress(); };
+  const release = (e) => { e.preventDefault(); keys[code] = false; el.classList.remove("pressed"); };
+  el.addEventListener("pointerdown", press);
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+  el.addEventListener("pointerleave", release);
+}
+bindButton("btn-left",  "ArrowLeft");
+bindButton("btn-right", "ArrowRight");
+bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
+
 /* =============================================================
    STATE
    ============================================================= */
 let state = "start";
 let score, lives, invulnTimer, enemySpawnTimer;
-let player, platforms, coins, enemies, ropes;
+let player, platforms, coins, enemies;
 let cameraX, worldGenX;
 
 function rand(a, b) { return a + Math.random() * (b - a); }
@@ -163,22 +211,7 @@ function makePlatform(x) {
   const y = GROUND_Y - rand(PLAT_RISE_MIN, PLAT_RISE_MAX);
   const p = { x, y, w, h: PLAT_THICK };
   addCoinsAbove(p);
-  maybeAddRope(p);
   return p;
-}
-
-// Hang a rope from a high-enough platform down to the ground.
-// You grab it by overlapping, climb with Up/Down, and step off the
-// top onto the platform or drop off the bottom onto the ground.
-function maybeAddRope(p) {
-  if (GROUND_Y - p.y < 60) return;            // too low to be worth a rope
-  if (Math.random() > ROPE_CHANCE) return;
-  ropes.push({
-    x: p.x + p.w * 0.5,    // hangs from the platform's middle
-    top: p.y + p.h,        // rope starts at the platform's underside
-    bottom: GROUND_Y,      // reaches the ground
-    platTop: p.y           // surface you mount when you reach the top
-  });
 }
 
 function addCoinsAbove(p) {
@@ -204,7 +237,6 @@ function generateAhead() {
   const cutoff = cameraX - 300;
   platforms = platforms.filter(p => p.x + p.w > cutoff);
   coins = coins.filter(c => c.x + c.w > cutoff);
-  ropes = ropes.filter(r => r.x > cutoff);
 }
 
 /* =============================================================
@@ -227,43 +259,10 @@ function updateEnemies(dt) {
    ============================================================= */
 function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
-             vx: 0, vy: 0, onGround: true, facing: 1,
-             onClimb: null, walkPhase: 0 };
-}
-
-// The rope (if any) whose vertical span the player currently overlaps.
-function ropeOverlap() {
-  const cx = player.x + player.w / 2;
-  for (const r of ropes) {
-    // Grabbable from the platform's top surface (so you can step on and
-    // climb down) all the way to the ground.
-    if (Math.abs(cx - r.x) <= ROPE_GRAB_TOL &&
-        player.y + player.h >= r.platTop && player.y < r.bottom) {
-      return r;
-    }
-  }
-  return null;
+             vx: 0, vy: 0, onGround: true, facing: 1, walkPhase: 0 };
 }
 
 function updatePlayer(dt) {
-  if (player.onClimb) { updateClimbing(dt); }
-  else {
-    // Grab a rope: press Up (when below its top) or Down while overlapping it.
-    const r = ropeOverlap();
-    const wantGrab = r && ((anyKey(DOWN_KEYS)) ||
-                           (anyKey(UP_KEYS) && player.y + player.h > r.top + 4));
-    if (wantGrab) {
-      player.onClimb = r;
-      player.x = r.x - player.w / 2;
-      player.vx = 0; player.vy = 0; player.onGround = false;
-    } else {
-      updateWalking(dt);
-    }
-  }
-  if (invulnTimer > 0) invulnTimer -= dt;
-}
-
-function updateWalking(dt) {
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
   if (anyKey(RIGHT_KEYS)) move += 1;
@@ -298,48 +297,8 @@ function updateWalking(dt) {
       player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
     }
   }
-}
 
-function updateClimbing(dt) {
-  const r = player.onClimb;
-  player.vx = 0; player.vy = 0;
-  player.x = r.x - player.w / 2;   // stay snapped to the rope
-
-  // Jump off the rope with a small hop.
-  if (keys["Space"]) {
-    player.onClimb = null;
-    player.vy = JUMP_VELOCITY * 0.7;
-    player.facing && (player.x += player.facing * 6);
-    return;
-  }
-  // Let go sideways.
-  if (anyKey(LEFT_KEYS) || anyKey(RIGHT_KEYS)) {
-    player.onClimb = null;
-    return;
-  }
-
-  let cm = 0;
-  if (anyKey(UP_KEYS)) cm -= 1;
-  if (anyKey(DOWN_KEYS)) cm += 1;
-  player.y += cm * CLIMB_SPEED * dt;
-  player.walkPhase += Math.abs(cm) * dt * 8;  // hand-over-hand wobble
-
-  // Reached the top -> step onto the platform (only while not descending,
-  // so grabbing from the platform to climb down doesn't instantly re-mount).
-  if (cm <= 0 && player.y + player.h <= r.top + 2) {
-    player.y = r.platTop - player.h;
-    player.onClimb = null;
-    player.onGround = true;
-    player.vy = 0;
-    return;
-  }
-  // Reached the ground -> stand off the rope.
-  if (player.y + player.h >= r.bottom) {
-    player.y = r.bottom - player.h;
-    player.onClimb = null;
-    player.onGround = true;
-    player.vy = 0;
-  }
+  if (invulnTimer > 0) invulnTimer -= dt;
 }
 
 function loseLife() {
@@ -447,22 +406,6 @@ function drawEnemies() {
   }
 }
 
-function drawRopes() {
-  for (const r of ropes) {
-    const sx = r.x - cameraX;
-    if (sx < -10 || sx > VIEW_W + 10) continue;
-    // twin strands + rungs so it reads as a climbable rope/ladder.
-    ctx.strokeStyle = "#7a5a2e";
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(sx - 5, r.top); ctx.lineTo(sx - 5, r.bottom);
-                     ctx.moveTo(sx + 5, r.top); ctx.lineTo(sx + 5, r.bottom); ctx.stroke();
-    ctx.strokeStyle = "#9c7438"; ctx.lineWidth = 3;
-    for (let y = r.top + 8; y < r.bottom; y += 16) {
-      ctx.beginPath(); ctx.moveTo(sx - 6, y); ctx.lineTo(sx + 6, y); ctx.stroke();
-    }
-  }
-}
-
 function drawPlayer() {
   if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
   const sx = player.x - cameraX;
@@ -470,9 +413,7 @@ function drawPlayer() {
   // --- Procedural animation: derive bob / lean / squash from state ---
   let bob = 0, lean = 0, squashY = 1;
   const ph = player.walkPhase;
-  if (player.onClimb) {
-    lean = Math.sin(ph) * 0.05;            // gentle hand-over-hand sway
-  } else if (!player.onGround) {
+  if (!player.onGround) {
     lean = 0.07 * player.facing;           // lean into the jump arc
     squashY = 1.04;                        // slight stretch in the air
   } else if (Math.abs(player.vx) > 1) {
@@ -534,12 +475,12 @@ function drawStartScreen() {
 
   ctx.textAlign = "center";
   const lines = [
-    { text: "Walk: A / D or Arrows   •   Jump: Space",       font: "20px Segoe UI, Arial", color: "#ffffff" },
-    { text: "Climb ropes: Up / Down   •   Jump off: Space",  font: "20px Segoe UI, Arial", color: "#ffffff" },
+    { text: "Walk: A / D or Arrows  (or on-screen buttons)", font: "20px Segoe UI, Arial", color: "#ffffff" },
+    { text: "Jump: Space / Up / W",                          font: "20px Segoe UI, Arial", color: "#ffffff" },
     { text: "Coins +" + COIN_POINTS + "   •   Stomp enemies +" + STOMP_POINTS, font: "20px Segoe UI, Arial", color: "#ffd84d" },
-    { text: "Press SPACE or click to start", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
+    { text: "Press SPACE or tap to start", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
   ];
-  let y = VIEW_H - 120;
+  let y = VIEW_H - 116;
   for (const l of lines) { ctx.fillStyle = l.color; ctx.font = l.font; ctx.fillText(l.text, VIEW_W / 2, y); y += 32; }
   ctx.textAlign = "left";
 }
@@ -558,7 +499,7 @@ function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; worldGenX = 300;
-  platforms = []; coins = []; enemies = []; ropes = [];
+  platforms = []; coins = []; enemies = [];
   initPlayer();
   generateAhead();
   state = "playing";
@@ -577,7 +518,6 @@ function draw() {
   drawBackground();
   drawGround();
   drawPlatforms();
-  drawRopes();
   drawCoins();
   drawEnemies();
   drawPlayer();
