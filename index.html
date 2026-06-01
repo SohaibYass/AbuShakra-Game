@@ -618,7 +618,7 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(cx, footY);
   ctx.rotate(lean);
-  if (player.facing < 0) ctx.scale(-1, 1);
+  if (player.facing > 0) ctx.scale(-1, 1);  // art faces left; flip when going right
   if (imgLoaded.player) {
     ctx.drawImage(images.player, -drawW / 2, -drawH, drawW, drawH);
   } else {
