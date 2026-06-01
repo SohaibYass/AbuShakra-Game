@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>2D Platformer</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #1b1b25;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Segoe UI", Arial, sans-serif;
+  }
+  #game {
+    image-rendering: pixelated;
+    background: #87b5e8;
+    max-width: 100vw;
+    max-height: 100vh;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="450"></canvas>
+<script>
+"use strict";
+
+/* =============================================================
+   ASSETS — swap your image files here, all in one place.
+   Missing/broken files fall back to colored shapes so the game
+   never crashes.
+   ============================================================= */
+const ASSETS = {
+  player:     "character.png",
+  enemy:      "enemy.png",
+  background: "background.png",
+  platform:   "platform.png",   // generated stone tile
+  coin:       "coin.png",       // no file -> gold-circle fallback
+  title:      "AbuVsSnake.png"  // start-screen splash art
+};
+
+/* =============================================================
+   TUNABLE CONSTANTS — tweak difficulty / feel here.
+   ============================================================= */
+const VIEW_W = 800, VIEW_H = 450;
+
+const GROUND_Y = 392;          // top surface of the continuous ground
+
+const GRAVITY        = 2000;   // px/s^2
+const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
+const STOMP_BOUNCE   = -520;   // px/s bounce after a stomp
+const PLAYER_SPEED   = 280;    // px/s walk speed
+const CLIMB_SPEED    = 170;    // px/s vertical speed while on a rope
+const ENEMY_SPEED    = 90;     // px/s, enemies walk left
+const CAMERA_ANCHOR  = 0.35;   // player kept at 35% from left of screen
+const BG_PARALLAX     = 0.5;   // background scrolls at half camera speed
+
+const ROPE_CHANCE    = 0.55;   // chance a tall-enough platform spawns a rope
+const ROPE_GRAB_TOL  = 22;     // how close (px) the player's center must be to grab
+
+const COIN_POINTS    = 10;
+const STOMP_POINTS   = 50;
+const START_LIVES    = 3;
+
+const ENEMY_SPAWN_MIN = 1.6, ENEMY_SPAWN_MAX = 3.2;  // seconds
+const MAX_ENEMIES     = 6;
+
+// Elevated stone platforms (the ones you jump onto).
+const PLAT_GAP_MIN   = 150, PLAT_GAP_MAX = 300;   // horizontal spacing
+const PLAT_WIDTH_MIN = 96,  PLAT_WIDTH_MAX = 224;
+const PLAT_RISE_MIN  = 55,  PLAT_RISE_MAX  = 130;  // height above ground (reachable)
+const PLAT_THICK     = 28;
+
+const INVULN_TIME    = 1.5;    // seconds invulnerable after a hit
+
+// Sprite sizes (match cropped art aspect ratios).
+const PLAYER_W = 30, PLAYER_H = 62;
+const ENEMY_W  = 46, ENEMY_H  = 46;
+const COIN_SIZE = 26;
+
+/* =============================================================
+   ASSET LOADING
+   ============================================================= */
+const images = {}, imgLoaded = {};
+function loadImages(cb) {
+  const keys = Object.keys(ASSETS);
+  let remaining = keys.length;
+  if (!remaining) return cb();
+  keys.forEach(key => {
+    const img = new Image();
+    images[key] = img; imgLoaded[key] = false;
+    const done = () => { if (--remaining === 0) cb(); };
+    img.onload = () => { imgLoaded[key] = img.naturalWidth > 0; done(); };
+    img.onerror = () => { imgLoaded[key] = false; done(); };
+    img.src = ASSETS[key];
+  });
+}
+function drawSprite(key, x, y, w, h, color) {
+  if (imgLoaded[key]) ctx.drawImage(images[key], x, y, w, h);
+  else { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+}
+
+/* =============================================================
+   CANVAS
+   ============================================================= */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+function resize() {
+  const s = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
+  canvas.style.width  = Math.floor(VIEW_W * s) + "px";
+  canvas.style.height = Math.floor(VIEW_H * s) + "px";
+}
+window.addEventListener("resize", resize); resize();
+
+/* =============================================================
+   INPUT
+   ============================================================= */
+const keys = {};
+const JUMP_KEYS = ["Space", "ArrowUp", "KeyW"];
+const LEFT_KEYS = ["ArrowLeft", "KeyA"];
+const RIGHT_KEYS = ["ArrowRight", "KeyD"];
+const UP_KEYS = ["ArrowUp", "KeyW"];
+const DOWN_KEYS = ["ArrowDown", "KeyS"];
+window.addEventListener("keydown", (e) => {
+  keys[e.code] = true;
+  if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+  if (e.code === "KeyR" && state === "gameover") resetGame();
+  if (state === "start" && (JUMP_KEYS.includes(e.code) || e.code === "Enter")) state = "playing";
+});
+window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+canvas.addEventListener("mousedown", () => {
+  if (state === "start") state = "playing";
+  else if (state === "gameover") resetGame();
+});
+function anyKey(list) { return list.some(k => keys[k]); }
+
+/* =============================================================
+   STATE
+   ============================================================= */
+let state = "start";
+let score, lives, invulnTimer, enemySpawnTimer;
+let player, platforms, coins, enemies, ropes;
+let cameraX, worldGenX;
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function aabb(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/* =============================================================
+   ELEVATED PLATFORMS — generated ahead in world space, recycled
+   once far behind the camera. The ground is a separate, always
+   solid surface, so walking never drops you into a pit.
+   ============================================================= */
+function makePlatform(x) {
+  const w = rand(PLAT_WIDTH_MIN, PLAT_WIDTH_MAX);
+  const y = GROUND_Y - rand(PLAT_RISE_MIN, PLAT_RISE_MAX);
+  const p = { x, y, w, h: PLAT_THICK };
+  addCoinsAbove(p);
+  maybeAddRope(p);
+  return p;
+}
+
+// Hang a rope from a high-enough platform down to the ground.
+// You grab it by overlapping, climb with Up/Down, and step off the
+// top onto the platform or drop off the bottom onto the ground.
+function maybeAddRope(p) {
+  if (GROUND_Y - p.y < 60) return;            // too low to be worth a rope
+  if (Math.random() > ROPE_CHANCE) return;
+  ropes.push({
+    x: p.x + p.w * 0.5,    // hangs from the platform's middle
+    top: p.y + p.h,        // rope starts at the platform's underside
+    bottom: GROUND_Y,      // reaches the ground
+    platTop: p.y           // surface you mount when you reach the top
+  });
+}
+
+function addCoinsAbove(p) {
+  if (Math.random() < 0.8) {
+    const n = Math.floor(rand(1, 4));
+    for (let i = 0; i < n; i++) {
+      const cx = p.x + 14 + i * (COIN_SIZE + 14);
+      if (cx + COIN_SIZE > p.x + p.w) break;
+      coins.push({ x: cx, y: p.y - COIN_SIZE - 14, w: COIN_SIZE, h: COIN_SIZE, t: Math.random() * 6.28 });
+    }
+  }
+}
+
+// Keep platforms generated up to a little past the right screen edge.
+function generateAhead() {
+  const target = cameraX + VIEW_W + 400;
+  while (worldGenX < target) {
+    worldGenX += rand(PLAT_GAP_MIN, PLAT_GAP_MAX);
+    platforms.push(makePlatform(worldGenX));
+    worldGenX += PLAT_WIDTH_MAX; // reserve space so the next gap starts after this block
+  }
+  // Recycle anything well behind the camera.
+  const cutoff = cameraX - 300;
+  platforms = platforms.filter(p => p.x + p.w > cutoff);
+  coins = coins.filter(c => c.x + c.w > cutoff);
+  ropes = ropes.filter(r => r.x > cutoff);
+}
+
+/* =============================================================
+   ENEMIES — spawn ahead, always walk left, recycle behind camera.
+   ============================================================= */
+function spawnEnemy() {
+  if (enemies.length >= MAX_ENEMIES) return;
+  const x = cameraX + VIEW_W + rand(40, 280);
+  enemies.push({ x, y: GROUND_Y - ENEMY_H, w: ENEMY_W, h: ENEMY_H, alive: true });
+}
+function updateEnemies(dt) {
+  for (const e of enemies) e.x -= ENEMY_SPEED * dt;
+  enemies = enemies.filter(e => e.alive && e.x + e.w > cameraX - 200);
+  enemySpawnTimer -= dt;
+  if (enemySpawnTimer <= 0) { spawnEnemy(); enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX); }
+}
+
+/* =============================================================
+   PLAYER — full left/right control, gravity, jump.
+   ============================================================= */
+function initPlayer() {
+  player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
+             vx: 0, vy: 0, onGround: true, facing: 1,
+             onClimb: null, walkPhase: 0 };
+}
+
+// The rope (if any) whose vertical span the player currently overlaps.
+function ropeOverlap() {
+  const cx = player.x + player.w / 2;
+  for (const r of ropes) {
+    // Grabbable from the platform's top surface (so you can step on and
+    // climb down) all the way to the ground.
+    if (Math.abs(cx - r.x) <= ROPE_GRAB_TOL &&
+        player.y + player.h >= r.platTop && player.y < r.bottom) {
+      return r;
+    }
+  }
+  return null;
+}
+
+function updatePlayer(dt) {
+  if (player.onClimb) { updateClimbing(dt); }
+  else {
+    // Grab a rope: press Up (when below its top) or Down while overlapping it.
+    const r = ropeOverlap();
+    const wantGrab = r && ((anyKey(DOWN_KEYS)) ||
+                           (anyKey(UP_KEYS) && player.y + player.h > r.top + 4));
+    if (wantGrab) {
+      player.onClimb = r;
+      player.x = r.x - player.w / 2;
+      player.vx = 0; player.vy = 0; player.onGround = false;
+    } else {
+      updateWalking(dt);
+    }
+  }
+  if (invulnTimer > 0) invulnTimer -= dt;
+}
+
+function updateWalking(dt) {
+  let move = 0;
+  if (anyKey(LEFT_KEYS)) move -= 1;
+  if (anyKey(RIGHT_KEYS)) move += 1;
+  player.vx = move * PLAYER_SPEED;
+  if (move !== 0) player.facing = move;
+
+  // Advance the walk cycle only while moving on the ground.
+  if (move !== 0 && player.onGround) player.walkPhase += dt * 11;
+
+  if (anyKey(JUMP_KEYS) && player.onGround) {
+    player.vy = JUMP_VELOCITY;
+    player.onGround = false;
+  }
+  player.vy += GRAVITY * dt;
+
+  player.x += player.vx * dt;
+  if (player.x < 0) player.x = 0;
+
+  const prevBottom = player.y + player.h;
+  player.y += player.vy * dt;
+  player.onGround = false;
+
+  if (player.vy >= 0) {
+    const newBottom = player.y + player.h;
+    for (const p of platforms) {
+      const overlapX = player.x + player.w > p.x && player.x < p.x + p.w;
+      if (overlapX && prevBottom <= p.y + 1 && newBottom >= p.y) {
+        player.y = p.y - player.h; player.vy = 0; player.onGround = true; break;
+      }
+    }
+    if (!player.onGround && newBottom >= GROUND_Y) {
+      player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
+    }
+  }
+}
+
+function updateClimbing(dt) {
+  const r = player.onClimb;
+  player.vx = 0; player.vy = 0;
+  player.x = r.x - player.w / 2;   // stay snapped to the rope
+
+  // Jump off the rope with a small hop.
+  if (keys["Space"]) {
+    player.onClimb = null;
+    player.vy = JUMP_VELOCITY * 0.7;
+    player.facing && (player.x += player.facing * 6);
+    return;
+  }
+  // Let go sideways.
+  if (anyKey(LEFT_KEYS) || anyKey(RIGHT_KEYS)) {
+    player.onClimb = null;
+    return;
+  }
+
+  let cm = 0;
+  if (anyKey(UP_KEYS)) cm -= 1;
+  if (anyKey(DOWN_KEYS)) cm += 1;
+  player.y += cm * CLIMB_SPEED * dt;
+  player.walkPhase += Math.abs(cm) * dt * 8;  // hand-over-hand wobble
+
+  // Reached the top -> step onto the platform (only while not descending,
+  // so grabbing from the platform to climb down doesn't instantly re-mount).
+  if (cm <= 0 && player.y + player.h <= r.top + 2) {
+    player.y = r.platTop - player.h;
+    player.onClimb = null;
+    player.onGround = true;
+    player.vy = 0;
+    return;
+  }
+  // Reached the ground -> stand off the rope.
+  if (player.y + player.h >= r.bottom) {
+    player.y = r.bottom - player.h;
+    player.onClimb = null;
+    player.onGround = true;
+    player.vy = 0;
+  }
+}
+
+function loseLife() {
+  if (invulnTimer > 0) return;
+  lives -= 1;
+  invulnTimer = INVULN_TIME;
+  if (lives <= 0) { lives = 0; state = "gameover"; }
+}
+
+/* =============================================================
+   COLLISIONS
+   ============================================================= */
+function handleCoins() {
+  for (const c of coins) if (!c.collected && aabb(player, c)) { c.collected = true; score += COIN_POINTS; }
+  coins = coins.filter(c => !c.collected);
+}
+function handleEnemies() {
+  for (const e of enemies) {
+    if (!e.alive || !aabb(player, e)) continue;
+    const feet = player.y + player.h;
+    const stomping = player.vy > 0 && feet < e.y + e.h * 0.6;
+    if (stomping) { e.alive = false; score += STOMP_POINTS; player.vy = STOMP_BOUNCE; player.onGround = false; }
+    else loseLife();
+  }
+  enemies = enemies.filter(e => e.alive);
+}
+
+/* =============================================================
+   CAMERA
+   ============================================================= */
+function updateCamera() {
+  cameraX = Math.max(0, player.x + player.w / 2 - VIEW_W * CAMERA_ANCHOR);
+}
+
+/* =============================================================
+   DRAW
+   ============================================================= */
+function drawBackground() {
+  if (imgLoaded.background) {
+    const img = images.background;
+    const tileW = img.naturalWidth * (VIEW_H / img.naturalHeight);
+    let startX = -((cameraX * BG_PARALLAX) % tileW);
+    if (startX > 0) startX -= tileW;
+    for (let x = startX; x < VIEW_W; x += tileW) ctx.drawImage(img, x, 0, tileW, VIEW_H);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+    g.addColorStop(0, "#87b5e8"); g.addColorStop(1, "#cfe7ff");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+}
+
+function drawGround() {
+  const bandH = VIEW_H - GROUND_Y;
+  if (imgLoaded.platform) {
+    const img = images.platform;
+    const tileW = img.naturalWidth * (bandH / img.naturalHeight);
+    let startX = -(cameraX % tileW);
+    if (startX > 0) startX -= tileW;
+    for (let x = startX; x < VIEW_W; x += tileW) ctx.drawImage(img, x, GROUND_Y, tileW, bandH);
+  } else {
+    ctx.fillStyle = "#6b6660"; ctx.fillRect(0, GROUND_Y, VIEW_W, bandH);
+  }
+}
+
+function drawPlatforms() {
+  for (const p of platforms) {
+    const sx = p.x - cameraX;
+    if (sx > VIEW_W || sx + p.w < 0) continue;
+    if (imgLoaded.platform) {
+      // Tile the stone texture across the platform width.
+      const img = images.platform;
+      const tileW = img.naturalWidth * (p.h / img.naturalHeight);
+      let drawn = 0;
+      while (drawn < p.w) {
+        const w = Math.min(tileW, p.w - drawn);
+        const sw = img.naturalWidth * (w / tileW);
+        ctx.drawImage(img, 0, 0, sw, img.naturalHeight, sx + drawn, p.y, w, p.h);
+        drawn += w;
+      }
+    } else {
+      ctx.fillStyle = "#7a756d"; ctx.fillRect(sx, p.y, p.w, p.h);
+    }
+  }
+}
+
+function drawCoins() {
+  for (const c of coins) {
+    const sx = c.x - cameraX;
+    if (sx > VIEW_W || sx + c.w < 0) continue;
+    const bob = Math.sin(performance.now() / 300 + c.t) * 3;
+    if (imgLoaded.coin) ctx.drawImage(images.coin, sx, c.y + bob, c.w, c.h);
+    else {
+      ctx.beginPath(); ctx.fillStyle = "#ffcf33";
+      ctx.arc(sx + c.w / 2, c.y + c.h / 2 + bob, c.w / 2, 0, 6.28); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#c89b14"; ctx.stroke();
+    }
+  }
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    const sx = e.x - cameraX;
+    if (sx > VIEW_W || sx + e.w < 0) continue;
+    drawSprite("enemy", sx, e.y, e.w, e.h, "#c0392b");
+  }
+}
+
+function drawRopes() {
+  for (const r of ropes) {
+    const sx = r.x - cameraX;
+    if (sx < -10 || sx > VIEW_W + 10) continue;
+    // twin strands + rungs so it reads as a climbable rope/ladder.
+    ctx.strokeStyle = "#7a5a2e";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(sx - 5, r.top); ctx.lineTo(sx - 5, r.bottom);
+                     ctx.moveTo(sx + 5, r.top); ctx.lineTo(sx + 5, r.bottom); ctx.stroke();
+    ctx.strokeStyle = "#9c7438"; ctx.lineWidth = 3;
+    for (let y = r.top + 8; y < r.bottom; y += 16) {
+      ctx.beginPath(); ctx.moveTo(sx - 6, y); ctx.lineTo(sx + 6, y); ctx.stroke();
+    }
+  }
+}
+
+function drawPlayer() {
+  if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
+  const sx = player.x - cameraX;
+
+  // --- Procedural animation: derive bob / lean / squash from state ---
+  let bob = 0, lean = 0, squashY = 1;
+  const ph = player.walkPhase;
+  if (player.onClimb) {
+    lean = Math.sin(ph) * 0.05;            // gentle hand-over-hand sway
+  } else if (!player.onGround) {
+    lean = 0.07 * player.facing;           // lean into the jump arc
+    squashY = 1.04;                        // slight stretch in the air
+  } else if (Math.abs(player.vx) > 1) {
+    bob = -Math.abs(Math.sin(ph)) * 5;     // head bobs up on each step
+    lean = Math.sin(ph) * 0.05 * player.facing;
+    squashY = 1 - Math.abs(Math.cos(ph)) * 0.05;  // squash on footfall
+  } else {
+    bob = Math.sin(performance.now() / 600) * 1.5; // idle breathing
+  }
+
+  const drawW = player.w, drawH = player.h * squashY;
+  const footY = player.y + player.h + bob;       // keep feet anchored
+  const cx = sx + player.w / 2;
+
+  ctx.save();
+  ctx.translate(cx, footY);
+  ctx.rotate(lean);
+  if (player.facing < 0) ctx.scale(-1, 1);
+  if (imgLoaded.player) {
+    ctx.drawImage(images.player, -drawW / 2, -drawH, drawW, drawH);
+  } else {
+    ctx.fillStyle = "#2980b9";
+    ctx.fillRect(-drawW / 2, -drawH, drawW, drawH);
+  }
+  ctx.restore();
+}
+
+function drawHUD() {
+  ctx.fillStyle = "#000"; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, VIEW_W, 40); ctx.globalAlpha = 1;
+  ctx.fillStyle = "#fff"; ctx.font = "bold 22px Segoe UI, Arial";
+  ctx.textAlign = "left";  ctx.fillText("Score: " + score, 16, 28);
+  ctx.textAlign = "right"; ctx.fillText("Lives: " + lives, VIEW_W - 16, 28);
+  ctx.textAlign = "left";
+}
+
+function drawCenteredText(lines) {
+  ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.textAlign = "center";
+  let y = VIEW_H / 2 - (lines.length - 1) * 22;
+  for (const l of lines) {
+    ctx.fillStyle = l.color || "#fff"; ctx.font = l.font || "24px Segoe UI, Arial";
+    ctx.fillText(l.text, VIEW_W / 2, y); y += l.gap || 44;
+  }
+  ctx.textAlign = "left";
+}
+function drawStartScreen() {
+  // Cover-fit the title splash, then darken the lower strip for legible text.
+  if (imgLoaded.title) {
+    const img = images.title;
+    const s = Math.max(VIEW_W / img.naturalWidth, VIEW_H / img.naturalHeight);
+    const w = img.naturalWidth * s, h = img.naturalHeight * s;
+    ctx.drawImage(img, (VIEW_W - w) / 2, (VIEW_H - h) / 2, w, h);
+    const g = ctx.createLinearGradient(0, VIEW_H * 0.45, 0, VIEW_H);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.85)");
+    ctx.fillStyle = g; ctx.fillRect(0, VIEW_H * 0.45, VIEW_W, VIEW_H * 0.55);
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+
+  ctx.textAlign = "center";
+  const lines = [
+    { text: "Walk: A / D or Arrows   •   Jump: Space",       font: "20px Segoe UI, Arial", color: "#ffffff" },
+    { text: "Climb ropes: Up / Down   •   Jump off: Space",  font: "20px Segoe UI, Arial", color: "#ffffff" },
+    { text: "Coins +" + COIN_POINTS + "   •   Stomp enemies +" + STOMP_POINTS, font: "20px Segoe UI, Arial", color: "#ffd84d" },
+    { text: "Press SPACE or click to start", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
+  ];
+  let y = VIEW_H - 120;
+  for (const l of lines) { ctx.fillStyle = l.color; ctx.font = l.font; ctx.fillText(l.text, VIEW_W / 2, y); y += 32; }
+  ctx.textAlign = "left";
+}
+function drawGameOver() {
+  drawCenteredText([
+    { text: "GAME OVER", font: "bold 52px Segoe UI, Arial", color: "#ff6b6b", gap: 60 },
+    { text: "Final Score: " + score, font: "28px Segoe UI, Arial", gap: 50 },
+    { text: "Press R or click to restart", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
+  ]);
+}
+
+/* =============================================================
+   LOOP
+   ============================================================= */
+function resetGame() {
+  score = 0; lives = START_LIVES; invulnTimer = 0;
+  enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
+  cameraX = 0; worldGenX = 300;
+  platforms = []; coins = []; enemies = []; ropes = [];
+  initPlayer();
+  generateAhead();
+  state = "playing";
+}
+
+function update(dt) {
+  updatePlayer(dt);
+  updateCamera();
+  generateAhead();
+  updateEnemies(dt);
+  handleCoins();
+  handleEnemies();
+}
+
+function draw() {
+  drawBackground();
+  drawGround();
+  drawPlatforms();
+  drawRopes();
+  drawCoins();
+  drawEnemies();
+  drawPlayer();
+  drawHUD();
+  if (state === "start") drawStartScreen();
+  else if (state === "gameover") drawGameOver();
+}
+
+let lastTime = 0;
+function loop(now) {
+  let dt = (now - lastTime) / 1000; lastTime = now;
+  if (dt > 0.05) dt = 0.05;
+  if (state === "playing") update(dt);
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loadImages(() => {
+  resetGame();
+  state = "start";
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
