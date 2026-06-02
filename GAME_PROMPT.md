@@ -22,11 +22,20 @@ no build step**. Must run by just opening the file or serving the folder.
   the content.
 - Note which way the character art faces by default, and flip it (`ctx.scale(-1,1)`)
   so the sprite always faces its movement direction.
+- For any **non-square** sprite (a tall pickup, a wide enemy), size its draw box
+  *and its collision hitbox* from the cropped art's aspect ratio — don't reuse a
+  square size, or collisions feel off (too generous/stingy).
 
 **Core mechanics:**
 - Walk-and-jump control (NOT an auto-scroller): A/D or arrows to move, Space/Up/W
   to jump.
-- Follow-camera in world coordinates; looping/parallax background.
+- Follow-camera in world coordinates; looping/parallax background. For a
+  **seamless** scrolling background from any image (no seamless-art needed),
+  **mirror-tile** it: draw every other copy horizontally flipped
+  (`ctx.scale(-1,1)`) so a flipped tile's left edge equals the previous tile's
+  right edge. Key the flip parity to *world* position (tile index = `floor(scroll
+  / tileW)`), not screen position, or tiles flicker as you scroll; add a ~1px
+  overlap ("bleed") between tiles so no dark hairline shows at a seam.
 - Procedurally generated platforms (varied gaps, widths, heights) over continuous
   ground so the player can't fall into an unwinnable spot.
 - Enemies spawn over time and move left; **stomp** them for points, touching them
@@ -54,6 +63,23 @@ no build step**. Must run by just opening the file or serving the folder.
   draw, inside save/restore.
 - Run particles + shake every frame regardless of game state (cosmetic), so they
   settle cleanly even on the game-over screen.
+
+**Multiple levels (optional, data-driven):**
+- Put levels in one `LEVELS = [...]` config at the top (name, background key,
+  score target, per-level difficulty like enemy speed / spawn rate) so they're
+  easy to tune. Drive difficulty and the active background from the current
+  level entry, not from scattered globals.
+- Pick a progression model up front: **cumulative score milestones** (one
+  continuous run; the world/theme swaps as total score passes each target —
+  suits an endless procedural ground) **or** per-level reset. They feel very
+  different; don't mix them by accident.
+- Add the flow states: title -> playing -> a **"Level Complete" interstitial**
+  ("tap to continue") -> next level -> a **"You Win!"** screen after the last
+  target -> restart. Carry score/lives across levels (a small bonus per level
+  feels good); reset only what should reset.
+- HUD: show the current level name + progress toward its target (a thin bar
+  reads well). Reuse the same generic "advance the non-play screen" handler for
+  start / interstitial / win / game-over so input stays consistent.
 
 **Music & sound (Web Audio API, no files):**
 - Synthesize an **original** cheerful 8-bit chiptune loop with the Web Audio API
@@ -93,6 +119,10 @@ no build step**. Must run by just opening the file or serving the folder.
   version then applies within a single launch instead of the next one.
 - **Always bump the service-worker cache version when any file changes**, or
   installed clients keep serving the old version offline.
+- **Never list a file in the precache (`cache.addAll`) unless it actually exists
+  on disk.** `addAll` rejects the *entire* install on a single 404, silently
+  breaking offline mode. When you rename/remove an asset (e.g. `background.png` ->
+  per-level backgrounds), update the precache list in the same change.
 - **One-time stale-SW caveat:** the auto-reload only helps *after* a worker that
   contains it is installed. Going from an older cache-first worker to this setup
   still needs one manual clear on the device (delete + re-add the home-screen app,
