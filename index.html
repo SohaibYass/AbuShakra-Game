@@ -132,6 +132,7 @@ const GROUND_Y = 392;          // top surface of the continuous ground
 const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
 const STOMP_BOUNCE   = -520;   // px/s bounce after a stomp
+const HOPPER_JUMP    = -640;   // px/s, the hopper enemy's periodic jump
 const COYOTE_TIME    = 0.10;   // s after leaving a ledge you can still jump
 const JUMP_BUFFER    = 0.12;   // s a jump press is remembered before landing
 const JUMP_CUT       = 0.45;   // upward speed kept when jump is released early
@@ -153,11 +154,14 @@ const MAX_ENEMIES     = 6;
    passes each target. Difficulty (enemy spawn / speed) is driven per level. */
 const LEVELS = [
   { id: 1, name: "Three Peaks of Lavaredo", bg: "bgLavaredo", target: 500,
-    enemySpeedMul: 1.0, spawnMul: 1.0 },
+    enemySpeedMul: 1.0, spawnMul: 1.0,
+    enemyMix: ["walker", "walker", "walker", "hopper"] },
   { id: 2, name: "Odle Group",              bg: "bgOdle",     target: 1000,
-    enemySpeedMul: 1.35, spawnMul: 0.75 },
+    enemySpeedMul: 1.35, spawnMul: 0.75,
+    enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"] },
   { id: 3, name: "Latemar Group",           bg: "bgLatemar",  target: 1500,
-    enemySpeedMul: 1.7,  spawnMul: 0.55 }
+    enemySpeedMul: 1.7,  spawnMul: 0.55,
+    enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"] }
 ];
 
 // Elevated stone platforms (the ones you jump onto).
@@ -173,6 +177,15 @@ const PLAYER_W = 30, PLAYER_H = 62;
 const ENEMY_W  = 46, ENEMY_H  = 46;
 // A carabiner is taller than it is wide (art is ~140x200, ratio 0.7).
 const CARABINER_W = 22, CARABINER_H = 31;
+
+/* Enemy types. `speed` multiplies ENEMY_SPEED; `hp` is stomps-to-kill;
+   `air` floats (no gravity). Sizes/points tuned so tougher = bigger reward. */
+const ENEMY_TYPES = {
+  walker: { w: ENEMY_W, h: ENEMY_H, speed: 1.0,  hp: 1, points: STOMP_POINTS, color: "#c0392b", air: false },
+  hopper: { w: 42,      h: 42,      speed: 1.15, hp: 1, points: 70,  color: "#27ae60", air: false },
+  flyer:  { w: 46,      h: 34,      speed: 1.30, hp: 1, points: 80,  color: "#8e44ad", air: true  },
+  tank:   { w: 72,      h: 72,      speed: 0.55, hp: 2, points: 120, color: "#7f8c8d", air: false }
+};
 
 /* =============================================================
    ASSET LOADING
@@ -490,12 +503,38 @@ function generateAhead() {
    ============================================================= */
 function spawnEnemy() {
   if (enemies.length >= MAX_ENEMIES) return;
+  const mix = currentLevel().enemyMix;
+  const type = mix[(Math.random() * mix.length) | 0];
+  const t = ENEMY_TYPES[type];
   const x = cameraX + VIEW_W + rand(40, 280);
-  enemies.push({ x, y: GROUND_Y - ENEMY_H, w: ENEMY_W, h: ENEMY_H, alive: true });
+  // Flyers float at a jump-reachable height; everyone else sits on the ground.
+  const baseY = t.air ? GROUND_Y - t.h - rand(70, 120) : GROUND_Y - t.h;
+  enemies.push({
+    type, x, y: baseY, w: t.w, h: t.h, alive: true,
+    speed: t.speed, hp: t.hp, points: t.points, color: t.color, air: t.air,
+    vy: 0, baseY, phase: Math.random() * 6.28, jumpTimer: rand(0.3, 1.0), hitFlash: 0
+  });
 }
 function updateEnemies(dt) {
   const d = difficulty();
-  for (const e of enemies) e.x -= ENEMY_SPEED * d * dt;
+  for (const e of enemies) {
+    e.x -= ENEMY_SPEED * e.speed * d * dt;
+    if (e.hitFlash > 0) e.hitFlash -= dt;
+    if (e.type === "hopper") {
+      // Gravity + a periodic hop while grounded.
+      e.vy += GRAVITY * dt; e.y += e.vy * dt;
+      if (e.y + e.h >= GROUND_Y) {
+        e.y = GROUND_Y - e.h; e.vy = 0;
+        e.jumpTimer -= dt;
+        if (e.jumpTimer <= 0) { e.vy = HOPPER_JUMP; e.jumpTimer = rand(0.5, 1.2); }
+      }
+    } else if (e.type === "flyer") {
+      // Float in place, bobbing up and down around baseY.
+      e.phase += dt * 3;
+      e.y = e.baseY + Math.sin(e.phase) * 26;
+    }
+    // walker & tank keep their fixed ground y.
+  }
   enemies = enemies.filter(e => e.alive && e.x + e.w > cameraX - 200);
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -616,8 +655,15 @@ function handleEnemies() {
     const feet = player.y + player.h;
     const stomping = player.vy > 0 && feet < e.y + e.h * 0.6;
     if (stomping) {
-      e.alive = false; score += STOMP_POINTS; player.vy = STOMP_BOUNCE; player.onGround = false;
-      poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
+      player.vy = STOMP_BOUNCE; player.onGround = false;
+      e.hp -= 1;
+      if (e.hp <= 0) {
+        e.alive = false; score += e.points;
+        poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
+      } else {
+        // Survived (tank): flash, small poof, keep going.
+        e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
+      }
     }
     else loseLife();
   }
@@ -776,7 +822,59 @@ function drawEnemies() {
   for (const e of enemies) {
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
-    drawSprite("enemy", sx, e.y, e.w, e.h, "#c0392b");
+
+    // Flapping wings behind a flyer.
+    if (e.type === "flyer") {
+      const flap = Math.sin(performance.now() / 90) * 6;
+      const wy = e.y + e.h * 0.4;
+      ctx.fillStyle = "rgba(232,228,255,0.9)";
+      ctx.beginPath();
+      ctx.moveTo(sx + 4, wy); ctx.lineTo(sx - 16, wy - 11 + flap); ctx.lineTo(sx - 16, wy + 11 + flap);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sx + e.w - 4, wy); ctx.lineTo(sx + e.w + 16, wy - 11 + flap); ctx.lineTo(sx + e.w + 16, wy + 11 + flap);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // A soft type-coloured glow so each variety reads at a glance
+    // (the shared enemy.png is the same for all types, so colour it here).
+    if (e.type !== "walker") {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = e.color;
+      const gx = sx + e.w / 2, gy = e.y + e.h / 2;
+      const gr = Math.max(e.w, e.h) * 0.62;
+      const grad = ctx.createRadialGradient(gx, gy, gr * 0.3, gx, gy, gr);
+      grad.addColorStop(0, e.color);
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 6.2832); ctx.fill();
+      ctx.restore();
+    }
+
+    // Body. Hoppers squash/stretch with vertical speed.
+    let dw = e.w, dh = e.h, dy = e.y;
+    if (e.type === "hopper") {
+      const stretch = e.vy < -40 ? 1.12 : (e.vy > 80 ? 0.9 : 1);
+      dh = e.h * stretch; dw = e.w * (2 - stretch); dy = e.y + (e.h - dh);
+    }
+    drawSprite("enemy", sx + (e.w - dw) / 2, dy, dw, dh, e.color);
+
+    // Tank: armour plate + remaining-HP pips above it.
+    if (e.type === "tank") {
+      ctx.fillStyle = "rgba(55,65,75,0.5)";
+      ctx.fillRect(sx + 5, e.y + 6, e.w - 10, e.h * 0.34);
+      for (let i = 0; i < e.hp; i++) {
+        ctx.fillStyle = "#e74c3c";
+        ctx.fillRect(sx + 6 + i * 11, e.y - 9, 8, 5);
+      }
+    }
+
+    // White flash when an enemy survived a stomp.
+    if (e.hitFlash > 0 && Math.floor(performance.now() / 60) % 2 === 0) {
+      ctx.globalAlpha = 0.5; ctx.fillStyle = "#fff";
+      ctx.fillRect(sx, e.y, e.w, e.h); ctx.globalAlpha = 1;
+    }
   }
 }
 
