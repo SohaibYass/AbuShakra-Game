@@ -113,10 +113,13 @@
 const ASSETS = {
   player:     "character.png",
   enemy:      "enemy.png",
-  background: "background.png",
-  platform:   "platform.png",   // generated stone tile
-  coin:       "coin.png",       // no file -> gold-circle fallback
-  title:      "AbuVsSnake.png"  // start-screen splash art
+  platform:   "platform.png",     // generated stone tile
+  carabiner:  "carabiner.png",    // climbing clip pickup
+  title:      "AbuVsSnake.png",   // start-screen splash art
+  // Per-level Dolomites backgrounds (see LEVELS below).
+  bgLavaredo: "bgLavaredo.png",
+  bgOdle:     "bgOdle.png",
+  bgLatemar:  "bgLatemar.png"
 };
 
 /* =============================================================
@@ -137,12 +140,25 @@ const ENEMY_SPEED    = 90;     // px/s, enemies walk left
 const CAMERA_ANCHOR  = 0.35;   // player kept at 35% from left of screen
 const BG_PARALLAX     = 0.5;   // background scrolls at half camera speed
 
-const COIN_POINTS    = 10;
-const STOMP_POINTS   = 50;
-const START_LIVES    = 3;
+const CARABINER_POINTS = 10;
+const STOMP_POINTS     = 50;
+const START_LIVES      = 3;
+const LEVEL_BONUS_LIVES = 1;   // +1 life awarded on each level advance
 
 const ENEMY_SPAWN_MIN = 1.6, ENEMY_SPAWN_MAX = 3.2;  // seconds
 const MAX_ENEMIES     = 6;
+
+/* Three levels on real Dolomites climbing locations. Cumulative score
+   milestones: one continuous run, the world swaps as your TOTAL score
+   passes each target. Difficulty (enemy spawn / speed) is driven per level. */
+const LEVELS = [
+  { id: 1, name: "Three Peaks of Lavaredo", bg: "bgLavaredo", target: 500,
+    enemySpeedMul: 1.0, spawnMul: 1.0 },
+  { id: 2, name: "Odle Group",              bg: "bgOdle",     target: 1000,
+    enemySpeedMul: 1.35, spawnMul: 0.75 },
+  { id: 3, name: "Latemar Group",           bg: "bgLatemar",  target: 1500,
+    enemySpeedMul: 1.7,  spawnMul: 0.55 }
+];
 
 // Elevated stone platforms (the ones you jump onto).
 const PLAT_GAP_MIN   = 150, PLAT_GAP_MAX = 300;   // horizontal spacing
@@ -155,7 +171,8 @@ const INVULN_TIME    = 1.5;    // seconds invulnerable after a hit
 // Sprite sizes (match cropped art aspect ratios).
 const PLAYER_W = 30, PLAYER_H = 62;
 const ENEMY_W  = 46, ENEMY_H  = 46;
-const COIN_SIZE = 26;
+// A carabiner is taller than it is wide (art is ~140x200, ratio 0.7).
+const CARABINER_W = 22, CARABINER_H = 31;
 
 /* =============================================================
    ASSET LOADING
@@ -202,14 +219,13 @@ const RIGHT_KEYS = ["ArrowRight", "KeyD"];
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
-  if (e.code === "KeyR" && state === "gameover") { resetGame(); Music.start(); }
-  if (state === "start" && (JUMP_KEYS.includes(e.code) || e.code === "Enter")) { state = "playing"; Music.start(); }
+  // Any of jump / Enter / R advances whichever non-play screen we're on.
+  if (state !== "playing" && (JUMP_KEYS.includes(e.code) || e.code === "Enter" || e.code === "KeyR")) {
+    advanceFromScreen();
+  }
 });
 window.addEventListener("keyup", (e) => { keys[e.code] = false; });
-canvas.addEventListener("mousedown", () => {
-  if (state === "start") { state = "playing"; Music.start(); }
-  else if (state === "gameover") { resetGame(); Music.start(); }
-});
+canvas.addEventListener("mousedown", () => { if (state !== "playing") advanceFromScreen(); });
 function anyKey(list) { return list.some(k => keys[k]); }
 
 /* ---- Touch controls (phones / tablets) ---- */
@@ -228,11 +244,15 @@ document.addEventListener("touchend", (e) => {
   lastTouchEnd = now;
 }, { passive: false });
 
-// Start / restart the game from a tap (mirrors the click handler).
-function tapAdvance() {
+// Advance whichever non-play screen we're on (start / level-complete / won /
+// game-over). Defined here; the level-flow helpers live in the LOOP section.
+function advanceFromScreen() {
   if (state === "start") { state = "playing"; Music.start(); }
-  else if (state === "gameover") { resetGame(); Music.start(); }
+  else if (state === "levelcomplete") { advanceLevel(); }
+  else if (state === "won" || state === "gameover") { resetGame(); Music.start(); }
 }
+// Start / restart the game from a tap (mirrors the click handler).
+function tapAdvance() { if (state !== "playing") advanceFromScreen(); }
 canvas.addEventListener("pointerdown", tapAdvance);
 
 // Bind an on-screen button to a virtual key. Multi-touch safe; uses touch
@@ -349,6 +369,8 @@ const Music = (() => {
     sfxStomp() { if (!sfxReady()) return; slide(440, 120, actx.currentTime, 0.16, "square", 0.6); },
     sfxHurt()  { if (!sfxReady()) return; slide(300, 80, actx.currentTime, 0.32, "sawtooth", 0.6); },
     sfxOver()  { if (!sfxReady()) return; const t = actx.currentTime; blip(523, t, 0.16, "square", 0.5); blip(392, t + 0.16, 0.16, "square", 0.5); blip(262, t + 0.32, 0.42, "square", 0.6); },
+    sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
+    sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     start() {
       if (!enabled) return;
       ensure();
@@ -400,10 +422,11 @@ document.addEventListener("visibilitychange", () => {
 /* =============================================================
    STATE
    ============================================================= */
-let state = "start";
+let state = "start";   // start | playing | levelcomplete | won | gameover
 let score, lives, invulnTimer, enemySpawnTimer;
-let player, platforms, coins, enemies;
+let player, platforms, carabiners, enemies;
 let cameraX, worldGenX;
+let levelIndex = 0;   // index into LEVELS for the active world
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let shake = 0;        // current screen-shake magnitude (px), decays to 0
 let newBest = false;  // did this run beat the saved high score?
@@ -411,8 +434,12 @@ let bestScore = (() => {
   try { return parseInt(localStorage.getItem("abushakra_best"), 10) || 0; }
   catch (e) { return 0; }
 })();
-// Ramps from 1.0 up to ~2.8 as you travel further — faster, more frequent enemies.
-function difficulty() { return 1 + Math.min(cameraX / 5000, 1.8); }
+function currentLevel() { return LEVELS[levelIndex]; }
+function prevTarget() { return levelIndex > 0 ? LEVELS[levelIndex - 1].target : 0; }
+// Mild within-level ramp (1.0 -> ~1.6) combined with the level's own multiplier.
+function difficulty() {
+  return (1 + Math.min(cameraX / 6000, 0.6)) * currentLevel().enemySpeedMul;
+}
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function aabb(a, b) {
@@ -429,17 +456,17 @@ function makePlatform(x) {
   const w = rand(PLAT_WIDTH_MIN, PLAT_WIDTH_MAX);
   const y = GROUND_Y - rand(PLAT_RISE_MIN, PLAT_RISE_MAX);
   const p = { x, y, w, h: PLAT_THICK };
-  addCoinsAbove(p);
+  addCarabinersAbove(p);
   return p;
 }
 
-function addCoinsAbove(p) {
+function addCarabinersAbove(p) {
   if (Math.random() < 0.8) {
     const n = Math.floor(rand(1, 4));
     for (let i = 0; i < n; i++) {
-      const cx = p.x + 14 + i * (COIN_SIZE + 14);
-      if (cx + COIN_SIZE > p.x + p.w) break;
-      coins.push({ x: cx, y: p.y - COIN_SIZE - 14, w: COIN_SIZE, h: COIN_SIZE, t: Math.random() * 6.28 });
+      const cx = p.x + 16 + i * (CARABINER_W + 20);
+      if (cx + CARABINER_W > p.x + p.w) break;
+      carabiners.push({ x: cx, y: p.y - CARABINER_H - 14, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
     }
   }
 }
@@ -455,7 +482,7 @@ function generateAhead() {
   // Recycle anything well behind the camera.
   const cutoff = cameraX - 300;
   platforms = platforms.filter(p => p.x + p.w > cutoff);
-  coins = coins.filter(c => c.x + c.w > cutoff);
+  carabiners = carabiners.filter(c => c.x + c.w > cutoff);
 }
 
 /* =============================================================
@@ -471,7 +498,12 @@ function updateEnemies(dt) {
   for (const e of enemies) e.x -= ENEMY_SPEED * d * dt;
   enemies = enemies.filter(e => e.alive && e.x + e.w > cameraX - 200);
   enemySpawnTimer -= dt;
-  if (enemySpawnTimer <= 0) { spawnEnemy(); enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX) / d; }
+  if (enemySpawnTimer <= 0) {
+    spawnEnemy();
+    // Higher levels spawn faster (smaller spawnMul); also tightens with distance.
+    const ramp = 1 + Math.min(cameraX / 6000, 0.6);
+    enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX) * currentLevel().spawnMul / ramp;
+  }
 }
 
 /* =============================================================
@@ -547,6 +579,13 @@ function updatePlayer(dt) {
   if (invulnTimer > 0) invulnTimer -= dt;
 }
 
+function recordBest() {
+  if (score > bestScore) {
+    bestScore = score; newBest = true;
+    try { localStorage.setItem("abushakra_best", String(bestScore)); } catch (e) {}
+  }
+}
+
 function loseLife() {
   if (invulnTimer > 0) return;
   lives -= 1;
@@ -554,10 +593,7 @@ function loseLife() {
   addShake(11);
   if (lives <= 0) {
     lives = 0; state = "gameover"; Music.stop(); Music.sfxOver();
-    if (score > bestScore) {
-      bestScore = score; newBest = true;
-      try { localStorage.setItem("abushakra_best", String(bestScore)); } catch (e) {}
-    }
+    recordBest();
   } else {
     Music.sfxHurt();
   }
@@ -566,13 +602,13 @@ function loseLife() {
 /* =============================================================
    COLLISIONS
    ============================================================= */
-function handleCoins() {
-  for (const c of coins) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += COIN_POINTS;
+function handleCarabiners() {
+  for (const c of carabiners) if (!c.collected && aabb(player, c)) {
+    c.collected = true; score += CARABINER_POINTS;
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
-  coins = coins.filter(c => !c.collected);
+  carabiners = carabiners.filter(c => !c.collected);
 }
 function handleEnemies() {
   for (const e of enemies) {
@@ -616,11 +652,11 @@ function dustBurst(x, y) {
     grav: 520, lifeMin: 0.25, lifeMax: 0.5, sizeMin: 2, sizeMax: 4,
     colors: ["#d8c8a8", "#bfae8c", "#efe6d0"] });
 }
-// Gold sparkle when a coin is grabbed.
+// Steel/silver sparkle when a carabiner is clipped.
 function sparkleBurst(x, y) {
   spawnParticles(x, y, 12, { angMin: 0, angMax: Math.PI * 2, spdMin: 60, spdMax: 220,
     grav: 120, lifeMin: 0.3, lifeMax: 0.6, sizeMin: 2, sizeMax: 4,
-    colors: ["#ffd84d", "#fff3b0", "#ffae3b"] });
+    colors: ["#e6ebf2", "#b8c0cc", "#ffffff"] });
 }
 // Green poof when an enemy is stomped.
 function poofBurst(x, y) {
@@ -651,16 +687,35 @@ function drawParticles() {
    DRAW
    ============================================================= */
 function drawBackground() {
-  if (imgLoaded.background) {
-    const img = images.background;
-    const tileW = img.naturalWidth * (VIEW_H / img.naturalHeight);
-    let startX = -((cameraX * BG_PARALLAX) % tileW);
-    if (startX > 0) startX -= tileW;
-    for (let x = startX; x < VIEW_W; x += tileW) ctx.drawImage(img, x, 0, tileW, VIEW_H);
-  } else {
+  const bgKey = currentLevel().bg;
+  if (!imgLoaded[bgKey]) {
     const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
     g.addColorStop(0, "#87b5e8"); g.addColorStop(1, "#cfe7ff");
     ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    return;
+  }
+  const img = images[bgKey];
+  const tileW = img.naturalWidth * (VIEW_H / img.naturalHeight);
+  const scroll = cameraX * BG_PARALLAX;
+  // World-stable tile index of the leftmost visible copy (parity must follow
+  // world position, not the screen, so tiles don't flicker as we scroll).
+  const firstIndex = Math.floor(scroll / tileW);
+  const bleed = 1;  // 1px overlap so no hairline gap shows at a seam
+  for (let i = firstIndex; ; i++) {
+    const x = i * tileW - scroll;          // screen-x of this tile's left edge
+    if (x >= VIEW_W) break;
+    // Mirror every other copy: a flipped tile's left edge equals the previous
+    // tile's right edge, so neighbours connect into a seamless loop.
+    const mirror = (((i % 2) + 2) % 2) === 1;
+    ctx.save();
+    if (mirror) {
+      ctx.translate(x + tileW + bleed, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, tileW + bleed, VIEW_H);
+    } else {
+      ctx.drawImage(img, x, 0, tileW + bleed, VIEW_H);
+    }
+    ctx.restore();
   }
 }
 
@@ -698,16 +753,21 @@ function drawPlatforms() {
   }
 }
 
-function drawCoins() {
-  for (const c of coins) {
+function drawCarabiners() {
+  for (const c of carabiners) {
     const sx = c.x - cameraX;
     if (sx > VIEW_W || sx + c.w < 0) continue;
     const bob = Math.sin(performance.now() / 300 + c.t) * 3;
-    if (imgLoaded.coin) ctx.drawImage(images.coin, sx, c.y + bob, c.w, c.h);
+    if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, sx, c.y + bob, c.w, c.h);
     else {
-      ctx.beginPath(); ctx.fillStyle = "#ffcf33";
-      ctx.arc(sx + c.w / 2, c.y + c.h / 2 + bob, c.w / 2, 0, 6.28); ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = "#c89b14"; ctx.stroke();
+      // Fallback: a metallic-grey oblong ring (carabiner shape).
+      const cx = sx + c.w / 2, cy = c.y + c.h / 2 + bob;
+      ctx.lineWidth = Math.max(3, c.w * 0.28); ctx.strokeStyle = "#aeb6c2";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, c.w / 2 - 1, c.h / 2 - 1, 0, 0, 6.28);
+      ctx.stroke();
+      ctx.fillStyle = "#d94f44";  // gate spring dot
+      ctx.beginPath(); ctx.arc(cx + c.w / 2 - 2, c.y + bob + 4, 2.5, 0, 6.28); ctx.fill();
     }
   }
 }
@@ -762,6 +822,17 @@ function drawHUD() {
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
   ctx.fillStyle = "#fff";   ctx.textAlign = "right"; ctx.fillText("Lives: " + lives, VIEW_W - 16, 28);
   ctx.textAlign = "left";
+
+  // Level name + progress toward this level's milestone (thin bar under the band).
+  const lvl = currentLevel();
+  const lo = prevTarget(), hi = lvl.target;
+  const prog = Math.max(0, Math.min(1, (score - lo) / (hi - lo)));
+  ctx.fillStyle = "#fff"; ctx.font = "bold 15px Segoe UI, Arial"; ctx.textAlign = "left";
+  ctx.fillText("Lv " + lvl.id + " · " + lvl.name + " — " + score + " / " + hi, 16, 58);
+  const barX = 16, barY = 64, barW = 240, barH = 8;
+  ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = "#7fd6ff"; ctx.fillRect(barX, barY, barW * prog, barH);
+  ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(barX + 0.5, barY + 0.5, barW, barH);
 }
 
 function drawCenteredText(lines) {
@@ -792,11 +863,12 @@ function drawStartScreen() {
   const lines = [
     { text: "Walk: A / D or Arrows  (or on-screen buttons)", font: "20px Segoe UI, Arial", color: "#ffffff" },
     { text: "Jump: Space / Up / W",                          font: "20px Segoe UI, Arial", color: "#ffffff" },
-    { text: "Coins +" + COIN_POINTS + "   •   Stomp enemies +" + STOMP_POINTS, font: "20px Segoe UI, Arial", color: "#ffd84d" },
+    { text: "Carabiners +" + CARABINER_POINTS + "   •   Stomp enemies +" + STOMP_POINTS, font: "20px Segoe UI, Arial", color: "#cfe8ff" },
+    { text: "Climb 3 Dolomites peaks to win", font: "20px Segoe UI, Arial", color: "#cfe8ff" },
     { text: "Press SPACE or tap to start", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
   ];
-  let y = VIEW_H - 116;
-  for (const l of lines) { ctx.fillStyle = l.color; ctx.font = l.font; ctx.fillText(l.text, VIEW_W / 2, y); y += 32; }
+  let y = VIEW_H - 148;
+  for (const l of lines) { ctx.fillStyle = l.color; ctx.font = l.font; ctx.fillText(l.text, VIEW_W / 2, y); y += 31; }
   ctx.textAlign = "left";
 }
 function drawGameOver() {
@@ -808,18 +880,62 @@ function drawGameOver() {
   lines.push({ text: "Press R or click to restart", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" });
   drawCenteredText(lines);
 }
+function drawLevelComplete() {
+  const next = LEVELS[Math.min(levelIndex + 1, LEVELS.length - 1)];
+  drawCenteredText([
+    { text: "LEVEL " + currentLevel().id + " COMPLETE!", font: "bold 44px Segoe UI, Arial", color: "#9fe6ff", gap: 50 },
+    { text: currentLevel().name, font: "22px Segoe UI, Arial", color: "#ffffff", gap: 40 },
+    { text: "+" + LEVEL_BONUS_LIVES + " life   •   Score " + score, font: "22px Segoe UI, Arial", color: "#7bd36a", gap: 46 },
+    { text: "Next: " + next.name + "  (reach " + next.target + ")", font: "20px Segoe UI, Arial", color: "#ffd84d", gap: 48 },
+    { text: "Press SPACE / JUMP or tap to continue", font: "bold 22px Segoe UI, Arial", color: "#9fe6ff" }
+  ]);
+}
+function drawWin() {
+  recordBest();  // idempotent (only updates if higher)
+  const lines = [
+    { text: "★ YOU WIN! ★", font: "bold 52px Segoe UI, Arial", color: "#ffd84d", gap: 54 },
+    { text: "All three Dolomites peaks conquered", font: "22px Segoe UI, Arial", color: "#ffffff", gap: 44 },
+    { text: "Final Score: " + score + "      Best: " + bestScore, font: "26px Segoe UI, Arial", gap: 48 }
+  ];
+  if (newBest) lines.push({ text: "★ NEW BEST! ★", font: "bold 28px Segoe UI, Arial", color: "#7bd36a", gap: 48 });
+  lines.push({ text: "Press R or tap to play again", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" });
+  drawCenteredText(lines);
+}
 
 /* =============================================================
    LOOP
    ============================================================= */
 function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
+  levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; worldGenX = 300;
-  platforms = []; coins = []; enemies = [];
+  platforms = []; carabiners = []; enemies = [];
   particles = []; shake = 0; newBest = false;
   initPlayer();
   generateAhead();
+  state = "playing";
+}
+
+// Cumulative milestones: when total score reaches the level target, either show
+// the "Level Complete" interstitial (and award a bonus life) or, on the last
+// level, the "You Win!" screen. The run stays continuous across levels.
+function checkLevelProgress() {
+  if (score < currentLevel().target) return;
+  if (levelIndex >= LEVELS.length - 1) {
+    state = "won"; Music.stop(); Music.sfxWin(); recordBest();
+  } else {
+    state = "levelcomplete";
+    lives += LEVEL_BONUS_LIVES;
+    Music.sfxLevel();
+  }
+}
+
+// Continue from the interstitial into the next level. Score, lives and the
+// player carry over; only the world theme and difficulty change.
+function advanceLevel() {
+  if (levelIndex < LEVELS.length - 1) levelIndex += 1;
+  invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
   state = "playing";
 }
 
@@ -828,20 +944,23 @@ function update(dt) {
   updateCamera();
   generateAhead();
   updateEnemies(dt);
-  handleCoins();
+  handleCarabiners();
   handleEnemies();
+  checkLevelProgress();
 }
 
 function draw() {
   drawBackground();
   drawGround();
   drawPlatforms();
-  drawCoins();
+  drawCarabiners();
   drawEnemies();
   drawPlayer();
   drawParticles();
   drawHUD();
   if (state === "start") drawStartScreen();
+  else if (state === "levelcomplete") drawLevelComplete();
+  else if (state === "won") drawWin();
   else if (state === "gameover") drawGameOver();
 }
 
