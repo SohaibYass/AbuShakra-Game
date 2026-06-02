@@ -82,6 +82,32 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 - **Jump buffering** (0.12s): a jump pressed just before landing still fires.
 - **Variable jump height:** releasing jump early cuts upward velocity (×0.45).
 
+### 9. Carabiners + three Dolomites levels
+- **Reskin (coins → carabiners):** new `carabiner.png` sprite, renamed all
+  `coin*` → `carabiner*`, sized the draw box + collision hitbox from the art's
+  aspect ratio (taller than wide), switched the pickup particle gold → silver.
+- **Data-driven levels:** a `LEVELS = [...]` config (name, background, score
+  target, per-level enemy speed / spawn rate) drives the active world.
+- **Cumulative milestones:** one continuous run; the world swaps as total score
+  passes 500 → 1000 → 1500.
+- **Flow:** title → Level 1 → "Level Complete" interstitial (+1 life) → Level 2
+  → interstitial (+1 life) → Level 3 → "You Win!" → restart. Score and lives
+  carry over. A single `advanceFromScreen()` handler drives every non-play
+  screen so input stays consistent.
+- **HUD:** current level name + a progress bar toward the level's target.
+- **Backgrounds:** three real pixel-art Dolomites scenes (Lavaredo / Odle /
+  Latemar) supplied by the user, replacing the generated placeholders.
+- New `sfxLevel` / `sfxWin` chiptune cues.
+
+### 10. Seamless mirror-tiling backgrounds
+- **Problem:** the wide mountain backgrounds showed an ugly hard seam where the
+  image repeated.
+- **Fix:** mirror-tile the background — draw every other copy horizontally
+  flipped (`ctx.scale(-1,1)`) so a flipped tile's left edge equals the previous
+  tile's right edge, forming a seamless loop. Flip parity is keyed to *world*
+  position (not screen) so tiles don't flicker while scrolling, with a 1px
+  "bleed" overlap so no dark hairline shows at a boundary. Works with any image.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -120,13 +146,17 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v9`**.
-- Commit history (recent): iOS zoom/buttons → music iOS hardening → facing fix →
-  network-first SW → prompt update → juice → SW auto-reload → prompt lessons →
-  SFX + high score + difficulty → jump feel.
+- Latest deploy: service worker cache **`abushakra-v10`**.
+- Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
+  score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
+  Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW).
+- **SW precache gotcha (learned here):** never list a file in `cache.addAll`
+  unless it exists — one 404 rejects the whole install and silently breaks
+  offline mode. Caught when `background.png` was renamed to per-level
+  backgrounds; the precache list must be updated in the same change.
 
 ## Possible next features (not yet built)
 
-- Power-ups: shield, double-jump, speed boost, coin magnet.
+- Power-ups: shield, double-jump, speed boost, carabiner magnet.
 - Enemy variety: hopper, flyer, tank.
 - Moving platforms + hazards (spikes, pits with visual telegraph).
