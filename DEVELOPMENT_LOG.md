@@ -108,6 +108,42 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   position (not screen) so tiles don't flicker while scrolling, with a 1px
   "bleed" overlap so no dark hairline shows at a boundary. Works with any image.
 
+### 11. Enemy variety (hopper, flyer, tank)
+- **Data-driven enemy types:** an `ENEMY_TYPES` table (size, speed, HP, points,
+  colour, air/ground) plus a per-level `enemyMix` array that the spawner samples,
+  so each level introduces tougher foes (L1 walker-heavy + a hopper → L2 adds
+  flyers → L3 adds tanks).
+- **The four types:**
+  - **Walker** — the original ground patroller, 1 HP, 50 pts.
+  - **Hopper** — gravity + a periodic hop; squashes/stretches with its vertical
+    speed; green glow, 70 pts.
+  - **Flyer** — floats at jump-reachable height, bobs up/down, flapping wings;
+    purple glow, 80 pts.
+  - **Tank** — big and slow, **2 stomps to kill** (white flash + armour plate +
+    HP pips after the first hit); grey glow, 120 pts.
+- **Multi-hit stomp:** `handleEnemies` decrements per-enemy `hp`; an enemy only
+  dies (and pays out) at 0, otherwise it flashes and keeps coming.
+- Since all types share one `enemy.png`, a soft **type-coloured radial glow** is
+  drawn behind each so the variety reads at a glance.
+
+### 12. Real pixel-art assets (carabiner + character)
+- Swapped the placeholder **carabiner** for the user's pixel-art version and the
+  **character** for an updated Abu sprite (now carrying a rope coil + belt
+  carabiner).
+- **Asset processing pipeline** (done in Pillow before wiring in):
+  - **Carabiner:** simple near-white → transparent + auto-crop (the art's only
+    light areas are the background).
+  - **Character:** the sprite has *interior* white details (headband checks,
+    jacket logo, eyes), so a blanket "near-white → transparent" would punch holes
+    in it. Used a **flood-fill from the image borders** instead, clearing only the
+    *connected* background, then auto-cropped.
+  - Re-derived each sprite's draw box / hitbox from the cropped aspect ratio
+    (carabiner `CARABINER_W` 22→23; character box unchanged — new aspect 0.469 ≈
+    old 0.484).
+- **Lesson:** auto-crop + a tight hitbox keep collisions honest when art is
+  re-exported at a different size; and prefer border flood-fill over a global
+  white-key threshold whenever a sprite legitimately contains white.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -146,10 +182,12 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v10`**.
+- Latest deploy: service worker cache **`abushakra-v13`**.
 - Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
   score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
-  Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW).
+  Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW) →
+  enemy variety (hopper/flyer/tank) → real pixel-art carabiner → updated Abu
+  character sprite.
 - **SW precache gotcha (learned here):** never list a file in `cache.addAll`
   unless it exists — one 404 rejects the whole install and silently breaks
   offline mode. Caught when `background.png` was renamed to per-level
@@ -158,5 +196,4 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 ## Possible next features (not yet built)
 
 - Power-ups: shield, double-jump, speed boost, carabiner magnet.
-- Enemy variety: hopper, flyer, tank.
 - Moving platforms + hazards (spikes, pits with visual telegraph).
