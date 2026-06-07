@@ -144,6 +144,29 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   re-exported at a different size; and prefer border flood-fill over a global
   white-key threshold whenever a sprite legitimately contains white.
 
+### 13. Hazards — empty holes + moving/elevator platforms
+- **Empty holes:** gaps carved into the otherwise-continuous ground. A
+  `groundSolidAt(x)` check makes the floor non-solid over a hole, so you fall in;
+  dropping past the rim costs a life and rescues you back onto the near solid
+  edge. Holes are width-capped (≤150px) and centred in a gap with ground on both
+  sides, so every one stays clearable with a single jump.
+- **Moving / elevator platforms:** a new platform `kind: "mover"` that oscillates
+  on one axis (vertical elevator or horizontal slider) via a sine phase. The
+  player is *carried* — `updatePlatforms` runs before `updatePlayer`, detects a
+  rider with `playerRidingOn`, and applies the platform's per-frame delta to the
+  player. Telegraphed with a cyan outline + directional chevrons. Vertical
+  elevators keep their low point a jump above the ground so they're reachable.
+- **Data-driven & escalating:** each `LEVELS` entry has a `haz: { mover, pit }`
+  probability block; `makePlatform` rolls for movers and `maybeGroundHazard`
+  rolls for holes, ramping up L1 → L3.
+- **Order matters:** movers update first (so the player's landing test sees their
+  new position), rider-carry uses *last* frame's `onGround`, and the landing loop
+  skips any platform flagged `solid === false`.
+- **Scope note:** spikes, deadly carnivorous plants, lava pits, and crumbling
+  platforms were each prototyped during this feature and then removed at the
+  user's request — the shipped set is deliberately just holes + moving platforms.
+  (Lava became a plain dark "empty hole"; crumbling blocks were cut entirely.)
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -182,12 +205,13 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v13`**.
+- Latest deploy: service worker cache **`abushakra-v18`**.
 - Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
   score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
   Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW) →
   enemy variety (hopper/flyer/tank) → real pixel-art carabiner → updated Abu
-  character sprite.
+  character sprite → new title cover (Abu vs the snake) → title cache-bust
+  (`?v=`) → hazards (empty holes + moving/elevator platforms).
 - **SW precache gotcha (learned here):** never list a file in `cache.addAll`
   unless it exists — one 404 rejects the whole install and silently breaks
   offline mode. Caught when `background.png` was renamed to per-level
@@ -196,4 +220,5 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 ## Possible next features (not yet built)
 
 - Power-ups: shield, double-jump, speed boost, carabiner magnet.
-- Moving platforms + hazards (spikes, pits with visual telegraph).
+- (Moving platforms + holes shipped in §13. Spikes / crumbling blocks / lava /
+  carnivorous plants were prototyped there and cut — revisit only if wanted.)
