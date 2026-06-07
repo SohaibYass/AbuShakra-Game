@@ -155,13 +155,18 @@ const MAX_ENEMIES     = 6;
 const LEVELS = [
   { id: 1, name: "Three Peaks of Lavaredo", bg: "bgLavaredo", target: 500,
     enemySpeedMul: 1.0, spawnMul: 1.0,
-    enemyMix: ["walker", "walker", "walker", "hopper"] },
+    enemyMix: ["walker", "walker", "walker", "hopper"],
+    // Hazard probabilities (mover = a moving/elevator platform; pit = an empty
+    // hole in the ground). Each level ramps up: L1 a gentle taste, L3 the most.
+    haz: { mover: 0.00, pit: 0.00 } },
   { id: 2, name: "Odle Group",              bg: "bgOdle",     target: 1000,
     enemySpeedMul: 1.35, spawnMul: 0.75,
-    enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"] },
+    enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
+    haz: { mover: 0.18, pit: 0.10 } },
   { id: 3, name: "Latemar Group",           bg: "bgLatemar",  target: 1500,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
-    enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"] }
+    enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"],
+    haz: { mover: 0.24, pit: 0.20 } }
 ];
 
 // Elevated stone platforms (the ones you jump onto).
@@ -171,6 +176,10 @@ const PLAT_RISE_MIN  = 55,  PLAT_RISE_MAX  = 130;  // height above ground (reach
 const PLAT_THICK     = 28;
 
 const INVULN_TIME    = 1.5;    // seconds invulnerable after a hit
+
+// --- Hazards ---
+const PIT_W_MAX      = 150;    // empty holes never wider than this (always jumpable)
+const PIT_FALL_DEPTH = 20;     // px below GROUND_Y you must drop for a fall to count
 
 // Sprite sizes (match cropped art aspect ratios).
 const PLAYER_W = 30, PLAYER_H = 62;
@@ -438,6 +447,7 @@ document.addEventListener("visibilitychange", () => {
 let state = "start";   // start | playing | levelcomplete | won | gameover
 let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
+let pits = [];      // empty holes in the ground {x, w}
 let cameraX, worldGenX;
 let levelIndex = 0;   // index into LEVELS for the active world
 let particles = [];   // cosmetic dust / sparkle / poof bits
@@ -468,8 +478,23 @@ function aabb(a, b) {
 function makePlatform(x) {
   const w = rand(PLAT_WIDTH_MIN, PLAT_WIDTH_MAX);
   const y = GROUND_Y - rand(PLAT_RISE_MIN, PLAT_RISE_MAX);
-  const p = { x, y, w, h: PLAT_THICK };
-  addCarabinersAbove(p);
+  const p = { x, y, w, h: PLAT_THICK, kind: "static", solid: true };
+
+  const h = currentLevel().haz || {};
+  const r = Math.random();
+  if (h.mover && r < h.mover) {
+    // Moving / elevator platform: oscillates on one axis, carries its rider.
+    p.kind = "mover"; p.ox = x; p.phase = Math.random() * 6.28;
+    if (Math.random() < 0.6) {
+      // Vertical elevator — keep its low point a jump above the ground.
+      p.axis = "y"; p.oy = GROUND_Y - rand(120, 190);
+      p.amp = rand(40, 80); p.speed = rand(0.6, 1.1); p.y = p.oy;
+    } else {
+      p.axis = "x"; p.oy = y; p.amp = rand(50, 120); p.speed = rand(0.5, 1.0);
+    }
+  }
+
+  if (p.kind === "static") addCarabinersAbove(p);   // keep clips off moving blocks
   return p;
 }
 
@@ -484,18 +509,63 @@ function addCarabinersAbove(p) {
   }
 }
 
+// Maybe carve an empty hole into a gap. It's centred with solid ground either
+// side and capped in width, so the gap always stays clearable with one jump.
+function maybeGroundHazard(gapStart, gap) {
+  const pPit = (currentLevel().haz || {}).pit || 0;
+  if (pPit && Math.random() < pPit && gap > 110) {
+    const pw = Math.min(PIT_W_MAX, gap - 50);
+    pits.push({ x: gapStart + (gap - pw) / 2, w: pw });
+  }
+}
+
 // Keep platforms generated up to a little past the right screen edge.
 function generateAhead() {
   const target = cameraX + VIEW_W + 400;
   while (worldGenX < target) {
-    worldGenX += rand(PLAT_GAP_MIN, PLAT_GAP_MAX);
+    const gap = rand(PLAT_GAP_MIN, PLAT_GAP_MAX);
+    const gapStart = worldGenX;
+    worldGenX += gap;
+    maybeGroundHazard(gapStart, gap);
     platforms.push(makePlatform(worldGenX));
     worldGenX += PLAT_WIDTH_MAX; // reserve space so the next gap starts after this block
   }
   // Recycle anything well behind the camera.
   const cutoff = cameraX - 300;
-  platforms = platforms.filter(p => p.x + p.w > cutoff);
+  platforms  = platforms.filter(p => p.x + p.w > cutoff);
   carabiners = carabiners.filter(c => c.x + c.w > cutoff);
+  pits       = pits.filter(p => p.x + p.w > cutoff);
+}
+
+// True unless the given world-x sits over a lava pit (no solid floor there).
+function groundSolidAt(cx) {
+  for (const pit of pits) if (cx > pit.x && cx < pit.x + pit.w) return false;
+  return true;
+}
+
+// Is the player currently resting on top of platform p (within a hair)?
+function playerRidingOn(p) {
+  return player && player.onGround &&
+         player.x + player.w > p.x && player.x < p.x + p.w &&
+         Math.abs((player.y + player.h) - p.y) < 3;
+}
+
+// Move moving/elevator platforms, advance crumbling blocks, and carry a rider.
+// Runs BEFORE updatePlayer so landing tests see the new positions; rider
+// detection uses last frame's onGround (still valid here).
+function updatePlatforms(dt) {
+  for (const p of platforms) {
+    if (p.kind !== "mover") continue;
+    p.phase += p.speed * dt;
+    const off = Math.sin(p.phase) * p.amp;
+    const nx = p.axis === "x" ? p.ox + off : p.ox;
+    const ny = p.axis === "y" ? p.oy + off : p.oy;
+    const dx = nx - p.x, dy = ny - p.y;
+    p.x = nx; p.y = ny;
+    if ((dx || dy) && playerRidingOn(p)) {  // carry the rider
+      player.x += dx; player.y += dy;
+    }
+  }
 }
 
 /* =============================================================
@@ -602,6 +672,7 @@ function updatePlayer(dt) {
     const impactVy = player.vy;                 // descending speed this frame
     const newBottom = player.y + player.h;
     for (const p of platforms) {
+      if (p.solid === false) continue;   // fallen crumbling block — no landing
       const overlapX = player.x + player.w > p.x && player.x < p.x + p.w;
       if (overlapX && prevBottom <= p.y + 1 && newBottom >= p.y) {
         player.y = p.y - player.h; player.vy = 0; player.onGround = true;
@@ -609,7 +680,8 @@ function updatePlayer(dt) {
         break;
       }
     }
-    if (!player.onGround && newBottom >= GROUND_Y) {
+    // Solid ground everywhere except over a lava pit (then you fall in).
+    if (!player.onGround && newBottom >= GROUND_Y && groundSolidAt(player.x + player.w / 2)) {
       player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
       if (impactVy > 250) dustBurst(player.x + player.w / 2, GROUND_Y);
     }
@@ -648,6 +720,22 @@ function handleCarabiners() {
     Music.sfxCoin();
   }
   carabiners = carabiners.filter(c => !c.collected);
+}
+function handleHazards() {
+  // Empty holes — falling in costs a life; rescue back to the near solid edge.
+  const cx = player.x + player.w / 2;
+  if (player.y + player.h > GROUND_Y + PIT_FALL_DEPTH) {
+    for (const pit of pits) {
+      if (cx > pit.x && cx < pit.x + pit.w) {
+        loseLife();                            // self-guards during invulnerability
+        if (state === "playing") {             // lift back onto solid ground
+          player.x = Math.max(0, pit.x - player.w - 6);
+          player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
+        }
+        break;
+      }
+    }
+  }
 }
 function handleEnemies() {
   for (const e of enemies) {
@@ -782,6 +870,8 @@ function drawPlatforms() {
   for (const p of platforms) {
     const sx = p.x - cameraX;
     if (sx > VIEW_W || sx + p.w < 0) continue;
+
+    ctx.save();
     if (imgLoaded.platform) {
       // Tile the stone texture across the platform width.
       const img = images.platform;
@@ -796,8 +886,42 @@ function drawPlatforms() {
     } else {
       ctx.fillStyle = "#7a756d"; ctx.fillRect(sx, p.y, p.w, p.h);
     }
+
+    // Type cues so the player can read each platform at a glance.
+    if (p.kind === "mover") {
+      ctx.strokeStyle = "rgba(120,220,255,0.9)"; ctx.lineWidth = 2;
+      ctx.strokeRect(sx + 1, p.y + 1, p.w - 2, p.h - 2);
+      ctx.fillStyle = "rgba(120,220,255,0.95)";
+      const cyp = p.y + p.h / 2;
+      if (p.axis === "y") {  // up/down chevrons
+        const mx = sx + p.w / 2;
+        ctx.beginPath(); ctx.moveTo(mx - 6, cyp + 2); ctx.lineTo(mx, cyp - 5); ctx.lineTo(mx + 6, cyp + 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(mx - 6, cyp - 2); ctx.lineTo(mx, cyp + 5); ctx.lineTo(mx + 6, cyp - 2); ctx.fill();
+      } else {               // left/right chevrons
+        ctx.beginPath(); ctx.moveTo(sx + 10, cyp - 6); ctx.lineTo(sx + 4, cyp); ctx.lineTo(sx + 10, cyp + 6); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(sx + p.w - 10, cyp - 6); ctx.lineTo(sx + p.w - 4, cyp); ctx.lineTo(sx + p.w - 10, cyp + 6); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 }
+
+// Empty holes — a dark chasm carved into the ground over each pit span.
+function drawPits() {
+  const top = GROUND_Y;
+  for (const pit of pits) {
+    const sx = pit.x - cameraX;
+    if (sx > VIEW_W || sx + pit.w < 0) continue;
+    const g = ctx.createLinearGradient(0, top, 0, VIEW_H);
+    g.addColorStop(0, "#2a241e"); g.addColorStop(0.4, "#140f0b"); g.addColorStop(1, "#000000");
+    ctx.fillStyle = g; ctx.fillRect(sx, top, pit.w, VIEW_H - top);
+    // Inner edge shadow so the rim reads as a carved hole.
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(sx, top, 4, VIEW_H - top);
+    ctx.fillRect(sx + pit.w - 4, top, 4, VIEW_H - top);
+  }
+}
+
 
 function drawCarabiners() {
   for (const c of carabiners) {
@@ -963,9 +1087,10 @@ function drawStartScreen() {
     { text: "Jump: Space / Up / W",                          font: "20px Segoe UI, Arial", color: "#ffffff" },
     { text: "Carabiners +" + CARABINER_POINTS + "   •   Stomp enemies +" + STOMP_POINTS, font: "20px Segoe UI, Arial", color: "#cfe8ff" },
     { text: "Climb 3 Dolomites peaks to win", font: "20px Segoe UI, Arial", color: "#cfe8ff" },
+    { text: "Mind the moving platforms & holes!", font: "20px Segoe UI, Arial", color: "#ffd27a" },
     { text: "Press SPACE or tap to start", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" }
   ];
-  let y = VIEW_H - 148;
+  let y = VIEW_H - 178;
   for (const l of lines) { ctx.fillStyle = l.color; ctx.font = l.font; ctx.fillText(l.text, VIEW_W / 2, y); y += 31; }
   ctx.textAlign = "left";
 }
@@ -1009,6 +1134,7 @@ function resetGame() {
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; worldGenX = 300;
   platforms = []; carabiners = []; enemies = [];
+  pits = [];
   particles = []; shake = 0; newBest = false;
   initPlayer();
   generateAhead();
@@ -1038,11 +1164,13 @@ function advanceLevel() {
 }
 
 function update(dt) {
+  updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
   updateCamera();
   generateAhead();
   updateEnemies(dt);
   handleCarabiners();
+  handleHazards();
   handleEnemies();
   checkLevelProgress();
 }
@@ -1050,6 +1178,7 @@ function update(dt) {
 function draw() {
   drawBackground();
   drawGround();
+  drawPits();
   drawPlatforms();
   drawCarabiners();
   drawEnemies();
