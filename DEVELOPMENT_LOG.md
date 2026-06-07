@@ -195,6 +195,36 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   puppeting limbs — a clean looping march, not hand-drawn side-view art. Tunable
   in `gen_walk.py` (frame count, lift/knee, bob/rock/sway).
 
+### 15. Level 1 reworked to natural Zugspitze terrain
+- **Goal:** Level 1 ("Zugspitze") should feel like climbing the painted mountain,
+  not jumping arcade blocks on a flat line.
+- **Scene drawn 1:1:** the whole `Zugspitze.png` is drawn mirror-tiled at 1:1
+  (no parallax) by `ZUG_TILE_W = 900`, so the painted foreground stays locked to
+  the collision as the world scrolls. (Trade-off: the distant peaks lost their
+  parallax depth — acceptable for exact alignment.) Levels 2–3 are untouched
+  (still block platforms / flat ground), gated by a per-level `terrain:"natural"`.
+- **Collision from the painting:** the playable surface is a heightmap, not
+  blocks. `surfaceY(x)` drives player + enemy collision; the player **auto-steps**
+  small rises (≤20px), **jumps** to climb taller ones, and walks off edges to
+  drop. Carabiners spawn just above the painted surface.
+- **Iterations to get the surface right:**
+  1. First tried *random terraces* — uneven, but didn't match the painted art.
+  2. Auto-detecting grass/rock tops (`analyze_terrain.py`) was noisy (caught
+     distant forest & tree tops); cleaned to *quantised flat ledges*.
+  3. **Source of truth = a hand-drawable red line on `terrain_overlay.png`.**
+     `overlay_to_ledges.py` reads that red stroke per column (topmost solid run,
+     so high cliffs survive and steps resolve cleanly) into a **dense surface
+     heightmap** (`ZUG_SURF`, 226 samples/tile). `surfaceY` linear-interpolates
+     it, so collision follows the drawn line **exactly** (slopes + steps), and
+     `ledges_check.png` overlays the result for verification.
+- **Workflow:** edit the red line in `terrain_overlay.png` → `python
+  overlay_to_ledges.py` → paste the printed `ZUG_SURF` into `index.html`.
+- **Lesson:** auto-extracting a walkable line from a painted scene is fragile
+  (distant greenery / trees fool colour heuristics); letting a human draw the
+  collision line on an overlay and tracing *that* is far more reliable — and the
+  surface must be a single-valued heightmap, so resolve vertical cliffs to one
+  side rather than averaging (averaging spikes).
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -233,14 +263,15 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v24`**.
+- Latest deploy: service worker cache **`abushakra-v29`**.
 - Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
   score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
   Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW) →
   enemy variety (hopper/flyer/tank) → real pixel-art carabiner → updated Abu
   character sprite → new title cover (Abu vs the snake) → title cache-bust
   (`?v=`) → hazards (empty holes + moving/elevator platforms) → 10-frame walk
-  animation (legs + body) baked via `gen_walk.py`.
+  animation (legs + body) baked via `gen_walk.py` → Level 1 natural Zugspitze
+  terrain (drawn 1:1, collision heightmap traced from `terrain_overlay.png`).
 - **SW precache gotcha (learned here):** never list a file in `cache.addAll`
   unless it exists — one 404 rejects the whole install and silently breaks
   offline mode. Caught when `background.png` was renamed to per-level

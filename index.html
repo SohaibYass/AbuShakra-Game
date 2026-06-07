@@ -131,16 +131,19 @@ const VIEW_W = 800, VIEW_H = 450;
 
 const GROUND_Y = 392;          // top surface of the continuous ground
 
-// Level-1 "natural terrain": the playable ground is an uneven chain of rock
-// LEDGES (terraces) following the Zugspitze art — you step and climb over them
-// instead of walking a flat line. Rock is textured from the Zugspitze image.
-const FG_SRC_TOP     = 0.80;            // image row where the foreground rock band starts (texture)
-const TERR_SEG_MIN   = 78, TERR_SEG_MAX = 150;  // ledge (terrace) width
-const TERR_MIN_TOP   = GROUND_Y - 104;  // highest ledge
-const TERR_MAX_TOP   = GROUND_Y + 26;   // lowest dip
-const TERR_STEP_UP   = 20;              // auto-climb rises up to this; taller needs a jump
-const TERR_STEP_DOWN = 28;              // auto-descend small drops; bigger and you fall
-const GRASS_CAP      = 8;               // grassy strip thickness on each ledge top
+// Level-1 "natural terrain": the collision is a set of flat LEDGES whose heights
+// were EXTRACTED from the painted Zugspitze foreground (see analyze_terrain.py),
+// so the player walks / steps / jumps along the actual painted terrain. The
+// scene is drawn 1:1 (mirror-tiled by ZUG_TILE_W) so art and collision stay
+// aligned as the world scrolls.
+const TERR_STEP_UP   = 20;   // auto-climb steps up to this; taller needs a jump
+const TERR_STEP_DOWN = 28;   // auto-descend small drops; bigger and you fall
+const ZUG_TILE_W = 900;      // image width drawn 1:1 (imgH -> VIEW_H)
+// Dense surface heightmap extracted from the red line in terrain_overlay.png
+// (see overlay_to_ledges.py). One sample every ZUG_TILE_W/(N-1) px; surfaceY
+// interpolates so collision follows the painted line exactly.
+const ZUG_SURF = [350.6, 352.1, 353.1, 353.1, 353.1, 353.6, 353.6, 354.6, 354.6, 354.6, 354.6, 354.6, 354.6, 354.1, 353.6, 353.6, 353.1, 353.1, 352.6, 352.6, 352.6, 354.1, 376.4, 379.0, 379.5, 379.0, 379.0, 378.5, 378.0, 377.5, 376.9, 376.4, 374.4, 373.9, 373.9, 373.9, 373.9, 373.9, 373.9, 373.4, 372.4, 371.4, 368.8, 368.8, 368.8, 369.3, 370.3, 371.4, 372.9, 373.9, 373.9, 373.4, 372.9, 371.9, 372.4, 372.9, 373.9, 373.9, 373.9, 373.9, 373.4, 372.4, 371.9, 371.9, 372.4, 373.4, 373.9, 374.4, 374.9, 375.9, 376.4, 377.5, 377.5, 377.5, 377.5, 377.5, 377.5, 378.0, 380.0, 384.0, 387.6, 394.7, 396.2, 396.7, 397.2, 397.7, 398.3, 398.8, 398.8, 399.3, 399.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 375.9, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 374.9, 374.4, 374.4, 373.9, 373.9, 373.9, 373.9, 373.9, 374.4, 374.9, 374.9, 374.9, 352.1, 346.5, 344.0, 343.5, 342.4, 341.4, 340.9, 340.4, 339.9, 339.4, 339.4, 338.9, 338.4, 337.9, 337.4, 336.4, 336.4, 336.4, 336.4, 336.9, 336.9, 337.4, 337.9, 337.9, 338.9, 339.9, 341.9, 343.5, 345.0, 346.5, 347.5, 348.0, 348.0, 348.0, 347.0, 346.5, 345.5, 345.0, 344.5, 345.0, 345.5, 345.5, 345.5, 345.5, 345.5, 345.5, 345.5, 345.0, 345.0, 344.5, 343.5, 343.5, 343.5, 342.4, 341.9, 341.4, 339.9, 339.4, 338.9, 338.9, 338.4, 338.4, 338.4, 338.4, 338.9, 340.4, 343.5, 345.0, 346.5, 348.0, 348.5, 348.5, 345.5, 343.0, 340.9, 339.4, 337.9, 336.9, 334.8, 332.8, 330.3, 326.7, 314.0, 294.8, 290.7, 289.7, 289.2, 290.2, 290.7, 291.2, 291.2, 291.7, 292.2, 292.7, 292.7, 292.7, 292.7, 291.7, 291.2, 291.2, 291.2];
+const ZUG_SURF_DX = ZUG_TILE_W / (ZUG_SURF.length - 1);
 
 const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
@@ -468,8 +471,6 @@ let state = "start";   // start | playing | levelcomplete | won | gameover
 let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
-let terrainSegments = [];   // Level-1 natural ledges {x, w, top}
-let lastTerraceTop = GROUND_Y;
 let cameraX, worldGenX;
 let levelIndex = 0;   // index into LEVELS for the active world
 let particles = [];   // cosmetic dust / sparkle / poof bits
@@ -541,34 +542,29 @@ function maybeGroundHazard(gapStart, gap) {
   }
 }
 
-// Scatter reachable carabiners just above a terrace ledge (sometimes a jump-arc).
-function maybeGroundCarabinersOn(seg) {
-  const n = Math.floor(rand(1, 4));
-  const arc = Math.random() < 0.5;
-  const baseY = seg.top - rand(42, 80);
-  for (let i = 0; i < n; i++) {
-    const cx = seg.x + 14 + i * (CARABINER_W + 22);
-    if (cx + CARABINER_W > seg.x + seg.w) break;
-    const y = arc ? baseY - Math.sin((i + 1) / (n + 1) * Math.PI) * 40 : baseY;
-    carabiners.push({ x: cx, y: y - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+// Scatter reachable carabiners just above the painted ledge at world-x.
+function maybeGroundCarabinersAt(x) {
+  if (Math.random() < 0.7) {
+    const n = Math.floor(rand(1, 4));
+    const arc = Math.random() < 0.5;
+    const baseY = surfaceY(x) - rand(44, 84);
+    for (let i = 0; i < n; i++) {
+      const cx = x + i * (CARABINER_W + 22);
+      const y = arc ? baseY - Math.sin((i + 1) / (n + 1) * Math.PI) * 40 : baseY;
+      carabiners.push({ x: cx, y: y - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+    }
   }
 }
 
-// Keep platforms / terrain generated up to a little past the right screen edge.
+// Keep platforms / carabiners generated up to a little past the right screen edge.
 function generateAhead() {
   const target = cameraX + VIEW_W + 400;
   if (currentLevel().terrain === "natural") {
-    // Natural terrain: a continuous chain of rock ledges at varying heights.
+    // Natural terrain: the surface is a fixed heightmap (ZUG_SURF); just place
+    // carabiners along the painted path.
     while (worldGenX < target) {
-      const w = rand(TERR_SEG_MIN, TERR_SEG_MAX);
-      const steps = [0, 0, -18, 18, -34, 34, 0, -50, 50];   // mostly gentle, some climbs
-      let nt = lastTerraceTop + steps[(Math.random() * steps.length) | 0];
-      nt = Math.max(TERR_MIN_TOP, Math.min(TERR_MAX_TOP, nt));
-      lastTerraceTop = nt;
-      const seg = { x: worldGenX, w, top: nt };
-      terrainSegments.push(seg);
-      if (Math.random() < 0.5) maybeGroundCarabinersOn(seg);
-      worldGenX += w;
+      worldGenX += rand(150, 300);
+      maybeGroundCarabinersAt(worldGenX);
     }
   } else {
     while (worldGenX < target) {
@@ -582,21 +578,24 @@ function generateAhead() {
   }
   // Recycle anything well behind the camera.
   const cutoff = cameraX - 300;
-  platforms       = platforms.filter(p => p.x + p.w > cutoff);
-  carabiners      = carabiners.filter(c => c.x + c.w > cutoff);
-  pits            = pits.filter(p => p.x + p.w > cutoff);
-  terrainSegments = terrainSegments.filter(s => s.x + s.w > cutoff);
+  platforms  = platforms.filter(p => p.x + p.w > cutoff);
+  carabiners = carabiners.filter(c => c.x + c.w > cutoff);
+  pits       = pits.filter(p => p.x + p.w > cutoff);
 }
 
-// Ground surface height at a world-x for natural terrain (the ledge top there).
+// Ground surface height at a world-x for natural terrain. The dense heightmap
+// (ZUG_SURF) repeats every ZUG_TILE_W and mirrors on odd tiles to match the
+// mirror-tiled art, so collision follows the painted line exactly.
 function surfaceY(worldX) {
-  const segs = terrainSegments;
-  for (let i = 0; i < segs.length; i++) {
-    const s = segs[i];
-    if (worldX >= s.x && worldX < s.x + s.w) return s.top;
-  }
-  if (segs.length) return worldX < segs[0].x ? segs[0].top : segs[segs.length - 1].top;
-  return GROUND_Y;
+  const t = Math.floor(worldX / ZUG_TILE_W);
+  let local = worldX - t * ZUG_TILE_W;
+  if ((((t % 2) + 2) % 2) === 1) local = ZUG_TILE_W - local;   // odd tile = mirrored
+  const fx = local / ZUG_SURF_DX;
+  let i = Math.floor(fx);
+  if (i < 0) return ZUG_SURF[0];
+  if (i >= ZUG_SURF.length - 1) return ZUG_SURF[ZUG_SURF.length - 1];
+  const f = fx - i;
+  return ZUG_SURF[i] * (1 - f) + ZUG_SURF[i + 1] * f;          // linear interpolation
 }
 
 // True unless the given world-x sits over a lava pit (no solid floor there).
@@ -932,6 +931,9 @@ function drawBackground() {
     ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     return;
   }
+  // Level 1: draw the whole painted scene 1:1 so the foreground ledges line up
+  // with the collision heightmap (no parallax — art and terrain stay aligned).
+  if (currentLevel().terrain === "natural") { drawNaturalScene(images[bgKey]); return; }
   const img = images[bgKey];
   const tileW = img.naturalWidth * (VIEW_H / img.naturalHeight);
   const scroll = cameraX * BG_PARALLAX;
@@ -958,12 +960,9 @@ function drawBackground() {
 }
 
 function drawGround() {
-  // Level 1: natural rock terrain cropped from the Zugspitze art (no blocks).
-  const lvl = currentLevel();
-  if (lvl.terrain === "natural" && imgLoaded[lvl.bg]) {
-    drawNaturalGround(images[lvl.bg]);
-    return;
-  }
+  // Level 1: the painted scene (drawn in drawBackground) already includes the
+  // ground; collision is the invisible ZUG_SURF heightmap.
+  if (currentLevel().terrain === "natural") return;
   const bandH = VIEW_H - GROUND_Y;
   if (imgLoaded.platform) {
     const img = images.platform;
@@ -976,24 +975,11 @@ function drawGround() {
   }
 }
 
-// Draw the natural terrain: clip to the uneven ledge profile (terrace tops),
-// fill it with the rock band cropped from the level art, then cap each ledge
-// with grass. The collision (terrace tops) lives hidden inside this rock.
-function drawNaturalGround(img) {
-  // 1) Clip to the terrain silhouette (sample the surface across the screen).
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(0, VIEW_H);
-  for (let sx = 0; sx <= VIEW_W; sx += 5) ctx.lineTo(sx, surfaceY(cameraX + sx));
-  ctx.lineTo(VIEW_W, VIEW_H);
-  ctx.closePath();
-  ctx.clip();
-
-  // 2) Fill with the foreground rock band, mirror-tiled, scrolling 1:1.
-  const sTop = img.naturalHeight * FG_SRC_TOP, sH = img.naturalHeight - sTop;
-  const destTop = TERR_MIN_TOP - 6, destH = VIEW_H - destTop;
-  const tileW = img.naturalWidth * (destH / sH);
-  const first = Math.floor(cameraX / tileW), bleed = 1;
+// Draw the full painted Zugspitze scene 1:1, mirror-tiled by ZUG_TILE_W, so the
+// foreground ledges sit exactly where the ZUG_SURF collision says they do.
+function drawNaturalScene(img) {
+  const tileW = ZUG_TILE_W, bleed = 1;
+  const first = Math.floor(cameraX / tileW);
   for (let i = first; ; i++) {
     const x = i * tileW - cameraX;
     if (x >= VIEW_W) break;
@@ -1001,23 +987,11 @@ function drawNaturalGround(img) {
     ctx.save();
     if (mirror) {
       ctx.translate(x + tileW + bleed, 0); ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, sTop, img.naturalWidth, sH, 0, destTop, tileW + bleed, destH);
+      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, tileW + bleed, VIEW_H);
     } else {
-      ctx.drawImage(img, 0, sTop, img.naturalWidth, sH, x, destTop, tileW + bleed, destH);
+      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, x, 0, tileW + bleed, VIEW_H);
     }
     ctx.restore();
-  }
-  ctx.restore();   // drop the clip
-
-  // 3) Grass cap along each ledge top so the edges read as grassy alpine rock.
-  for (const s of terrainSegments) {
-    const x0 = s.x - cameraX, x1 = s.x + s.w - cameraX;
-    if (x1 < 0 || x0 > VIEW_W) continue;
-    const gx = Math.max(0, x0), gw = Math.min(VIEW_W, x1) - gx;
-    const g = ctx.createLinearGradient(0, s.top - 3, 0, s.top + GRASS_CAP);
-    g.addColorStop(0, "#74c24a"); g.addColorStop(1, "#3c7a32");
-    ctx.fillStyle = g; ctx.fillRect(gx, s.top - 3, gw, GRASS_CAP + 3);
-    ctx.fillStyle = "rgba(150,220,110,0.7)"; ctx.fillRect(gx, s.top - 3, gw, 2);  // bright lip
   }
 }
 
@@ -1311,15 +1285,13 @@ function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
-  cameraX = 0;
+  cameraX = 0; worldGenX = 0;
   platforms = []; carabiners = []; enemies = [];
-  pits = []; terrainSegments = []; lastTerraceTop = GROUND_Y;
+  pits = [];
   particles = []; shake = 0; newBest = false;
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
-    // A flat starting ledge so the player spawns on solid ground.
-    terrainSegments.push({ x: -200, w: 620, top: GROUND_Y });
-    worldGenX = 420;
+    player.y = surfaceY(player.x + player.w / 2) - player.h;   // stand on the painted ledge
   } else {
     worldGenX = 300;
   }
