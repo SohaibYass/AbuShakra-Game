@@ -118,6 +118,7 @@ const ASSETS = {
   carabiner:  "carabiner.png",    // climbing clip pickup
   title:      "AbuVsSnake.png?v=14",  // splash art; bump ?v on each cover update to dodge stale image caches
   // Per-level Dolomites backgrounds (see LEVELS below).
+  bgZugspitze: "Zugspitze.png",
   bgLavaredo: "bgLavaredo.png",
   bgOdle:     "bgOdle.png",
   bgLatemar:  "bgLatemar.png"
@@ -129,6 +130,17 @@ const ASSETS = {
 const VIEW_W = 800, VIEW_H = 450;
 
 const GROUND_Y = 392;          // top surface of the continuous ground
+
+// Level-1 "natural terrain": the playable ground is an uneven chain of rock
+// LEDGES (terraces) following the Zugspitze art — you step and climb over them
+// instead of walking a flat line. Rock is textured from the Zugspitze image.
+const FG_SRC_TOP     = 0.80;            // image row where the foreground rock band starts (texture)
+const TERR_SEG_MIN   = 78, TERR_SEG_MAX = 150;  // ledge (terrace) width
+const TERR_MIN_TOP   = GROUND_Y - 104;  // highest ledge
+const TERR_MAX_TOP   = GROUND_Y + 26;   // lowest dip
+const TERR_STEP_UP   = 20;              // auto-climb rises up to this; taller needs a jump
+const TERR_STEP_DOWN = 28;              // auto-descend small drops; bigger and you fall
+const GRASS_CAP      = 8;               // grassy strip thickness on each ledge top
 
 const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
@@ -154,12 +166,15 @@ const MAX_ENEMIES     = 6;
    milestones: one continuous run, the world swaps as your TOTAL score
    passes each target. Difficulty (enemy spawn / speed) is driven per level. */
 const LEVELS = [
-  { id: 1, name: "Three Peaks of Lavaredo", bg: "bgLavaredo", target: 500,
+  { id: 1, name: "Zugspitze", bg: "bgZugspitze", target: 500,
     enemySpeedMul: 1.0, spawnMul: 1.0,
     enemyMix: ["walker", "walker", "walker", "hopper"],
     // Hazard probabilities (mover = a moving/elevator platform; pit = an empty
     // hole in the ground). Each level ramps up: L1 a gentle taste, L3 the most.
-    haz: { mover: 0.00, pit: 0.00 } },
+    haz: { mover: 0.00, pit: 0.00 },
+    // Natural terrain: the foreground rock from the art IS the playable ground —
+    // no block platforms. (Only Level 1 for now.)
+    terrain: "natural" },
   { id: 2, name: "Odle Group",              bg: "bgOdle",     target: 1000,
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
@@ -453,6 +468,8 @@ let state = "start";   // start | playing | levelcomplete | won | gameover
 let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
+let terrainSegments = [];   // Level-1 natural ledges {x, w, top}
+let lastTerraceTop = GROUND_Y;
 let cameraX, worldGenX;
 let levelIndex = 0;   // index into LEVELS for the active world
 let particles = [];   // cosmetic dust / sparkle / poof bits
@@ -524,22 +541,62 @@ function maybeGroundHazard(gapStart, gap) {
   }
 }
 
-// Keep platforms generated up to a little past the right screen edge.
+// Scatter reachable carabiners just above a terrace ledge (sometimes a jump-arc).
+function maybeGroundCarabinersOn(seg) {
+  const n = Math.floor(rand(1, 4));
+  const arc = Math.random() < 0.5;
+  const baseY = seg.top - rand(42, 80);
+  for (let i = 0; i < n; i++) {
+    const cx = seg.x + 14 + i * (CARABINER_W + 22);
+    if (cx + CARABINER_W > seg.x + seg.w) break;
+    const y = arc ? baseY - Math.sin((i + 1) / (n + 1) * Math.PI) * 40 : baseY;
+    carabiners.push({ x: cx, y: y - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+  }
+}
+
+// Keep platforms / terrain generated up to a little past the right screen edge.
 function generateAhead() {
   const target = cameraX + VIEW_W + 400;
-  while (worldGenX < target) {
-    const gap = rand(PLAT_GAP_MIN, PLAT_GAP_MAX);
-    const gapStart = worldGenX;
-    worldGenX += gap;
-    maybeGroundHazard(gapStart, gap);
-    platforms.push(makePlatform(worldGenX));
-    worldGenX += PLAT_WIDTH_MAX; // reserve space so the next gap starts after this block
+  if (currentLevel().terrain === "natural") {
+    // Natural terrain: a continuous chain of rock ledges at varying heights.
+    while (worldGenX < target) {
+      const w = rand(TERR_SEG_MIN, TERR_SEG_MAX);
+      const steps = [0, 0, -18, 18, -34, 34, 0, -50, 50];   // mostly gentle, some climbs
+      let nt = lastTerraceTop + steps[(Math.random() * steps.length) | 0];
+      nt = Math.max(TERR_MIN_TOP, Math.min(TERR_MAX_TOP, nt));
+      lastTerraceTop = nt;
+      const seg = { x: worldGenX, w, top: nt };
+      terrainSegments.push(seg);
+      if (Math.random() < 0.5) maybeGroundCarabinersOn(seg);
+      worldGenX += w;
+    }
+  } else {
+    while (worldGenX < target) {
+      const gap = rand(PLAT_GAP_MIN, PLAT_GAP_MAX);
+      const gapStart = worldGenX;
+      worldGenX += gap;
+      maybeGroundHazard(gapStart, gap);
+      platforms.push(makePlatform(worldGenX));
+      worldGenX += PLAT_WIDTH_MAX; // reserve space so the next gap starts after this block
+    }
   }
   // Recycle anything well behind the camera.
   const cutoff = cameraX - 300;
-  platforms  = platforms.filter(p => p.x + p.w > cutoff);
-  carabiners = carabiners.filter(c => c.x + c.w > cutoff);
-  pits       = pits.filter(p => p.x + p.w > cutoff);
+  platforms       = platforms.filter(p => p.x + p.w > cutoff);
+  carabiners      = carabiners.filter(c => c.x + c.w > cutoff);
+  pits            = pits.filter(p => p.x + p.w > cutoff);
+  terrainSegments = terrainSegments.filter(s => s.x + s.w > cutoff);
+}
+
+// Ground surface height at a world-x for natural terrain (the ledge top there).
+function surfaceY(worldX) {
+  const segs = terrainSegments;
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    if (worldX >= s.x && worldX < s.x + s.w) return s.top;
+  }
+  if (segs.length) return worldX < segs[0].x ? segs[0].top : segs[segs.length - 1].top;
+  return GROUND_Y;
 }
 
 // True unless the given world-x sits over a lava pit (no solid floor there).
@@ -592,23 +649,29 @@ function spawnEnemy() {
 }
 function updateEnemies(dt) {
   const d = difficulty();
+  const natural = currentLevel().terrain === "natural";
   for (const e of enemies) {
     e.x -= ENEMY_SPEED * e.speed * d * dt;
     if (e.hitFlash > 0) e.hitFlash -= dt;
+    const floor = natural ? surfaceY(e.x + e.w / 2) : GROUND_Y;
     if (e.type === "hopper") {
-      // Gravity + a periodic hop while grounded.
+      // Gravity + a periodic hop while grounded (on the local terrain surface).
       e.vy += GRAVITY * dt; e.y += e.vy * dt;
-      if (e.y + e.h >= GROUND_Y) {
-        e.y = GROUND_Y - e.h; e.vy = 0;
+      if (e.y + e.h >= floor) {
+        e.y = floor - e.h; e.vy = 0;
         e.jumpTimer -= dt;
         if (e.jumpTimer <= 0) { e.vy = HOPPER_JUMP; e.jumpTimer = rand(0.5, 1.2); }
       }
     } else if (e.type === "flyer") {
-      // Float in place, bobbing up and down around baseY.
+      // Float, bobbing up and down (above the local surface on natural terrain).
       e.phase += dt * 3;
-      e.y = e.baseY + Math.sin(e.phase) * 26;
+      const base = natural ? floor - e.h - 80 : e.baseY;
+      e.y = base + Math.sin(e.phase) * 26;
+    } else if (natural) {
+      // walker & tank follow the uneven ground surface.
+      e.y = floor - e.h;
     }
-    // walker & tank keep their fixed ground y.
+    // (on block levels walker & tank keep their fixed ground y.)
   }
   enemies = enemies.filter(e => e.alive && e.x + e.w > cameraX - 200);
   enemySpawnTimer -= dt;
@@ -676,8 +739,23 @@ function updatePlayer(dt) {
 
   player.vy += GRAVITY * dt;
 
-  player.x += player.vx * dt;
-  if (player.x < 0) player.x = 0;
+  const natural = currentLevel().terrain === "natural";
+
+  // --- Horizontal move ---
+  let nx = player.x + player.vx * dt;
+  if (nx < 0) nx = 0;
+  // Natural terrain: auto-step small ledges, but a tall ledge is a wall to jump.
+  if (natural && player.onGround && player.vx !== 0) {
+    const gs = surfaceY(nx + player.w / 2);
+    const rise = (player.y + player.h) - gs;     // >0: surface is above the feet
+    if (rise > TERR_STEP_UP) {
+      nx = player.x;                              // too tall — blocked, must jump
+    } else if (rise > -TERR_STEP_DOWN) {
+      player.y = gs - player.h;                   // step up / down a small ledge
+    }
+    // a bigger drop is left to gravity below (walk off the ledge and fall)
+  }
+  player.x = nx;
 
   const prevBottom = player.y + player.h;
   player.y += player.vy * dt;
@@ -695,10 +773,15 @@ function updatePlayer(dt) {
         break;
       }
     }
-    // Solid ground everywhere except over a lava pit (then you fall in).
-    if (!player.onGround && newBottom >= GROUND_Y && groundSolidAt(player.x + player.w / 2)) {
-      player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
-      if (impactVy > 250) dustBurst(player.x + player.w / 2, GROUND_Y);
+    // Land on the ground: a terrace top on natural terrain, else the flat ground
+    // (solid everywhere except over a lava pit).
+    if (!player.onGround) {
+      const gs = natural ? surfaceY(player.x + player.w / 2) : GROUND_Y;
+      const solid = natural ? true : groundSolidAt(player.x + player.w / 2);
+      if (newBottom >= gs && solid) {
+        player.y = gs - player.h; player.vy = 0; player.onGround = true;
+        if (impactVy > 250) dustBurst(player.x + player.w / 2, gs);
+      }
     }
   }
 
@@ -875,6 +958,12 @@ function drawBackground() {
 }
 
 function drawGround() {
+  // Level 1: natural rock terrain cropped from the Zugspitze art (no blocks).
+  const lvl = currentLevel();
+  if (lvl.terrain === "natural" && imgLoaded[lvl.bg]) {
+    drawNaturalGround(images[lvl.bg]);
+    return;
+  }
   const bandH = VIEW_H - GROUND_Y;
   if (imgLoaded.platform) {
     const img = images.platform;
@@ -884,6 +973,51 @@ function drawGround() {
     for (let x = startX; x < VIEW_W; x += tileW) ctx.drawImage(img, x, GROUND_Y, tileW, bandH);
   } else {
     ctx.fillStyle = "#6b6660"; ctx.fillRect(0, GROUND_Y, VIEW_W, bandH);
+  }
+}
+
+// Draw the natural terrain: clip to the uneven ledge profile (terrace tops),
+// fill it with the rock band cropped from the level art, then cap each ledge
+// with grass. The collision (terrace tops) lives hidden inside this rock.
+function drawNaturalGround(img) {
+  // 1) Clip to the terrain silhouette (sample the surface across the screen).
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0, VIEW_H);
+  for (let sx = 0; sx <= VIEW_W; sx += 5) ctx.lineTo(sx, surfaceY(cameraX + sx));
+  ctx.lineTo(VIEW_W, VIEW_H);
+  ctx.closePath();
+  ctx.clip();
+
+  // 2) Fill with the foreground rock band, mirror-tiled, scrolling 1:1.
+  const sTop = img.naturalHeight * FG_SRC_TOP, sH = img.naturalHeight - sTop;
+  const destTop = TERR_MIN_TOP - 6, destH = VIEW_H - destTop;
+  const tileW = img.naturalWidth * (destH / sH);
+  const first = Math.floor(cameraX / tileW), bleed = 1;
+  for (let i = first; ; i++) {
+    const x = i * tileW - cameraX;
+    if (x >= VIEW_W) break;
+    const mirror = (((i % 2) + 2) % 2) === 1;
+    ctx.save();
+    if (mirror) {
+      ctx.translate(x + tileW + bleed, 0); ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, sTop, img.naturalWidth, sH, 0, destTop, tileW + bleed, destH);
+    } else {
+      ctx.drawImage(img, 0, sTop, img.naturalWidth, sH, x, destTop, tileW + bleed, destH);
+    }
+    ctx.restore();
+  }
+  ctx.restore();   // drop the clip
+
+  // 3) Grass cap along each ledge top so the edges read as grassy alpine rock.
+  for (const s of terrainSegments) {
+    const x0 = s.x - cameraX, x1 = s.x + s.w - cameraX;
+    if (x1 < 0 || x0 > VIEW_W) continue;
+    const gx = Math.max(0, x0), gw = Math.min(VIEW_W, x1) - gx;
+    const g = ctx.createLinearGradient(0, s.top - 3, 0, s.top + GRASS_CAP);
+    g.addColorStop(0, "#74c24a"); g.addColorStop(1, "#3c7a32");
+    ctx.fillStyle = g; ctx.fillRect(gx, s.top - 3, gw, GRASS_CAP + 3);
+    ctx.fillStyle = "rgba(150,220,110,0.7)"; ctx.fillRect(gx, s.top - 3, gw, 2);  // bright lip
   }
 }
 
@@ -1177,11 +1311,18 @@ function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
-  cameraX = 0; worldGenX = 300;
+  cameraX = 0;
   platforms = []; carabiners = []; enemies = [];
-  pits = [];
+  pits = []; terrainSegments = []; lastTerraceTop = GROUND_Y;
   particles = []; shake = 0; newBest = false;
   initPlayer();
+  if (LEVELS[0].terrain === "natural") {
+    // A flat starting ledge so the player spawns on solid ground.
+    terrainSegments.push({ x: -200, w: 620, top: GROUND_Y });
+    worldGenX = 420;
+  } else {
+    worldGenX = 300;
+  }
   generateAhead();
   state = "playing";
 }
