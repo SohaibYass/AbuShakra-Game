@@ -112,6 +112,7 @@
    ============================================================= */
 const ASSETS = {
   player:     "character.png",
+  walk:       "character_walk.png?v=4",   // 10-frame walk-cycle sprite sheet (bump ?v on regen)
   enemy:      "enemy.png",
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
@@ -183,6 +184,10 @@ const PIT_FALL_DEPTH = 20;     // px below GROUND_Y you must drop for a fall to 
 
 // Sprite sizes (match cropped art aspect ratios).
 const PLAYER_W = 30, PLAYER_H = 62;
+const WALK_FRAMES = 10;  // frames in character_walk.png (one full 2-step loop)
+// Each walk cell is padded (headroom + side room for body bob/rock/sway); these
+// fractions must match gen_walk.py so the body draws at the standing-sprite scale.
+const WALK_PAD_X = 0.119, WALK_PAD_Y = 0.120;
 const ENEMY_W  = 46, ENEMY_H  = 46;
 // A carabiner is taller than it is wide (art is ~140x200, ratio 0.7).
 const CARABINER_W = 23, CARABINER_H = 31;
@@ -631,8 +636,18 @@ function updatePlayer(dt) {
   player.vx = move * PLAYER_SPEED;
   if (move !== 0) player.facing = move;
 
-  // Advance the walk cycle only while moving on the ground.
-  if (move !== 0 && player.onGround) player.walkPhase += dt * 11;
+  // Advance the walk cycle only while moving on the ground, and kick up a
+  // little dust on every footfall so it reads as walking, not sliding.
+  if (move !== 0 && player.onGround) {
+    const prevPhase = player.walkPhase;
+    player.walkPhase += dt * 9.5;
+    // |sin| dips to 0 at each multiple of PI — that's a footfall.
+    if (Math.floor(player.walkPhase / Math.PI) !== Math.floor(prevPhase / Math.PI)) {
+      footDust(player.x + player.w / 2 - player.facing * 5, player.y + player.h);
+    }
+  } else if (player.onGround) {
+    player.walkPhase = 0;   // reset to a neutral stance when standing still
+  }
 
   // --- Jump feel: coyote time, jump buffering, variable height ---
   // Coyote: keep "can jump" alive briefly after walking off a ledge.
@@ -785,6 +800,12 @@ function dustBurst(x, y) {
   spawnParticles(x, y, 9, { angMin: -Math.PI, angMax: 0, spdMin: 40, spdMax: 170,
     grav: 520, lifeMin: 0.25, lifeMax: 0.5, sizeMin: 2, sizeMax: 4,
     colors: ["#d8c8a8", "#bfae8c", "#efe6d0"] });
+}
+// Small puff under a foot on each step (subtle — gates the "walking" read).
+function footDust(x, y) {
+  spawnParticles(x, y, 3, { angMin: -Math.PI * 0.85, angMax: -Math.PI * 0.15, spdMin: 18, spdMax: 64,
+    grav: 480, lifeMin: 0.16, lifeMax: 0.32, sizeMin: 1.5, sizeMax: 3,
+    colors: ["#d8c8a8", "#cbbf9f", "#e8dcc4"] });
 }
 // Steel/silver sparkle when a carabiner is clipped.
 function sparkleBurst(x, y) {
@@ -1013,9 +1034,9 @@ function drawPlayer() {
     lean = 0.07 * player.facing;           // lean into the jump arc
     squashY = 1.04;                        // slight stretch in the air
   } else if (Math.abs(player.vx) > 1) {
-    bob = -Math.abs(Math.sin(ph)) * 5;     // head bobs up on each step
-    lean = Math.sin(ph) * 0.05 * player.facing;
-    squashY = 1 - Math.abs(Math.cos(ph)) * 0.05;  // squash on footfall
+    // The walk sprite sheet carries the bob + leg motion; just add a slight
+    // forward lean for momentum.
+    lean = 0.03 * player.facing;
   } else {
     bob = Math.sin(performance.now() / 600) * 1.5; // idle breathing
   }
@@ -1029,12 +1050,36 @@ function drawPlayer() {
   ctx.rotate(lean);
   if (player.facing > 0) ctx.scale(-1, 1);  // art faces left; flip when going right
   if (imgLoaded.player) {
-    ctx.drawImage(images.player, -drawW / 2, -drawH, drawW, drawH);
+    if (player.onGround && Math.abs(player.vx) > 1) {
+      drawWalkingSprite(drawW, drawH, ph);   // articulated legs while walking
+    } else {
+      ctx.drawImage(images.player, -drawW / 2, -drawH, drawW, drawH);
+    }
   } else {
     ctx.fillStyle = "#2980b9";
     ctx.fillRect(-drawW / 2, -drawH, drawW, drawH);
   }
   ctx.restore();
+}
+
+// Walk animation: play the pre-baked 6-frame sprite sheet, picking the frame
+// from the walk-cycle phase. Origin is at the feet (y=0), head at y=-drawH.
+// Falls back to the standing sprite if the sheet hasn't loaded.
+function drawWalkingSprite(drawW, drawH, ph) {
+  if (!imgLoaded.walk) {
+    ctx.drawImage(images.player, -drawW / 2, -drawH, drawW, drawH);
+    return;
+  }
+  const sheet = images.walk;
+  const cw = sheet.naturalWidth / WALK_FRAMES, chh = sheet.naturalHeight;
+  const span = (2 * Math.PI) / WALK_FRAMES;              // phase per frame
+  let f = Math.floor(ph / span) % WALK_FRAMES;
+  if (f < 0) f += WALK_FRAMES;
+  // The cell is padded; scale it up so the body matches the standing sprite and
+  // anchor the feet (cell bottom) at y=0, centred horizontally.
+  const dW = drawW * (1 + 2 * WALK_PAD_X);
+  const dH = drawH * (1 + WALK_PAD_Y);
+  ctx.drawImage(sheet, f * cw, 0, cw, chh, -dW / 2, -dH, dW, dH);
 }
 
 function drawHUD() {
