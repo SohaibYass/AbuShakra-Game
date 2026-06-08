@@ -1,25 +1,35 @@
-"""Read the red collision line drawn on terrain_overlay.png and turn it into a
-DENSE surface heightmap (ZUG_SURF) for Level 1 — following the drawn line exactly
-(slopes and steps), not snapped to flat ledges. Edit the red line in
-terrain_overlay.png and re-run to update the in-game terrain.
+"""Read the red collision line drawn on a *_terrain_overlay.png and turn it into
+a DENSE surface heightmap (e.g. ZUG_SURF / GLOCK_SURF) for a natural level —
+following the drawn line exactly (slopes and steps), not snapped to flat ledges.
+
+Usage:  python overlay_to_ledges.py [overlay.png] [VAR_NAME] [check_out.png]
+  default: terrain_overlay.png  ZUG_SURF  ledges_check.png
 """
+import sys
 from PIL import Image, ImageDraw
 
-ov = Image.open("terrain_overlay.png").convert("RGB")
+OVERLAY = sys.argv[1] if len(sys.argv) > 1 else "terrain_overlay.png"
+VARNAME = sys.argv[2] if len(sys.argv) > 2 else "ZUG_SURF"
+CHECK   = sys.argv[3] if len(sys.argv) > 3 else "ledges_check.png"
+
+ov = Image.open(OVERLAY).convert("RGB")
 W, H = ov.size
 px = ov.load()
 VIEW_H = 450
 SCALE_Y = VIEW_H / H
 
 def is_red(r, g, b):
-    return r > 150 and g < 110 and b < 110 and r - g > 60 and r - b > 60
+    # strict: the drawn line is pure/bright red, not warm orange-brown rock
+    return r > 165 and g < 90 and b < 90 and r - g > 95 and r - b > 95
 
 # Red-line y per column. The stroke is THIN, so a thin red run IS the surface
 # (this preserves high ledges). Pick the thin run nearest the previous column for
 # continuity. Pure-vertical columns (only a tall run) are left blank and become
 # interpolated ramps between ledges.
 def runs_in_col(x):
-    reds = [y for y in range(int(0.50 * H), H) if is_red(*px[x, y])]
+    # strict is_red only matches the drawn line, so we can scan high up and still
+    # capture tall ledges (without catching sunset sky / warm rock).
+    reds = [y for y in range(int(0.15 * H), H) if is_red(*px[x, y])]
     if not reds:
         return []
     out = []
@@ -32,13 +42,16 @@ def runs_in_col(x):
     out.append((s, p))
     return out
 
+# Per column take the TOP-most real stroke (captures high ledges; steps resolve
+# cleanly). Thin spikes from steep cliff overlaps are removed by a median filter
+# on the sampled surface further down.
 line = [None] * W
 for x in range(W):
-    runs = [r for r in runs_in_col(x) if r[1] - r[0] >= 1]   # ignore 1px specks
+    runs = [r for r in runs_in_col(x) if r[1] - r[0] >= 1]
     if not runs:
         continue
-    s, e = min(runs, key=lambda r: r[0])    # TOP-most stroke = highest surface here
-    line[x] = s + 2                          # ~centre of the thin stroke
+    s, e = min(runs, key=lambda r: r[0])
+    line[x] = s + 2
 
 known = [x for x in range(W) if line[x] is not None]
 if not known:
@@ -66,7 +79,16 @@ line = sm
 # Sample a dense heightmap in GAME coords across one tile.
 N = 226                                  # ~4px game spacing
 tileW = W * SCALE_Y
-surf = [round(line[round(i * (W - 1) / (N - 1))] * SCALE_Y, 1) for i in range(N)]
+surf = [line[round(i * (W - 1) / (N - 1))] * SCALE_Y for i in range(N)]
+
+# Median filter to remove thin spikes (steep-cliff overlap artifacts) while
+# preserving wide ledges and real step edges.
+mk = 4
+med = surf[:]
+for i in range(N):
+    a = max(0, i - mk); b = min(N, i + mk + 1)
+    med[i] = sorted(surf[a:b])[(b - a) // 2]
+surf = [round(v, 1) for v in med]
 
 # verification overlay: draw the EXACT sampled surface in bright green
 chk = ov.copy()
@@ -76,8 +98,8 @@ for i in range(1, N):
     x0 = (i - 1) * dx_img; x1 = i * dx_img
     y0 = surf[i - 1] / SCALE_Y; y1 = surf[i] / SCALE_Y
     d.line([(x0, y0), (x1, y1)], fill=(0, 255, 0), width=3)
-chk.save("ledges_check.png")
+chk.save(CHECK)
 
-print("ZUG_TILE_W =", round(tileW))
+print("TILE_W =", round(tileW))
 print("N =", N, " game_y min/max =", min(surf), max(surf))
-print("ZUG_SURF = [" + ", ".join(str(v) for v in surf) + "];")
+print("const %s = [" % VARNAME + ", ".join(str(v) for v in surf) + "];")
