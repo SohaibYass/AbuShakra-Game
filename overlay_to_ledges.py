@@ -93,15 +93,13 @@ surf = med
 # Climb-rate cap: a wall taller than the player's jump (~144px) is impassable and
 # would trap the player (and the tile repeats). Limit how fast the surface may
 # RISE per sample so any too-steep cliff becomes an auto-walkable steep slope.
-# Drops are left alone (you can always fall off a ledge). Forward + backward pass
-# so the cap doesn't shift where the climb lands.
+# Drops are left alone (you can always fall off a ledge). FORWARD-only so the
+# climb ramps up *at* the cliff and follows the drawn line up to the top — a
+# backward pass would ramp up early and create a false peak before the cliff.
 MAX_RISE = 14.0          # px up per ~4px sample -> auto-walkable slope
 for i in range(1, N):
     if surf[i] < surf[i - 1] - MAX_RISE:
         surf[i] = surf[i - 1] - MAX_RISE
-for i in range(N - 2, -1, -1):
-    if surf[i] < surf[i + 1] - MAX_RISE:
-        surf[i] = surf[i + 1] - MAX_RISE
 surf = [round(v, 1) for v in surf]
 
 # verification overlay: draw the EXACT sampled surface in bright green
