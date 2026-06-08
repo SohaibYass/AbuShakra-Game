@@ -197,7 +197,7 @@ const LEVELS = [
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
     terrain: "natural", surf: GLOCK_SURF, tileW: GLOCK_TILE_W },
-  { id: 3, name: "Grande", country: "Italy", bg: "bgGrande", target: 1500,
+  { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrande", target: 1500,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
     enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"],
     terrain: "natural", surf: GRANDE_SURF, tileW: GRANDE_TILE_W },
@@ -496,6 +496,8 @@ let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
 let cameraX, worldGenX;
 let levelIndex = 0;   // index into LEVELS for the active world
+let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
+let dashboard = null;      // between-levels "Mountain Progress" screen data
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let shake = 0;        // current screen-shake magnitude (px), decays to 0
 let newBest = false;  // did this run beat the saved high score?
@@ -860,7 +862,7 @@ function loseLife() {
    ============================================================= */
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += CARABINER_POINTS;
+    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1;
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
@@ -1329,15 +1331,114 @@ function drawGameOver() {
   lines.push({ text: "Press R or click to restart", font: "bold 24px Segoe UI, Arial", color: "#9fe6ff" });
   drawCenteredText(lines);
 }
-function drawLevelComplete() {
-  const next = LEVELS[Math.min(levelIndex + 1, LEVELS.length - 1)];
-  drawCenteredText([
-    { text: "LEVEL " + currentLevel().id + " COMPLETE!", font: "bold 44px Segoe UI, Arial", color: "#9fe6ff", gap: 50 },
-    { text: currentLevel().name, font: "22px Segoe UI, Arial", color: "#ffffff", gap: 40 },
-    { text: "+" + LEVEL_BONUS_LIVES + " life   •   Score " + score, font: "22px Segoe UI, Arial", color: "#7bd36a", gap: 46 },
-    { text: "Next: " + next.name + "  (reach " + next.target + ")", font: "20px Segoe UI, Arial", color: "#ffd84d", gap: 48 },
-    { text: "Press SPACE / JUMP or tap to continue", font: "bold 22px Segoe UI, Arial", color: "#9fe6ff" }
-  ]);
+// A small national flag, drawn procedurally (centred horizontally on cx).
+function drawFlag(country, cx, topY, w, h) {
+  const x = cx - w / 2, y = topY, t3 = w / 3, h3 = h / 3;
+  switch (country) {
+    case "Germany":                                   // black / red / gold
+      ctx.fillStyle = "#000000"; ctx.fillRect(x, y, w, h3);
+      ctx.fillStyle = "#dd0000"; ctx.fillRect(x, y + h3, w, h3);
+      ctx.fillStyle = "#ffce00"; ctx.fillRect(x, y + 2 * h3, w, h - 2 * h3); break;
+    case "Austria":                                   // red / white / red
+      ctx.fillStyle = "#c8102e"; ctx.fillRect(x, y, w, h3);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(x, y + h3, w, h3);
+      ctx.fillStyle = "#c8102e"; ctx.fillRect(x, y + 2 * h3, w, h - 2 * h3); break;
+    case "Italy":                                     // green / white / red
+      ctx.fillStyle = "#009246"; ctx.fillRect(x, y, t3, h);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(x + t3, y, t3, h);
+      ctx.fillStyle = "#ce2b37"; ctx.fillRect(x + 2 * t3, y, w - 2 * t3, h); break;
+    case "Switzerland": {                             // red with white cross
+      ctx.fillStyle = "#d52b1e"; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = "#ffffff";
+      const s = Math.max(2, Math.round(h * 0.2));
+      ctx.fillRect(x + w / 2 - s / 2, y + h * 0.22, s, h * 0.56);
+      ctx.fillRect(x + w * 0.22, y + h / 2 - s / 2, w * 0.56, s); break;
+    }
+    case "France":                                    // blue / white / red
+      ctx.fillStyle = "#0055a4"; ctx.fillRect(x, y, t3, h);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(x + t3, y, t3, h);
+      ctx.fillStyle = "#ef4135"; ctx.fillRect(x + 2 * t3, y, w - 2 * t3, h); break;
+    default:
+      ctx.fillStyle = "#888888"; ctx.fillRect(x, y, w, h);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+
+// A small snow-capped mountain icon above a map node.
+function drawMtnIcon(cx, baseY, bright) {
+  ctx.fillStyle = bright ? "#8aa0bb" : "#46546a";
+  ctx.beginPath(); ctx.moveTo(cx - 13, baseY); ctx.lineTo(cx, baseY - 19); ctx.lineTo(cx + 13, baseY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = bright ? "#ffffff" : "#9eadc2";       // snow cap
+  ctx.beginPath(); ctx.moveTo(cx - 5, baseY - 12); ctx.lineTo(cx, baseY - 19); ctx.lineTo(cx + 5, baseY - 12); ctx.closePath(); ctx.fill();
+}
+
+// "Mountain Progress" dashboard shown after each level (the levelcomplete state).
+function drawLevelDashboard() {
+  const d = dashboard;
+  if (!d) return;
+  const done = LEVELS[d.completedLevelIndex], next = LEVELS[d.nextLevelIndex];
+
+  ctx.fillStyle = "rgba(6,10,20,0.88)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "#9fe6ff"; ctx.font = "bold 38px Segoe UI, Arial";
+  ctx.fillText("LEVEL COMPLETE", VIEW_W / 2, 54);
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 22px Segoe UI, Arial";
+  ctx.fillText(done.name + "  —  " + done.country, VIEW_W / 2, 86);
+  ctx.fillStyle = "#cfe8ff"; ctx.font = "17px Segoe UI, Arial";
+  ctx.fillText("Carabiners this level: " + d.carabiners + "    •    Total Score: " + score + "    •    Lives: " + lives, VIEW_W / 2, 114);
+
+  // --- journey map ---
+  const n = LEVELS.length, mapY = 250;
+  const x0 = 92, x1 = VIEW_W - 92;
+  const nodeX = i => x0 + (x1 - x0) * (i / (n - 1));
+
+  ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,0.22)";          // full route
+  ctx.beginPath(); ctx.moveTo(nodeX(0), mapY); ctx.lineTo(nodeX(n - 1), mapY); ctx.stroke();
+  ctx.strokeStyle = "#7bd36a";                                           // completed portion
+  ctx.beginPath(); ctx.moveTo(nodeX(0), mapY); ctx.lineTo(nodeX(d.completedLevelIndex), mapY); ctx.stroke();
+
+  for (let i = 0; i < n; i++) {
+    const x = nodeX(i), completed = i <= d.completedLevelIndex, isNext = i === d.nextLevelIndex;
+    drawMtnIcon(x, mapY - 26, completed);
+    ctx.beginPath(); ctx.arc(x, mapY, 12, 0, 6.2832);
+    ctx.fillStyle = completed ? "#7bd36a" : (isNext ? "#ffd84d" : "#39435a"); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.65)"; ctx.stroke();
+    if (completed) {                                                     // checkmark
+      ctx.strokeStyle = "#0a2a0a"; ctx.lineWidth = 2.5; ctx.beginPath();
+      ctx.moveTo(x - 5, mapY); ctx.lineTo(x - 1, mapY + 4); ctx.lineTo(x + 5, mapY - 5); ctx.stroke();
+    }
+    ctx.fillStyle = completed ? "#eaf7e0" : (isNext ? "#ffe9a8" : "#93a4bd");
+    ctx.font = (isNext ? "bold " : "") + "12px Segoe UI, Arial";
+    ctx.fillText(LEVELS[i].name, x, mapY + 30);
+    ctx.fillStyle = "#7f93ad"; ctx.font = "10px Segoe UI, Arial";
+    ctx.fillText(LEVELS[i].country, x, mapY + 43);
+    ctx.globalAlpha = completed || isNext ? 1 : 0.55;   // dim future-level flags
+    drawFlag(LEVELS[i].country, x, mapY + 49, 22, 14);
+    ctx.globalAlpha = 1;
+  }
+
+  // animated AbuShakra marker travelling from completed node to next node
+  const t = Math.min(1, d.animTime / d.animDuration);
+  const e = t * t * (3 - 2 * t);                                         // smoothstep
+  const mx = nodeX(d.completedLevelIndex) + (nodeX(d.nextLevelIndex) - nodeX(d.completedLevelIndex)) * e;
+  const my = (mapY - 48) - Math.sin(e * Math.PI) * 20;
+  if (imgLoaded.player) {
+    const mw = 24, mh = mw * (player.h / player.w);
+    ctx.drawImage(images.player, mx - mw / 2, my - mh, mw, mh);
+  } else { ctx.fillStyle = "#e23b3b"; ctx.fillRect(mx - 7, my - 18, 14, 18); }
+
+  ctx.fillStyle = "#ffd84d"; ctx.font = "bold 18px Segoe UI, Arial";
+  ctx.fillText("AbuShakra travels from " + done.name + " to " + next.name, VIEW_W / 2, 332);
+  ctx.fillStyle = "#7bd36a"; ctx.font = "15px Segoe UI, Arial";
+  ctx.fillText("+" + LEVEL_BONUS_LIVES + " life   •   Next target: " + next.target, VIEW_W / 2, 358);
+
+  if (Math.floor(performance.now() / 500) % 2 === 0) {
+    ctx.fillStyle = "#9fe6ff"; ctx.font = "bold 20px Segoe UI, Arial";
+    ctx.fillText("Press / Tap to continue", VIEW_W / 2, 408);
+  }
+  ctx.textAlign = "left";
 }
 function drawWin() {
   recordBest();  // idempotent (only updates if higher)
@@ -1360,7 +1461,7 @@ function resetGame() {
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; worldGenX = 0;
   platforms = []; carabiners = []; enemies = [];
-  pits = [];
+  pits = []; levelCarabiners = 0; dashboard = null;
   particles = []; shake = 0; newBest = false;
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
@@ -1380,6 +1481,13 @@ function checkLevelProgress() {
   if (levelIndex >= LEVELS.length - 1) {
     state = "won"; Music.stop(); Music.sfxWin(); recordBest();
   } else {
+    // Show the Mountain Progress dashboard before the next level.
+    dashboard = {
+      completedLevelIndex: levelIndex,
+      nextLevelIndex: levelIndex + 1,
+      carabiners: levelCarabiners,
+      animTime: 0, animDuration: 1.2
+    };
     state = "levelcomplete";
     lives += LEVEL_BONUS_LIVES;
     Music.sfxLevel();
@@ -1390,6 +1498,7 @@ function checkLevelProgress() {
 // player carry over; only the world theme and difficulty change.
 function advanceLevel() {
   if (levelIndex < LEVELS.length - 1) levelIndex += 1;
+  levelCarabiners = 0; dashboard = null;   // fresh counter for the new level
   invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
   // Entering a natural level: drop the player onto the new painted surface so
   // they don't start embedded in (or floating above) the terrain.
@@ -1423,7 +1532,7 @@ function draw() {
   drawParticles();
   drawHUD();
   if (state === "start") drawStartScreen();
-  else if (state === "levelcomplete") drawLevelComplete();
+  else if (state === "levelcomplete") drawLevelDashboard();
   else if (state === "won") drawWin();
   else if (state === "gameover") drawGameOver();
 }
@@ -1433,6 +1542,7 @@ function loop(now) {
   let dt = (now - lastTime) / 1000; lastTime = now;
   if (dt > 0.05) dt = 0.05;
   if (state === "playing") update(dt);
+  if (state === "levelcomplete" && dashboard) dashboard.animTime += dt;   // marker travel anim
   updateEffects(dt);                 // particles + shake decay (always)
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   ctx.save();

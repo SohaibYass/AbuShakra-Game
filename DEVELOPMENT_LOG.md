@@ -250,6 +250,41 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 - **TEMP test flag:** `ENEMIES_ENABLED` gates snake spawning — set `false` while
   proving out the terrain, flip back to `true` to ship enemies.
 
+### 17. Five peaks + Mont Blanc + the "impassable cliff" guard
+- Grew the run to **5 Alpine peaks**: Zugspitze (DE) → Grossglockner (AT) →
+  **Cime Grande** (IT) → **Matterhorn** (CH) → **Mont Blanc** (FR), each natural
+  terrain traced from its overlay. Win screen counts `LEVELS` dynamically.
+- **Multi-scene levels (engine generalisation):** a natural level can carry a
+  `tiles: [{bg, surf, tileW}, …]` array — scenes play in sequence and repeat
+  (no mirror). (Built for a two-scene Mont Blanc, then reverted to single-scene
+  at the user's request; the `tiles` path remains for future use.)
+- **Climb-rate cap (key fix):** Matterhorn's right cliff was a ~158px wall —
+  taller than the jump (~144px) — which would trap the player (and the tile
+  repeats). The extractor now caps how fast the surface may *rise* per sample so
+  a too-steep cliff becomes an **auto-walkable steep slope**. Made it
+  **forward-only** (a backward pass had ramped up *before* the cliff, creating a
+  false triangular peak that didn't match the drawn line).
+- **`overlay_to_ledges.py` lessons:** strict pure-red + high scan + median +
+  forward climb-cap. Edit the red line, re-run, paste the printed surf.
+
+### 18. Mountain Progress dashboard (between levels)
+- After each level (the `levelcomplete` state) a **dashboard** replaces the plain
+  interstitial: "Level Complete", the mountain + country just finished,
+  **carabiners this level** (new per-level counter), total score, lives.
+- A horizontal **5-node journey map** (mountain icon + name + country + a
+  procedurally-drawn **national flag** per node). Completed nodes are green with
+  a check and a green route line; the next node is highlighted; future nodes are
+  dimmed. An **AbuShakra marker animates** in an arc from the completed node to
+  the next (`dashboard.animTime`, smoothstep), with "AbuShakra travels from X to
+  Y" and a blinking "Press / Tap to continue".
+- **Flags are drawn on the canvas, not emoji** — flag emoji don't render as
+  flags on many platforms (Windows shows "DE"/"CH" letters), so each flag is a
+  few `fillRect`s (stripes / Swiss cross).
+- Wiring: `checkLevelProgress` builds the `dashboard` object; the loop advances
+  its `animTime` (since `update` only runs while playing); `advanceFromScreen` →
+  `advanceLevel` continues and resets the per-level carabiner counter. Last level
+  still goes straight to the Win screen.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -288,18 +323,20 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v33`**.
-- Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
-  score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
-  Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW) →
-  enemy variety (hopper/flyer/tank) → real pixel-art carabiner → updated Abu
-  character sprite → new title cover (Abu vs the snake) → title cache-bust
-  (`?v=`) → hazards (empty holes + moving/elevator platforms) → 10-frame walk
-  animation (legs + body) baked via `gen_walk.py` → Level 1 natural Zugspitze
-  terrain (drawn 1:1, collision heightmap traced from `terrain_overlay.png`) →
-  all 3 levels natural peaks (Zugspitze/Grossglockner/Grande), per-level surf.
+- Latest deploy: service worker cache **`abushakra-v40`**.
+- Commit history (recent): … → hazards → 10-frame walk animation → Level 1
+  natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
+  5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
+  (per-level `surf`; climb-cap for unjumpable cliffs) → Mountain Progress
+  dashboard (journey map + national flags).
 - **NOTE:** enemies are currently **disabled** (`ENEMIES_ENABLED = false`) for
   terrain testing — re-enable before treating this as a player-facing build.
+- **Encoding gotcha (learned the hard way):** never round-trip the source files
+  through PowerShell `Get-Content`/`Set-Content` — PS 5.1 reads as Windows-1252
+  and writes UTF-8, **double-encoding** non-ASCII (`·`, `—`, `★`) into mojibake
+  (`Â·`, `â€"`) plus a stray BOM. Use the Edit/Write tools (UTF-8 safe). To undo
+  a double-encoded file: read bytes → `UTF8.GetString` → `Encoding(1252).GetBytes`
+  → write bytes.
 - **SW precache gotcha (learned here):** never list a file in `cache.addAll`
   unless it exists — one 404 rejects the whole install and silently breaks
   offline mode. Caught when `background.png` was renamed to per-level
