@@ -225,6 +225,31 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   surface must be a single-valued heightmap, so resolve vertical cliffs to one
   side rather than averaging (averaging spikes).
 
+### 16. All three levels = natural peaks (Grossglockner, Grande)
+- **Generalised the terrain system** so any level can be natural: each natural
+  `LEVELS` entry carries its own `surf` heightmap + `tileW` (and now a `country`
+  field, shown in the HUD). `surfaceY` and `drawNaturalScene` read the *current*
+  level's data, so adding a natural level is pure data — no engine changes.
+- **The peaks:** L1 **Zugspitze** (Germany) → L2 **Grossglockner** (Austria) →
+  L3 **Grande** (Italy). Each background + collision comes from a paired
+  `<Name>.png` / `<Name>_terrain_overlay.png`. `advanceLevel` snaps the player
+  onto the new painted surface so transitions don't start embedded/floating.
+- **`overlay_to_ledges.py` is now reusable:** `python overlay_to_ledges.py
+  <overlay.png> <VAR_NAME> <check.png>`.
+- **Tracer hardening (driven by the new art):**
+  - *Grossglockner* has steep stacked cliffs — the tracer takes the **top-most
+    stroke** per column and **median-filters** the sampled surface to kill the
+    thin spikes that steep cliff overlaps produce.
+  - *Grande* is a **sunset** scene; warm orange-brown rock was matching the red
+    detector. Fixed with a **strict pure-red test** (`g<90, b<90, r-g>95`), which
+    also let us **scan higher up the image** to capture tall ledges — that's what
+    made the Grande right cliff follow the line up to the top grassy ledge.
+- **Playability check:** each level is auto-walked end-to-end in a test — the
+  player must stay exactly on the surface (0 frames off) and never get stuck;
+  big step-ups stay within jump height.
+- **TEMP test flag:** `ENEMIES_ENABLED` gates snake spawning — set `false` while
+  proving out the terrain, flip back to `true` to ship enemies.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -263,7 +288,7 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v29`**.
+- Latest deploy: service worker cache **`abushakra-v33`**.
 - Commit history (recent): juice → SW auto-reload → prompt lessons → SFX + high
   score + difficulty → jump feel → App Store/dev-log docs → carabiners + 3
   Dolomites levels + seamless backgrounds → prompt lessons (levels/tiling/SW) →
@@ -271,7 +296,10 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   character sprite → new title cover (Abu vs the snake) → title cache-bust
   (`?v=`) → hazards (empty holes + moving/elevator platforms) → 10-frame walk
   animation (legs + body) baked via `gen_walk.py` → Level 1 natural Zugspitze
-  terrain (drawn 1:1, collision heightmap traced from `terrain_overlay.png`).
+  terrain (drawn 1:1, collision heightmap traced from `terrain_overlay.png`) →
+  all 3 levels natural peaks (Zugspitze/Grossglockner/Grande), per-level surf.
+- **NOTE:** enemies are currently **disabled** (`ENEMIES_ENABLED = false`) for
+  terrain testing — re-enable before treating this as a player-facing build.
 - **SW precache gotcha (learned here):** never list a file in `cache.addAll`
   unless it exists — one 404 rejects the whole install and silently breaks
   offline mode. Caught when `background.png` was renamed to per-level
