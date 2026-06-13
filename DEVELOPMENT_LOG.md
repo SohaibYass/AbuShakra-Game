@@ -326,6 +326,41 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   transparent `*_Front.png` (with platforms), and a `*_collisionline.png` to
   trace, then point the level at them with `bgMode:"parallax"`.
 
+### 21. Level 1 victory cutscene + asset trim (v48 / v49)
+- **Cutscene:** when Level 1's target is reached, an **8-sec video** of Abu on the
+  summit with the German flag plays before the dashboard. Implemented as an
+  off-canvas hidden `<video>` (`Zugspitze_victory.mp4`) drawn onto the canvas via
+  `ctx.drawImage(video,…)`; `startCutscene()` stops music + plays (unmuted →
+  muted fallback if autoplay is blocked), `endCutscene()` resumes into the
+  dashboard. `state==="cutscene"` short-circuits `draw()`; tap/press skips.
+  Per-level via `cutscene:"…mp4"` on the LEVELS entry.
+- **Perf / "is it slower?" trim:** the PWA precache had grown to **34 MB / 25
+  files** with dead weight. Removed unused backgrounds (`bgZugspitze`,
+  `bgLavaredo/Odle/Latemar`) from the `ASSETS` object (they were fetched at every
+  launch, ~7 MB) and dropped them + old covers from the SW precache → **24 MB /
+  18 files** (SW `v49`). Gameplay itself was never slower (parallax = 2
+  `drawImage` layers; video only during the cutscene); only first-load / SW
+  update was heavy.
+
+### 22. Score system rework + carabiner placement pattern (v50)
+- **New economy:** carabiner clip **+1** (was +10), stomp **+2** (was 50–120;
+  now flat for **every** enemy type — tougher enemies are harder, not worth more).
+  Level targets rescaled to the low-point economy (cumulative, +20/level):
+  **20 / 40 / 60 / 80 / 100**.
+- **Carabiner placement (Level 1, platform level):** clips are placed
+  **deterministically per tile** (once, as `worldGenX` steps a whole `tileW`), so
+  the `collected` state is stable and never re-spawns. Two helpers:
+  `placePlatformCarabiners` (on the ledge tops) and `placeTrackCarabiners` (in
+  the **gaps between** platforms, chest-high, never under a ledge clip).
+- **Alternating loop pattern (user spec):** to keep the level from finishing too
+  fast, only **2 clips per tile**, alternating by tile parity:
+  - **EVEN tile:** one clip on the **first & last ledge** (middle ledge + gaps empty).
+  - **ODD tile:** one clip in **each gap** (all ledges empty).
+  - Reads `ledge,_,_,_,ledge` then `_,gap,_,gap,_` — verified in-preview by
+    classifying each clip's tile-local x against ledge/gap centres.
+- **Non-platform levels (2–5):** keep sparse ground scatter (`maybeGroundCarabinersAt`,
+  ~45% chance, 1–2 each) since they have no platforms.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -364,14 +399,16 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v47`**.
+- Latest deploy: service worker cache **`abushakra-v50`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
   (per-level `surf`; climb-cap for unjumpable cliffs) → Mountain Progress
   dashboard (journey map + national flags) → 16:9 cover + 5s "How to Play"
   intro → Level 1 two-layer parallax (far `Zugspitze_Back` + transparent
-  `Zugspitze_Front` with 3 platforms; jump raised to 168px).
+  `Zugspitze_Front` with 3 platforms; jump raised to 168px) → Level 1 victory
+  cutscene (§21) + asset/precache trim 34→24 MB (§21) → score rework: clip +1,
+  stomp +2, Level 1 target 20, alternating per-tile carabiner pattern (§22).
 - **NOTE:** enemies are currently **disabled** (`ENEMIES_ENABLED = false`) for
   terrain testing — re-enable before treating this as a player-facing build.
 - **Encoding gotcha (learned the hard way):** never round-trip the source files
