@@ -1380,12 +1380,37 @@ function drawWalkingSprite(drawW, drawH, ph) {
   ctx.drawImage(sheet, f * cw, 0, cw, chh, -dW / 2, -dH, dW, dH);
 }
 
+// A filled red heart centred at (cx, cy), `s` tall, with a dark outline so it
+// stays visible against a bright sky.
+function drawHeart(cx, cy, s, fill) {
+  const r = s * 0.30;                       // lobe radius
+  const topY = cy - s * 0.18;               // lobe centre height
+  ctx.beginPath();
+  ctx.arc(cx - r, topY, r, Math.PI, 0, false);   // left bump
+  ctx.arc(cx + r, topY, r, Math.PI, 0, false);   // right bump
+  ctx.lineTo(cx, cy + s * 0.52);                 // down to the bottom point
+  ctx.closePath();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.stroke();
+  ctx.fillStyle = fill; ctx.fill();
+}
+
 function drawHUD() {
   ctx.fillStyle = "#000"; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, VIEW_W, 40); ctx.globalAlpha = 1;
   ctx.fillStyle = "#fff"; ctx.font = "bold 22px Segoe UI, Arial";
   ctx.textAlign = "left";   ctx.fillText("Score: " + score, 16, 28);
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
-  ctx.fillStyle = "#fff";   ctx.textAlign = "right"; ctx.fillText("Lives: " + lives, VIEW_W - 16, 28);
+
+  // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
+  const HS = 18, HG = 7;                    // heart size + gap between hearts
+  if (lives <= 6) {
+    let hx = VIEW_W - 16 - HS / 2;          // centre of the right-most heart
+    for (let i = 0; i < lives; i++) { drawHeart(hx, 20, HS, "#ff3b46"); hx -= (HS + HG); }
+  } else {
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px Segoe UI, Arial"; ctx.textAlign = "right";
+    const lbl = "× " + lives;
+    ctx.fillText(lbl, VIEW_W - 16, 27);
+    drawHeart(VIEW_W - 16 - ctx.measureText(lbl).width - HS / 2 - 6, 20, HS, "#ff3b46");
+  }
   ctx.textAlign = "left";
 
   // Level name + progress toward this level's milestone (thin bar under the band).
