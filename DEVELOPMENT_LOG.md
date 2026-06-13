@@ -285,6 +285,47 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   `advanceLevel` continues and resets the per-level carabiner counter. Last level
   still goes straight to the Win screen.
 
+### 19. Full-screen cover + "How to Play" intro
+- Title cover swapped a few times; final art is **`AbuVsSnake_4.png`** at **16:9
+  (1672×941)** so cover-fit fills the 800×450 screen **exactly — no crop, no
+  bars** (the earlier 3:2 covers either cropped the flags/title or left side
+  bars; a 16:9 source is the clean fix). The cover carries the title + 5 country
+  flags, so the controls text was removed from it.
+- New **`instructions` state**: after you start, the game explanation (controls,
+  scoring, "climb all 5 peaks") shows for **5 seconds** with a countdown +
+  progress bar, then auto-starts. Taps are ignored during the hold. Win/Game-over
+  return to the cover.
+- **Encoding gotcha (again):** a PowerShell `Set-Content` round-trip double-
+  encoded the HUD's `·`/`—` into `Â·`/`â€"` and added a BOM. Fixed by reversing
+  the bytes (UTF-8 → 1252) and stripping the BOM; **only ever edit these files
+  with the UTF-8-safe Edit/Write tools.**
+
+### 20. Level 1 reworked into two parallax layers
+- **Problem:** Level 1 was one image (mountains + foreground) mirror-tiled, so the
+  **Zugspitze peak duplicated/flipped** as it scrolled. Slicing that one image
+  into bg/fg bands left a visible horizontal **tear** (the layers scroll at
+  different speeds). The real fix is purpose-built separate layers.
+- **Two layers (user-supplied art):**
+  - **Far background** `Zugspitze_Back.png` (16:9): fills the height, **slow
+    parallax (0.4)**, **mirror-tiled** so the distant range/clouds loop with **no
+    seam** and no duplicated peak (the image isn't seamless on its own; flipping
+    every other copy makes the edges match — invisible on a hazy range).
+  - **Near foreground** `Zugspitze_Front.png` (transparent PNG): drawn **1:1**,
+    tile width 675, painted rock ledges + **3 floating platforms**; the
+    background shows through the alpha.
+- **Collision** traced from `Zugspitze_Front..._collisionline_1.png`: a **ground
+  heightmap** (`surfaceY`, and parallax levels tile it **without** the mirror flip
+  so it matches the 1:1 foreground) **plus 3 floating-platform boxes** generated
+  per tile — one-way landable, **invisible** (they're painted into the fg art, so
+  `drawPlatforms` skips natural levels).
+- **Jump raised 144 → 168px** (`JUMP_VELOCITY` −760 → −820) so all three floating
+  platforms are reachable; verified all 5 levels still traverse end-to-end.
+- **Per-level `bgMode: "parallax"`** gates all of this — Levels 2–5 keep their
+  single-image mirror-tile. (`drawParallaxScene` draws bg then fg.)
+- **Reusable plan for the other peaks:** same recipe — a far `*_Back.png`, a
+  transparent `*_Front.png` (with platforms), and a `*_collisionline.png` to
+  trace, then point the level at them with `bgMode:"parallax"`.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -323,12 +364,14 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v40`**.
+- Latest deploy: service worker cache **`abushakra-v47`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
   (per-level `surf`; climb-cap for unjumpable cliffs) → Mountain Progress
-  dashboard (journey map + national flags).
+  dashboard (journey map + national flags) → 16:9 cover + 5s "How to Play"
+  intro → Level 1 two-layer parallax (far `Zugspitze_Back` + transparent
+  `Zugspitze_Front` with 3 platforms; jump raised to 168px).
 - **NOTE:** enemies are currently **disabled** (`ENEMIES_ENABLED = false`) for
   terrain testing — re-enable before treating this as a player-facing build.
 - **Encoding gotcha (learned the hard way):** never round-trip the source files
