@@ -56,6 +56,26 @@
   }
   #btn-mute:active { transform: scale(0.92); }
 
+  /* Dev/test shortcut — jump straight into Level 2. Only shown on the start screen. */
+  #btn-testl2 {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left));
+    height: 40px; padding: 0 14px;
+    border-radius: 20px;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: rgba(20,22,34,0.45);
+    color: #fff; font: 700 14px/1 "Segoe UI", Arial;
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  #btn-testl2:active { transform: scale(0.94); }
+
   /* On-screen touch controls — hidden by default, shown on touch devices. */
   #touch-controls { display: none; }
   body.touch #touch-controls { display: block; }
@@ -97,6 +117,7 @@
 <body>
 <canvas id="game" width="800" height="450"></canvas>
 <button id="btn-mute" aria-label="Toggle music">&#128266;</button>
+<button id="btn-testl2" aria-label="Test Level 2">&#9654; Test L2</button>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
   <div id="btn-right" class="btn">&#9654;</div>
@@ -120,7 +141,8 @@ const ASSETS = {
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
   fgZug:       "Zugspitze_Front.png?v=1",  // Level 1 parallax: near terrain + platforms (transparent)
-  bgGrossglockner: "Grossglockner.png",
+  bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
+  fgGlock:     "Grossglockner_Front2.png?v=2",  // Level 2 parallax: near terrain + platforms (transparent)
   bgGrande: "Grande.png",
   bgMatterhorn: "Matterhorn.png",
   bgMontBlanc1: "MontBlanc_1.png"
@@ -156,8 +178,13 @@ const MATTERHORN_TILE_W = 900;   // Level 4 "Matterhorn" (Switzerland)
 const MATTERHORN_SURF = [360.7, 361.2, 361.2, 361.7, 361.7, 362.2, 362.7, 363.2, 363.8, 364.3, 364.8, 365.8, 366.3, 366.8, 367.3, 367.8, 368.3, 368.8, 369.3, 369.8, 370.3, 370.9, 371.4, 371.9, 372.9, 373.4, 373.9, 374.4, 374.9, 375.4, 375.9, 375.9, 382.0, 385.1, 389.1, 392.2, 392.7, 393.2, 393.7, 394.7, 395.2, 396.2, 396.7, 397.7, 398.3, 399.3, 399.8, 400.3, 401.3, 401.8, 402.8, 403.3, 404.3, 404.8, 405.9, 406.4, 406.9, 407.9, 408.4, 409.4, 409.9, 410.9, 411.4, 412.0, 413.0, 413.5, 414.5, 415.0, 416.0, 416.5, 417.5, 418.0, 418.5, 419.6, 420.1, 421.1, 421.6, 422.6, 423.1, 424.1, 424.6, 425.1, 426.2, 426.7, 427.7, 428.2, 429.2, 429.7, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.2, 432.8, 434.3, 437.8, 439.9, 442.9, 443.4, 443.4, 443.4, 443.4, 443.4, 443.4, 443.4, 443.4, 443.4, 442.9, 442.9, 441.4, 435.3, 432.2, 429.7, 427.2, 424.1, 422.1, 420.6, 420.6, 420.1, 419.6, 419.6, 419.6, 419.6, 413.5, 405.4, 398.3, 390.1, 386.6, 386.1, 386.1, 386.1, 386.1, 386.1, 386.6, 387.1, 387.6, 388.1, 388.6, 389.1, 389.6, 390.1, 390.6, 390.6, 391.1, 391.7, 392.2, 392.7, 393.2, 393.7, 394.2, 394.7, 395.7, 396.2, 397.2, 398.3, 398.8, 399.3, 400.8, 401.3, 401.8, 402.8, 403.8, 404.3, 405.4, 405.9, 406.9, 407.9, 408.9, 409.4, 410.4, 410.9, 412.0, 412.5, 413.5, 414.5, 415.0, 416.0, 416.5, 418.0, 418.5, 419.1, 419.1, 419.1, 419.1, 420.1, 420.1, 419.1, 417.5, 416.0, 414.5, 414.5, 414.5, 414.5, 413.0, 411.4, 409.4, 408.4, 406.4, 392.4, 378.4, 364.4, 350.4, 336.4, 322.4, 308.4, 294.4, 280.4, 266.4, 262.8, 323.7, 323.7, 323.7, 323.7];
 const GRANDE_TILE_W = 900;   // Level 3 "Grande" (Italy) — line from Grande_terrain_overlay.png
 const GRANDE_SURF = [380.0, 380.0, 379.5, 379.5, 379.5, 379.0, 379.0, 378.5, 378.5, 378.0, 378.0, 377.5, 377.5, 376.9, 376.4, 376.4, 376.4, 375.9, 375.4, 375.4, 374.9, 374.9, 374.4, 374.4, 373.4, 370.9, 369.8, 368.8, 367.8, 366.8, 365.8, 364.8, 363.8, 362.7, 361.7, 360.7, 359.7, 358.7, 357.7, 356.7, 355.1, 354.6, 353.1, 352.1, 352.1, 352.1, 352.1, 352.1, 374.4, 374.4, 374.4, 374.4, 374.4, 373.9, 373.9, 373.9, 373.9, 373.9, 374.9, 376.9, 389.6, 390.1, 391.1, 391.7, 392.2, 393.2, 393.7, 394.2, 395.2, 395.7, 396.7, 397.2, 397.7, 397.7, 397.7, 397.7, 397.7, 395.7, 394.2, 394.2, 394.2, 394.2, 394.2, 397.2, 401.3, 401.3, 401.8, 401.8, 401.8, 401.8, 401.8, 401.8, 401.8, 402.3, 402.3, 402.3, 402.3, 402.3, 402.3, 402.3, 391.1, 391.1, 391.1, 391.1, 391.1, 391.7, 392.2, 392.7, 393.2, 393.7, 394.2, 394.7, 395.2, 395.7, 395.7, 396.2, 396.7, 397.2, 397.7, 398.3, 398.8, 399.3, 399.3, 399.8, 400.3, 400.8, 401.3, 401.8, 402.3, 402.8, 402.8, 403.3, 403.8, 404.3, 404.8, 405.4, 405.9, 406.4, 406.9, 407.4, 407.9, 407.9, 408.4, 408.9, 409.4, 409.9, 410.4, 410.9, 411.4, 411.4, 411.4, 411.4, 411.4, 409.9, 408.4, 407.9, 406.4, 404.8, 403.8, 402.3, 401.3, 399.8, 398.8, 397.7, 396.2, 395.2, 393.7, 392.7, 391.1, 390.1, 378.0, 378.0, 378.0, 378.0, 377.5, 377.5, 377.5, 376.9, 376.9, 376.9, 376.9, 376.9, 376.9, 376.9, 372.9, 356.1, 349.5, 349.0, 348.5, 348.5, 348.0, 347.5, 347.5, 347.0, 346.5, 346.5, 329.3, 302.4, 296.8, 296.8, 296.3, 295.8, 295.3, 295.3, 295.3, 294.8, 294.3, 294.3, 293.7, 293.7, 232.9, 213.1, 212.6, 212.6, 211.6, 211.0, 211.0, 211.0, 211.0, 211.0, 210.5, 210.5, 210.5, 210.5, 210.5, 210.0];
-const GLOCK_TILE_W = 900;
-const GLOCK_SURF = [225.8, 225.8, 225.8, 225.8, 225.8, 225.8, 225.8, 244.5, 244.5, 244.5, 244.5, 244.5, 244.0, 244.0, 244.0, 244.0, 244.0, 244.0, 281.1, 281.1, 281.6, 282.1, 282.1, 282.1, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 323.2, 326.2, 328.7, 331.3, 334.3, 334.3, 334.3, 336.9, 338.9, 339.9, 339.9, 339.9, 339.9, 341.4, 341.4, 341.4, 341.4, 387.6, 387.6, 387.6, 387.6, 387.6, 386.6, 386.1, 385.1, 384.0, 383.0, 382.0, 381.5, 380.5, 380.0, 379.0, 378.0, 376.9, 376.4, 375.9, 374.9, 373.9, 372.9, 371.9, 371.4, 370.3, 369.3, 368.8, 367.8, 366.8, 366.3, 366.3, 366.3, 366.3, 366.3, 369.8, 373.9, 378.0, 382.0, 382.5, 383.5, 385.1, 386.6, 387.6, 389.1, 390.1, 391.1, 392.7, 394.2, 395.2, 396.7, 397.7, 399.3, 400.3, 401.8, 402.8, 404.3, 405.4, 406.9, 407.9, 409.4, 410.4, 412.0, 413.0, 414.0, 415.5, 416.5, 427.7, 427.7, 427.7, 427.7, 427.7, 427.2, 426.7, 426.2, 425.6, 425.1, 424.6, 424.1, 423.6, 423.1, 422.6, 422.1, 421.6, 421.1, 420.6, 420.1, 419.6, 388.1, 388.1, 388.1, 388.1, 388.1, 389.6, 390.6, 391.7, 392.7, 392.7, 392.7, 392.7, 392.7, 320.6, 320.6, 320.6, 320.6, 320.6, 321.1, 322.2, 322.7, 323.7, 324.2, 325.2, 325.7, 326.7, 327.7, 328.2, 329.3, 329.3, 329.3, 329.3, 329.3, 277.0, 276.5, 276.5, 276.5, 276.5, 276.5, 277.0, 277.5, 277.5, 277.5, 277.5, 277.5, 277.5, 277.5, 278.0, 278.0, 278.0, 278.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 280.0, 280.0, 281.1, 282.1, 282.1, 282.1, 282.1, 282.1, 282.1, 282.6, 282.6, 283.1, 283.1, 284.1, 284.1, 284.6, 285.1, 285.1, 285.1, 285.1, 285.1, 285.1];
+// Level 2 now uses two parallax layers (Grossglockner_Back + transparent
+// Grossglockner_Front2), tile width 675; ground heightmap + 2 floating platforms
+// derived from the Grossglockner_Front2.png alpha. Platform 1 is reachable from
+// the ground; platform 2 (higher) is reached by hopping up from platform 1.
+const GLOCK_TILE_W = 675;
+const GLOCK_PLATFORMS = [{x0:288,x1:413,top:180}, {x0:496,x1:633,top:150}];
+const GLOCK_SURF = [311.6, 311.6, 311.6, 311.6, 311.6, 311.1, 311.1, 311.1, 311.1, 311.1, 310.7, 310.7, 310.3, 310.3, 309.8, 309.4, 309.4, 309.4, 309.4, 309.4, 309.4, 309.8, 309.8, 309.8, 310.3, 310.7, 311.6, 312.5, 313.3, 313.8, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 313.3, 312.5, 312.0, 312.0, 312.0, 312.0, 312.0, 312.5, 312.9, 314.2, 314.6, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 314.2, 313.8, 313.3, 313.3, 312.0, 312.0, 312.0, 312.0, 312.0, 312.0, 312.5, 312.5, 313.8, 314.2, 316.0, 316.0, 316.4, 316.8, 316.8, 317.7, 317.7, 317.7, 318.2, 318.2, 318.2, 319.0, 319.9, 319.9, 319.9, 319.9, 319.9, 319.9, 320.4, 320.4, 320.4, 321.2, 321.2, 322.6, 324.8, 324.8, 325.6, 326.5, 326.5, 326.5, 326.5, 326.5, 326.5, 326.5, 326.1, 326.1, 325.6, 325.6, 325.6, 325.2, 324.8, 324.3, 324.3, 323.4, 323.0, 323.0, 322.6, 321.7, 320.8, 319.9, 319.5, 319.5, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.9, 321.2, 322.1, 322.1, 322.1, 322.1, 322.1, 322.1, 322.1, 321.7, 320.8, 320.4, 319.0, 318.6, 318.6, 318.2, 318.2, 318.2, 318.2, 318.2, 318.2, 318.2, 317.7, 317.7, 317.7, 315.1, 315.1, 315.1, 314.6, 314.6, 314.6, 314.6, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.6, 316.0, 316.8, 317.3, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 316.4, 315.1, 313.8, 313.3, 312.5, 312.0, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 312.0, 312.0, 312.0, 313.8, 314.2, 314.2, 314.2, 314.6, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 313.8, 313.8, 313.8, 313.8, 313.8, 313.8, 315.1, 315.5, 316.8, 316.8, 316.8, 316.8, 317.3, 317.3, 317.3, 317.3, 317.3];
 
 const GRAVITY        = 2000;   // px/s^2
 const JUMP_VELOCITY  = -820;   // px/s upward impulse (jump height ~168px, reaches the floating platforms)
@@ -194,10 +221,11 @@ const LEVELS = [
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
     cutscene: "Zugspitze_victory.mp4" },
-  { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGrossglockner", target: 40,
+  { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
-    terrain: "natural", surf: GLOCK_SURF, tileW: GLOCK_TILE_W },
+    // Two parallax layers (far mountains + transparent foreground) with 2 floating platforms.
+    terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
     enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"],
@@ -473,6 +501,35 @@ muteBtn.addEventListener("click", (e) => {
   refreshMute();
 });
 refreshMute();
+
+// Dev/test shortcut: jump straight into a given level (skips the cover, the
+// 5s "How to Play" intro, and earlier levels). Score starts at that level's
+// entry milestone so its progress bar reads 0 and its target still applies.
+function startAtLevel(idx) {
+  resetGame();                       // fresh player / lives / effects, state="playing"
+  levelIndex = idx;
+  score = prevTarget();              // arrive with the cumulative score of prior levels
+  cameraX = 0; worldGenX = 0;
+  platforms = []; carabiners = []; enemies = []; pits = [];
+  levelCarabiners = 0; dashboard = null;
+  invulnTimer = INVULN_TIME;
+  if (currentLevel().terrain === "natural") {
+    player.x = 80;
+    player.y = surfaceY(player.x + player.w / 2) - player.h;
+    player.vy = 0; player.onGround = true;
+  }
+  generateAhead();
+  Music.start();
+  state = "playing";
+}
+const testBtn = document.getElementById("btn-testl2");
+testBtn.addEventListener("click", (e) => { e.preventDefault(); startAtLevel(1); });
+// Only show the test button on the cover screen.
+let _testBtnVis = null;
+function syncTestBtn() {
+  const vis = (state === "start");
+  if (vis !== _testBtnVis) { testBtn.style.display = vis ? "flex" : "none"; _testBtnVis = vis; }
+}
 
 // Unlock audio on the very first user interaction (covers iOS, which only
 // allows audio to begin from inside a gesture). Runs once.
@@ -1743,6 +1800,7 @@ function loop(now) {
   if (state === "instructions") { howtoTimer -= dt; if (howtoTimer <= 0) state = "playing"; }
   if (state === "levelcomplete" && dashboard) dashboard.animTime += dt;   // marker travel anim
   updateEffects(dt);                 // particles + shake decay (always)
+  syncTestBtn();                     // show the Test-L2 shortcut only on the cover
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);

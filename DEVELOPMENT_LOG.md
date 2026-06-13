@@ -361,6 +361,48 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 - **Non-platform levels (2–5):** keep sparse ground scatter (`maybeGroundCarabinersAt`,
   ~45% chance, 1–2 each) since they have no platforms.
 
+### 23. Hearts HUD + enemies re-enabled + Level 1 cutscene swap (v51)
+- **Lives as hearts:** the HUD `Lives: N` text is replaced by **N red hearts**
+  drawn right-aligned (`drawHeart`, dark-outlined for contrast on bright sky).
+  Above 6 lives it falls back to a single heart + "×N" so it never overflows.
+- **Enemies re-enabled** (`ENEMIES_ENABLED = true`) after the terrain-testing
+  pause. Verified spawn + stomp(+2) + contact damage.
+- **Level 1 victory video** swapped to `Level1_Export3.mp4` (still saved as
+  `Zugspitze_victory.mp4`). Decodes, plays through, auto-advances to dashboard.
+
+### 24. Level 2 (Grossglockner) → two-layer parallax + alpha-derived collision (v54)
+- Converted Level 2 to the Level-1 recipe: `bgMode:"parallax"`, far
+  `Grossglockner_Back.png` + transparent `Grossglockner_Front2.png`, `GLOCK_TILE_W=675`,
+  `GLOCK_SURF` (ground heightmap) + `GLOCK_PLATFORMS` (2 floating platforms).
+- **No hand-drawn collision line existed for Front2**, so the surface + platform
+  boxes are **derived from the PNG's alpha**: ground = topmost-opaque per column
+  in the lower band (median + climb-cap); platforms = opaque blobs above the
+  ground gap.
+- **Platform deck vs. tree (gotcha):** platform 2 has a pine tree. Taking the
+  median/`min`-y of the blob put the collision up in the **tree foliage**, so the
+  player floated. Fixed by finding the deck via **horizontal coverage** (first row
+  where ≥78% of the platform width is opaque) — the narrow tree no longer fools it.
+  Then hand-tuned the deck top against a candidate-line overlay (settled on game
+  **150**, which also makes it ground-reachable: 162 px rise < 168 px jump).
+- **Generator floats the ground (recurring):** every Grossglockner foreground the
+  image model produced left the terrain hovering with a drop-shadow gap, not
+  anchored to the canvas bottom. Reusable fix `extend-ground-to-bottom` patch:
+  per column, copy/reflect the rock band downward to the bottom edge, darkening
+  with depth so it reads as deep earth (leaves floating platforms untouched).
+  Prompts now also tell the generator to fill solid to the bottom, but the patch
+  is the reliable backstop. Originals kept as `*_ORIG.png`.
+- **Stale-image-cache gotcha:** swapping a file's *contents* while keeping the
+  same `?v=` query made the browser/SW serve the **old cached image** (saw a
+  leftover pink flower-stripe). Bump the `?v=` on the asset (→ `?v=2`) whenever a
+  same-named image's pixels change, in addition to the SW cache version.
+
+### 25. Dev shortcut: "Test L2" button
+- A small **`▶ Test L2`** pill (top-left) shown **only on the cover** (`syncTestBtn`
+  toggles it per-frame on `state==="start"`). One tap calls `startAtLevel(1)`:
+  skips the cover + 5 s how-to + Level 1, drops the player onto the Grossglockner
+  terrain with `score = prevTarget()` (so the `0/40` bar + target stay correct).
+  Self-contained; easy to remove or extend into a full L1–L5 picker.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -399,7 +441,7 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v50`**.
+- Latest deploy: service worker cache **`abushakra-v54`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
@@ -408,9 +450,10 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   intro → Level 1 two-layer parallax (far `Zugspitze_Back` + transparent
   `Zugspitze_Front` with 3 platforms; jump raised to 168px) → Level 1 victory
   cutscene (§21) + asset/precache trim 34→24 MB (§21) → score rework: clip +1,
-  stomp +2, Level 1 target 20, alternating per-tile carabiner pattern (§22).
-- **NOTE:** enemies are currently **disabled** (`ENEMIES_ENABLED = false`) for
-  terrain testing — re-enable before treating this as a player-facing build.
+  stomp +2, Level 1 target 20, alternating per-tile carabiner pattern (§22) →
+  hearts HUD + enemies re-enabled + cutscene→Export3 (§23) → Level 2 parallax
+  with alpha-derived collision (§24) → "Test L2" dev button (§25).
+- **NOTE:** enemies are now **enabled** (`ENEMIES_ENABLED = true`).
 - **Encoding gotcha (learned the hard way):** never round-trip the source files
   through PowerShell `Get-Content`/`Set-Content` — PS 5.1 reads as Windows-1252
   and writes UTF-8, **double-encoding** non-ASCII (`·`, `—`, `★`) into mojibake
