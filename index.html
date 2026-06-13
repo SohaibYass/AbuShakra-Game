@@ -384,28 +384,15 @@ bindButton("btn-right", "ArrowRight");
 bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
 
 /* =============================================================
-   MUSIC — original cheerful 8-bit loop, synthesized live with the
-   Web Audio API (no audio files, no libraries). A lookahead
-   scheduler queues notes slightly ahead of the clock so timing
-   stays rock-solid regardless of frame rate.
+   MUSIC — background track is an mp3 (looped HTML5 <audio>); the
+   short sound effects are still synthesized live with the Web Audio
+   API. Both are gated by the same mute toggle.
    ============================================================= */
 const Music = (() => {
-  const NOTE = {
-    E2:82.41, F2:87.31, G2:98.00, A2:110.00, B2:123.47,
-    C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
-    C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
-    C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
-    C6:1046.50
-  };
-  const M = n => NOTE[n] || 0;
-  // 32 eighth-notes over a I-V-vi-IV feel in C major (original melody).
-  const melody = ["C5",0,"E5","G5","C6",0,"G5",0, "B4",0,"D5","G5","B5",0,"G5",0,
-                  "A4",0,"C5","E5","A5",0,"E5",0, "F4",0,"A4","C5","F5",0,"C5","E5"].map(M);
-  const bass   = ["C3",0,0,0,"G3",0,0,0, "G2",0,0,0,"D3",0,0,0,
-                  "A2",0,0,0,"E3",0,0,0, "F2",0,0,0,"C3",0,0,0].map(M);
-  const STEP = 0.15;            // seconds per eighth note
+  // Looping background track (replaces the old synthesized 8-bit loop).
+  const bgm = new Audio("level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3");
+  bgm.loop = true; bgm.volume = 0.5; bgm.preload = "auto";
   let actx = null, master = null, enabled = true;
-  let step = 0, nextTime = 0, ticker = null;
 
   function ensure() {
     if (actx) return;
@@ -450,18 +437,6 @@ const Music = (() => {
     o.start(time); o.stop(time + dur + 0.02);
   }
   const sfxReady = () => enabled && !!actx;
-  function schedule() {
-    if (!actx) return;
-    // If the clock ran ahead of us (e.g. context was suspended while the
-    // phone was locked), don't queue notes in the past — catch up cleanly.
-    if (nextTime < actx.currentTime) nextTime = actx.currentTime + 0.05;
-    while (nextTime < actx.currentTime + 0.12) {
-      blip(melody[step], nextTime, STEP * 0.9,  "square",   0.5);
-      blip(bass[step],   nextTime, STEP * 0.95, "triangle", 0.8);
-      nextTime += STEP;
-      step = (step + 1) % melody.length;
-    }
-  }
   return {
     unlock,
     // ---- Sound effects (share the unlocked context; gated by mute) ----
@@ -474,18 +449,18 @@ const Music = (() => {
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     start() {
       if (!enabled) return;
-      ensure();
-      if (!actx) return;
-      if (actx.state === "suspended") actx.resume();
-      if (ticker) return;                    // already playing
-      step = 0; nextTime = actx.currentTime + 0.06;
-      ticker = setInterval(schedule, 25);
+      ensure();                              // unlock the sfx context too
+      if (actx && actx.state === "suspended") actx.resume();
+      bgm.play().catch(() => {});            // loop the background track (ignored if autoplay is blocked)
     },
-    resume() { if (actx && actx.state === "suspended") actx.resume(); },
-    stop() { if (ticker) { clearInterval(ticker); ticker = null; } },
+    resume() {
+      if (actx && actx.state === "suspended") actx.resume();
+      if (enabled) bgm.play().catch(() => {});
+    },
+    stop() { bgm.pause(); },
     toggle() {
       enabled = !enabled;
-      if (!enabled) this.stop();
+      if (!enabled) bgm.pause();
       return enabled;
     },
     get enabled() { return enabled; }
