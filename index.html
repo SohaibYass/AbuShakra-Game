@@ -219,13 +219,15 @@ const LEVELS = [
     enemyMix: ["walker", "walker", "walker", "hopper"],
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
-    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS },
+    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
+    music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3" },
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
     // Two parallax layers (far mountains + transparent foreground) with 2 floating platforms.
-    terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS },
+    terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS,
+    music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
     enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"],
@@ -389,10 +391,21 @@ bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
    API. Both are gated by the same mute toggle.
    ============================================================= */
 const Music = (() => {
-  // Looping background track (replaces the old synthesized 8-bit loop).
-  const bgm = new Audio("level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3");
+  // Looping background track (per-level mp3; replaces the old synth loop).
+  const bgm = new Audio();
   bgm.loop = true; bgm.volume = 0.5; bgm.preload = "auto";
+  let curSrc = null;
   let actx = null, master = null, enabled = true;
+  // Switch the background track. Swaps the source only when it changes; if music
+  // is already playing it crossfades straight into the new track, otherwise it
+  // just arms it (so the cover stays silent until the first tap calls start()).
+  function setTrack(src) {
+    if (!src || src === curSrc) return;
+    const wasPlaying = !bgm.paused;
+    curSrc = src;
+    bgm.src = src;
+    if (enabled && wasPlaying) bgm.play().catch(() => {});
+  }
 
   function ensure() {
     if (actx) return;
@@ -447,6 +460,7 @@ const Music = (() => {
     sfxOver()  { if (!sfxReady()) return; const t = actx.currentTime; blip(523, t, 0.16, "square", 0.5); blip(392, t + 0.16, 0.16, "square", 0.5); blip(262, t + 0.32, 0.42, "square", 0.6); },
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
+    setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
       ensure();                              // unlock the sfx context too
@@ -494,6 +508,7 @@ function startAtLevel(idx) {
     player.vy = 0; player.onGround = true;
   }
   generateAhead();
+  Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
 }
@@ -1693,6 +1708,7 @@ function resetGame() {
     worldGenX = 300;
   }
   generateAhead();
+  Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
 
@@ -1728,6 +1744,7 @@ function advanceLevel() {
   if (levelIndex < LEVELS.length - 1) levelIndex += 1;
   levelCarabiners = 0; dashboard = null;   // fresh counter for the new level
   invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
+  Music.setTrack(currentLevel().music);    // switch to the new level's track (keeps playing)
   // Entering a natural level: drop the player onto the new painted surface so
   // they don't start embedded in (or floating above) the terrain.
   if (currentLevel().terrain === "natural") {
