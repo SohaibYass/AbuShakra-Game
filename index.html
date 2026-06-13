@@ -119,6 +119,8 @@ const ASSETS = {
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level Dolomites backgrounds (see LEVELS below).
   bgZugspitze: "Zugspitze.png",
+  bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
+  fgZug:       "Zugspitze_Front.png?v=1",  // Level 1 parallax: near terrain + platforms (transparent)
   bgGrossglockner: "Grossglockner.png",
   bgGrande: "Grande.png",
   bgMatterhorn: "Matterhorn.png",
@@ -142,11 +144,12 @@ const GROUND_Y = 392;          // top surface of the continuous ground
 // aligned as the world scrolls.
 const TERR_STEP_UP   = 20;   // auto-climb steps up to this; taller needs a jump
 const TERR_STEP_DOWN = 28;   // auto-descend small drops; bigger and you fall
-const ZUG_TILE_W = 900;      // image width drawn 1:1 (imgH -> VIEW_H)
-// Dense surface heightmap extracted from the red line in terrain_overlay.png
-// (see overlay_to_ledges.py). One sample every ZUG_TILE_W/(N-1) px; surfaceY
-// interpolates so collision follows the painted line exactly.
-const ZUG_SURF = [350.6, 352.1, 353.1, 353.1, 353.1, 353.6, 353.6, 354.6, 354.6, 354.6, 354.6, 354.6, 354.6, 354.1, 353.6, 353.6, 353.1, 353.1, 352.6, 352.6, 352.6, 354.1, 376.4, 379.0, 379.5, 379.0, 379.0, 378.5, 378.0, 377.5, 376.9, 376.4, 374.4, 373.9, 373.9, 373.9, 373.9, 373.9, 373.9, 373.4, 372.4, 371.4, 368.8, 368.8, 368.8, 369.3, 370.3, 371.4, 372.9, 373.9, 373.9, 373.4, 372.9, 371.9, 372.4, 372.9, 373.9, 373.9, 373.9, 373.9, 373.4, 372.4, 371.9, 371.9, 372.4, 373.4, 373.9, 374.4, 374.9, 375.9, 376.4, 377.5, 377.5, 377.5, 377.5, 377.5, 377.5, 378.0, 380.0, 384.0, 387.6, 394.7, 396.2, 396.7, 397.2, 397.7, 398.3, 398.8, 398.8, 399.3, 399.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 400.8, 375.9, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 375.4, 374.9, 374.4, 374.4, 373.9, 373.9, 373.9, 373.9, 373.9, 374.4, 374.9, 374.9, 374.9, 352.1, 346.5, 344.0, 343.5, 342.4, 341.4, 340.9, 340.4, 339.9, 339.4, 339.4, 338.9, 338.4, 337.9, 337.4, 336.4, 336.4, 336.4, 336.4, 336.9, 336.9, 337.4, 337.9, 337.9, 338.9, 339.9, 341.9, 343.5, 345.0, 346.5, 347.5, 348.0, 348.0, 348.0, 347.0, 346.5, 345.5, 345.0, 344.5, 345.0, 345.5, 345.5, 345.5, 345.5, 345.5, 345.5, 345.5, 345.0, 345.0, 344.5, 343.5, 343.5, 343.5, 342.4, 341.9, 341.4, 339.9, 339.4, 338.9, 338.9, 338.4, 338.4, 338.4, 338.4, 338.9, 340.4, 343.5, 345.0, 346.5, 348.0, 348.5, 348.5, 345.5, 343.0, 340.9, 339.4, 337.9, 336.9, 334.8, 332.8, 330.3, 326.7, 314.0, 294.8, 290.7, 289.7, 289.2, 290.2, 290.7, 291.2, 291.2, 291.7, 292.2, 292.7, 292.7, 292.7, 292.7, 291.7, 291.2, 291.2, 291.2];
+// Level 1 now uses two parallax layers (Zugspitze_Back + transparent
+// Zugspitze_Front), tile width 675; ground heightmap + 3 floating platforms
+// traced from Zugspitze_Front_Platforms2_collisionline_1.png.
+const ZUG_TILE_W = 675;
+const ZUG_PLATFORMS = [{x0:49,x1:196,top:170}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159}];
+const ZUG_SURF = [329.6, 328.3, 329.2, 329.6, 330.0, 330.5, 330.5, 330.5, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.3, 316.4, 316.8, 316.4, 316.4, 316.0, 315.1, 314.6, 314.2, 313.3, 312.9, 312.0, 311.1, 309.8, 330.5, 330.0, 329.6, 329.2, 328.7, 328.7, 328.7, 328.7, 328.3, 327.8, 328.3, 332.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 350.7, 350.7, 351.1, 350.7, 351.1, 351.1, 351.1, 351.1, 350.7, 350.7, 351.1, 350.7, 350.2, 350.2, 349.8, 349.8, 349.4, 348.9, 348.5, 347.6, 347.2, 346.3, 345.4, 345.0, 344.1, 341.5, 339.3, 337.1, 334.4, 333.1, 330.5, 325.2, 319.9, 317.7, 317.3, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.8, 316.4, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 316.8, 318.2, 320.8, 323.4, 324.8, 326.5, 327.8, 329.6, 330.9, 332.2, 333.1, 333.5, 334.4, 335.3, 335.7, 335.7, 335.7, 334.9, 334.9, 334.0, 333.5, 333.5, 333.1, 332.7, 331.8, 330.5, 330.0, 329.2, 328.7, 328.3, 327.8, 327.0, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 323.9, 323.4, 323.4, 323.0];
 // Level 2 "Grossglockner" (Austria) — same system, line from
 // Grossglockner_terrain_overlay.png. Each natural LEVELS entry points at its own
 // surf + tileW, and surfaceY reads the current level's.
@@ -161,7 +164,7 @@ const GLOCK_TILE_W = 900;
 const GLOCK_SURF = [225.8, 225.8, 225.8, 225.8, 225.8, 225.8, 225.8, 244.5, 244.5, 244.5, 244.5, 244.5, 244.0, 244.0, 244.0, 244.0, 244.0, 244.0, 281.1, 281.1, 281.6, 282.1, 282.1, 282.1, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 319.6, 323.2, 326.2, 328.7, 331.3, 334.3, 334.3, 334.3, 336.9, 338.9, 339.9, 339.9, 339.9, 339.9, 341.4, 341.4, 341.4, 341.4, 387.6, 387.6, 387.6, 387.6, 387.6, 386.6, 386.1, 385.1, 384.0, 383.0, 382.0, 381.5, 380.5, 380.0, 379.0, 378.0, 376.9, 376.4, 375.9, 374.9, 373.9, 372.9, 371.9, 371.4, 370.3, 369.3, 368.8, 367.8, 366.8, 366.3, 366.3, 366.3, 366.3, 366.3, 369.8, 373.9, 378.0, 382.0, 382.5, 383.5, 385.1, 386.6, 387.6, 389.1, 390.1, 391.1, 392.7, 394.2, 395.2, 396.7, 397.7, 399.3, 400.3, 401.8, 402.8, 404.3, 405.4, 406.9, 407.9, 409.4, 410.4, 412.0, 413.0, 414.0, 415.5, 416.5, 427.7, 427.7, 427.7, 427.7, 427.7, 427.2, 426.7, 426.2, 425.6, 425.1, 424.6, 424.1, 423.6, 423.1, 422.6, 422.1, 421.6, 421.1, 420.6, 420.1, 419.6, 388.1, 388.1, 388.1, 388.1, 388.1, 389.6, 390.6, 391.7, 392.7, 392.7, 392.7, 392.7, 392.7, 320.6, 320.6, 320.6, 320.6, 320.6, 321.1, 322.2, 322.7, 323.7, 324.2, 325.2, 325.7, 326.7, 327.7, 328.2, 329.3, 329.3, 329.3, 329.3, 329.3, 277.0, 276.5, 276.5, 276.5, 276.5, 276.5, 277.0, 277.5, 277.5, 277.5, 277.5, 277.5, 277.5, 277.5, 278.0, 278.0, 278.0, 278.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 279.0, 280.0, 280.0, 281.1, 282.1, 282.1, 282.1, 282.1, 282.1, 282.1, 282.6, 282.6, 283.1, 283.1, 284.1, 284.1, 284.6, 285.1, 285.1, 285.1, 285.1, 285.1, 285.1];
 
 const GRAVITY        = 2000;   // px/s^2
-const JUMP_VELOCITY  = -760;   // px/s upward impulse (jump height ~144px)
+const JUMP_VELOCITY  = -820;   // px/s upward impulse (jump height ~168px, reaches the floating platforms)
 const STOMP_BOUNCE   = -520;   // px/s bounce after a stomp
 const HOPPER_JUMP    = -640;   // px/s, the hopper enemy's periodic jump
 const COYOTE_TIME    = 0.10;   // s after leaving a ledge you can still jump
@@ -189,10 +192,12 @@ const ENEMIES_ENABLED = false;
 const LEVELS = [
   // Natural-terrain levels: the painted scene is drawn 1:1 and the playable
   // collision is the `surf` heightmap (traced from a *_terrain_overlay.png).
-  { id: 1, name: "Zugspitze", country: "Germany", bg: "bgZugspitze", target: 500,
+  { id: 1, name: "Zugspitze", country: "Germany", bg: "bgZugBack", fg: "fgZug", target: 500,
     enemySpeedMul: 1.0, spawnMul: 1.0,
     enemyMix: ["walker", "walker", "walker", "hopper"],
-    terrain: "natural", surf: ZUG_SURF, tileW: ZUG_TILE_W },
+    // Two parallax layers: far mountains (bg, slow) + transparent foreground
+    // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
+    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS },
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGrossglockner", target: 1000,
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
@@ -589,11 +594,22 @@ function maybeGroundCarabinersAt(x) {
 function generateAhead() {
   const target = cameraX + VIEW_W + 400;
   if (currentLevel().terrain === "natural") {
-    // Natural terrain: the surface is a fixed heightmap (ZUG_SURF); just place
-    // carabiners along the painted path.
+    // Natural terrain: the surface is a fixed heightmap; just place carabiners
+    // along the painted path.
     while (worldGenX < target) {
       worldGenX += rand(150, 300);
       maybeGroundCarabinersAt(worldGenX);
+    }
+    // Floating-platform collision boxes (painted into the fg art): rebuild for
+    // the visible tiles each frame (deterministic, repeats every tileW).
+    const lvl = currentLevel();
+    if (lvl.platforms) {
+      const tw = lvl.tileW;
+      const a = Math.floor((cameraX - tw) / tw), b = Math.floor((cameraX + VIEW_W + tw) / tw);
+      platforms = [];
+      for (let t = a; t <= b; t++) for (const bx of lvl.platforms) {
+        platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true });
+      }
     }
   } else {
     while (worldGenX < target) {
@@ -647,7 +663,8 @@ function surfaceY(worldX) {
   if (!surf) return GROUND_Y;
   const t = Math.floor(worldX / tileW);
   let local = worldX - t * tileW;
-  if ((((t % 2) + 2) % 2) === 1) local = tileW - local;        // odd tile = mirrored
+  // parallax levels tile the foreground normally (no flip), so collision matches.
+  if (lvl.bgMode !== "parallax" && (((t % 2) + 2) % 2) === 1) local = tileW - local;
   return sampleSurf(surf, tileW, local);
 }
 
@@ -1037,6 +1054,9 @@ function drawNaturalScene() {
   const lvl = currentLevel();
   const bleed = 1;
 
+  // Level 1: two parallax layers (far mountains + transparent near foreground).
+  if (lvl.bgMode === "parallax") { drawParallaxScene(lvl); return; }
+
   if (lvl.tiles) {
     const seqW = natSeqW(lvl);
     let wx = Math.floor(cameraX / seqW) * seqW;   // start of the sequence cycle at the left edge
@@ -1073,7 +1093,46 @@ function drawNaturalScene() {
   }
 }
 
+// Level 1: far mountain backdrop (slow parallax, looped) + transparent near
+// foreground (1:1, the painted ledges + floating platforms) drawn on top.
+function drawParallaxScene(lvl) {
+  // 1) Background: fill the screen height, slow parallax, MIRROR-tiled so the
+  //    distant range/clouds loop with no seam (the image isn't seamless on its
+  //    own; flipping every other copy makes the edges match).
+  if (imgLoaded[lvl.bg]) {
+    const bg = images[lvl.bg], bw = bg.naturalWidth * (VIEW_H / bg.naturalHeight);
+    const scroll = cameraX * 0.4, first = Math.floor(scroll / bw), bleed = 1;
+    for (let i = first; ; i++) {
+      const x = i * bw - scroll;
+      if (x >= VIEW_W) break;
+      const mir = (((i % 2) + 2) % 2) === 1;
+      ctx.save();
+      if (mir) {
+        ctx.translate(x + bw + bleed, 0); ctx.scale(-1, 1);
+        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, 0, 0, bw + bleed, VIEW_H);
+      } else {
+        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, x, 0, bw + bleed, VIEW_H);
+      }
+      ctx.restore();
+    }
+  }
+  // 2) Foreground: 1:1, tiled normally (no mirror), transparent over the bg.
+  if (imgLoaded[lvl.fg]) {
+    const fg = images[lvl.fg];
+    const tileW = lvl.tileW || ZUG_TILE_W;
+    const first = Math.floor(cameraX / tileW);
+    for (let i = first; ; i++) {
+      const x = i * tileW - cameraX;
+      if (x >= VIEW_W) break;
+      ctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, 0, tileW + 1, VIEW_H);
+    }
+  }
+}
+
 function drawPlatforms() {
+  // On natural levels the platforms are painted into the foreground art; the
+  // collision boxes are invisible, so don't draw them.
+  if (currentLevel().terrain === "natural") return;
   for (const p of platforms) {
     const sx = p.x - cameraX;
     if (sx > VIEW_W || sx + p.w < 0) continue;
