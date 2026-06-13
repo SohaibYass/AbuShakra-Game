@@ -197,7 +197,8 @@ const LEVELS = [
     enemyMix: ["walker", "walker", "walker", "hopper"],
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
-    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS },
+    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
+    cutscene: "Zugspitze_victory.mp4" },
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGrossglockner", target: 1000,
     enemySpeedMul: 1.35, spawnMul: 0.75,
     enemyMix: ["walker", "walker", "hopper", "hopper", "flyer"],
@@ -322,6 +323,7 @@ document.addEventListener("touchend", (e) => {
 function advanceFromScreen() {
   // Cover -> "How to Play" (held for 5s, then auto-starts; taps are ignored
   // while it counts down). Win/Game-over -> back to the cover.
+  if (state === "cutscene") { endCutscene(); return; }   // tap to skip the cutscene
   if (state === "start") { state = "instructions"; howtoTimer = HOWTO_SECONDS; Music.start(); }
   else if (state === "levelcomplete") { advanceLevel(); }
   else if (state === "won" || state === "gameover") { resetGame(); state = "start"; }
@@ -507,6 +509,16 @@ let levelCarabiners = 0;   // carabiners clipped in the current level (for the d
 let dashboard = null;      // between-levels "Mountain Progress" screen data
 const HOWTO_SECONDS = 5;   // how long the "How to Play" screen holds before play
 let howtoTimer = 0;
+// Per-level victory cutscene: an mp4 drawn onto the canvas after a level is
+// finished (before the dashboard). Hidden off-canvas <video>, played + drawn.
+const cutsceneVideo = document.createElement("video");
+cutsceneVideo.preload = "auto"; cutsceneVideo.playsInline = true;
+cutsceneVideo.setAttribute("playsinline", "");
+cutsceneVideo.style.cssText = "position:absolute;left:0;top:0;width:1px;height:1px;opacity:0.01;pointer-events:none;";
+document.body.appendChild(cutsceneVideo);
+let cutsceneDone = false;
+cutsceneVideo.addEventListener("ended", () => { if (state === "cutscene") endCutscene(); });
+cutsceneVideo.addEventListener("error", () => { if (state === "cutscene") endCutscene(); });
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let shake = 0;        // current screen-shake magnitude (px), decays to 0
 let newBest = false;  // did this run beat the saved high score?
@@ -1533,6 +1545,38 @@ function drawWin() {
   drawCenteredText(lines);
 }
 
+// Start a level's victory cutscene: pause the music, play + draw the video.
+// Falls back to muted (then to skipping) if autoplay is blocked.
+function startCutscene(path) {
+  cutsceneDone = false;
+  if (cutsceneVideo.dataset.path !== path) { cutsceneVideo.src = path; cutsceneVideo.dataset.path = path; }
+  try { cutsceneVideo.currentTime = 0; } catch (e) {}
+  Music.stop();
+  state = "cutscene";
+  const pr = cutsceneVideo.play();
+  if (pr && pr.catch) pr.catch(() => {
+    cutsceneVideo.muted = true;
+    const p2 = cutsceneVideo.play();
+    if (p2 && p2.catch) p2.catch(() => endCutscene());
+  });
+}
+function endCutscene() {
+  if (cutsceneDone) return; cutsceneDone = true;
+  try { cutsceneVideo.pause(); } catch (e) {}
+  Music.start();
+  state = "levelcomplete";   // continue to the Mountain Progress dashboard
+}
+function drawCutscene() {
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  if (cutsceneVideo.readyState >= 2 && cutsceneVideo.videoWidth) {
+    ctx.drawImage(cutsceneVideo, 0, 0, VIEW_W, VIEW_H);   // 16:9 video fills the 16:9 canvas
+  }
+  if (Math.floor(performance.now() / 600) % 2 === 0) {
+    ctx.textAlign = "right"; ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "14px Segoe UI, Arial";
+    ctx.fillText("tap / press to skip", VIEW_W - 12, VIEW_H - 14); ctx.textAlign = "left";
+  }
+}
+
 /* =============================================================
    LOOP
    ============================================================= */
@@ -1569,9 +1613,14 @@ function checkLevelProgress() {
       carabiners: levelCarabiners,
       animTime: 0, animDuration: 1.2
     };
-    state = "levelcomplete";
     lives += LEVEL_BONUS_LIVES;
-    Music.sfxLevel();
+    // A victory cutscene (if the level has one) plays first, then the dashboard.
+    if (currentLevel().cutscene) {
+      startCutscene(currentLevel().cutscene);
+    } else {
+      state = "levelcomplete";
+      Music.sfxLevel();
+    }
   }
 }
 
@@ -1603,6 +1652,7 @@ function update(dt) {
 }
 
 function draw() {
+  if (state === "cutscene") { drawCutscene(); return; }
   drawBackground();
   drawGround();
   drawPits();
