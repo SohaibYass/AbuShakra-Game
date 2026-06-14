@@ -1778,10 +1778,13 @@ function drawRopes() {
       ctx.strokeStyle = "#caa15a"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(ax, r.top); ctx.lineTo(ex, ey); ctx.stroke();
     }
-    // Anchor sits on the anchor point, its tie-off meeting the rope top.
+    // Anchor sits on the anchor point, its tie-off meeting the rope top. The wooden
+    // post's tie-off knot hangs lower-right in its sprite, so it's drawn lower and
+    // nudged left so the knot lands on the rope.
     if (imgLoaded[rockKey]) {
       const img = images[rockKey], rkW = 76, rkH = rkW * img.naturalHeight / img.naturalWidth;
-      ctx.drawImage(img, ax - rkW / 2, r.top - rkH + 14, rkW, rkH);
+      const drop = r.alt ? 42 : 14, shift = r.alt ? 20 : 0;
+      ctx.drawImage(img, ax - rkW / 2 - shift, r.top - rkH + drop, rkW, rkH);
     } else {
       ctx.fillStyle = "#7a5a28"; ctx.fillRect(ax - 6, r.top - 4, 12, 6);
     }
