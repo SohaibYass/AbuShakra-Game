@@ -143,6 +143,8 @@ const ASSETS = {
   walk:       "character_walk.png?v=4",   // 10-frame walk-cycle sprite sheet (bump ?v on regen)
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
+  enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
+  enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
@@ -250,10 +252,12 @@ const LEVELS = [
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
-    enemyMix: ["walker", "walker", "walker", "walker"],
-    // Animated slithering snakes (same as Level 1); they conform to GLOCK_SURF,
-    // which already sits on the grass, so no separate enemy line is needed.
-    enemyAnim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 },
+    // Bears: ground walkers + a big slow "tank" bear (2 hits); no flyer.
+    enemyMix: ["walker", "walker", "walker", "tank"],
+    enemySprite: "enemyBearWalk",
+    enemySize: { walker: { w: 60, h: 37 }, tank: { w: 98, h: 61 } },
+    enemyFrames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, // 4-frame walk strip
+    enemyWalk: { speed: 7, bob: 2, squash: 0.08, sway: 1 },   // subtle bob layered over frame walk
     // Two parallax layers (far mountains + transparent foreground) with 2 floating platforms.
     terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS,
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
@@ -872,8 +876,11 @@ function spawnEnemy() {
   const mix = currentLevel().enemyMix;
   const type = mix[(Math.random() * mix.length) | 0];
   const t = ENEMY_TYPES[type];
-  const anim = currentLevel().enemyAnim || null;   // per-level animated sprite (e.g. snake)
-  const w = anim ? anim.w : t.w, h = anim ? anim.h : t.h;
+  const lvl = currentLevel();
+  const anim = lvl.enemyAnim || null;              // per-level animated sprite (e.g. snake)
+  const sz = lvl.enemySize && lvl.enemySize[type]; // per-level, per-type size (e.g. bear)
+  const w = sz ? sz.w : (anim ? anim.w : t.w);
+  const h = sz ? sz.h : (anim ? anim.h : t.h);
   const x = cameraX + VIEW_W + rand(40, 280);
   // Flyers float at a jump-reachable height; everyone else sits on the ground.
   const baseY = t.air ? GROUND_Y - h - rand(70, 120) : GROUND_Y - h;
@@ -1416,9 +1423,11 @@ function drawEnemies() {
       ctx.closePath(); ctx.fill();
     }
 
-    // A soft type-coloured glow so each variety reads at a glance
-    // (the shared enemy.png is the same for all types, so colour it here).
-    if (e.type !== "walker") {
+    const spriteKey = currentLevel().enemySprite || "enemy";
+    const customSprite = spriteKey !== "enemy";
+    // A soft type-coloured glow so each variety reads at a glance (skip it for a
+    // detailed per-level sprite like the bear, where it just muddies the art).
+    if (e.type !== "walker" && !customSprite) {
       ctx.save();
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = e.color;
@@ -1438,13 +1447,48 @@ function drawEnemies() {
       const stretch = e.vy < -40 ? 1.12 : (e.vy > 80 ? 0.9 : 1);
       dh = e.h * stretch; dw = e.w * (2 - stretch); dy = e.y + (e.h - dh);
     }
-    if (e.anim) drawEnemyAnim(e, sx + (e.w - dw) / 2, dy, dw, dh);
-    else drawSprite("enemy", sx + (e.w - dw) / 2, dy, dw, dh, e.color);
+    const walk = currentLevel().enemyWalk;
+    const frames = currentLevel().enemyFrames;
+    if (e.anim) {
+      drawEnemyAnim(e, sx + (e.w - dw) / 2, dy, dw, dh);
+    } else if (frames && imgLoaded[frames.key]) {
+      // Frame-based walk cycle (e.g. the 4-frame bear): step through the strip at
+      // a fixed fps, desynced per enemy, with a subtle body bob layered on top.
+      const img = images[frames.key];
+      const count = frames.count || 4, fps = frames.fps || 7;
+      const cellW = img.naturalWidth / count, cellH = img.naturalHeight;
+      const fi = Math.floor(performance.now() / 1000 * fps + (e.phase || 0) * 2) % count;
+      // Draw at the frame's true aspect so the bear isn't squashed; sit it on its feet.
+      const drawW = dw, drawH = drawW / (frames.aspect || (cellW / cellH));
+      const ph = performance.now() / 1000 * (walk ? walk.speed : 7) + (e.phase || 0);
+      const bobY = walk ? -(walk.bob || 2) * Math.abs(Math.sin(ph)) : 0;
+      const footY = e.y + e.h, cx = sx + e.w / 2;
+      const flip = e.vx > 0;   // strip faces left; flip when walking right
+      ctx.save();
+      if (flip) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(img, fi * cellW, 0, cellW, cellH,
+        cx - drawW / 2, footY + bobY - drawH, drawW, drawH);
+      ctx.restore();
+    } else if (walk && customSprite && imgLoaded[spriteKey]) {
+      // Procedural lumbering walk for a static creature sprite (e.g. the bear):
+      // body bobs up on each step, squashes at footfall, with a slow weight sway.
+      const ph = performance.now() / 1000 * (walk.speed || 7) + (e.phase || 0);
+      const step = Math.abs(Math.sin(ph));                 // 0 at footfall, 1 mid-step
+      const bobY = -(walk.bob || 3) * step;                // lift the body on each step
+      const sway = (walk.sway || 2) * Math.sin(ph * 0.5);  // slow side weight shift
+      const sq = 1 - (walk.squash || 0.1) * (1 - step);    // squash at footfall
+      const drawH = dh * sq, footY = e.y + e.h, cx = sx + e.w / 2 + sway;
+      ctx.drawImage(images[spriteKey], cx - dw / 2, footY + bobY - drawH, dw, drawH);
+    } else {
+      drawSprite(spriteKey, sx + (e.w - dw) / 2, dy, dw, dh, e.color);
+    }
 
-    // Tank: armour plate + remaining-HP pips above it.
+    // Tank: armour plate (only on the generic sprite) + remaining-HP pips above it.
     if (e.type === "tank") {
-      ctx.fillStyle = "rgba(55,65,75,0.5)";
-      ctx.fillRect(sx + 5, e.y + 6, e.w - 10, e.h * 0.34);
+      if (!customSprite) {
+        ctx.fillStyle = "rgba(55,65,75,0.5)";
+        ctx.fillRect(sx + 5, e.y + 6, e.w - 10, e.h * 0.34);
+      }
       for (let i = 0; i < e.hp; i++) {
         ctx.fillStyle = "#e74c3c";
         ctx.fillRect(sx + 6 + i * 11, e.y - 9, 8, 5);
