@@ -140,8 +140,8 @@
    never crashes.
    ============================================================= */
 const ASSETS = {
-  player:     "character.png",
-  walk:       "character_walk.png?v=4",   // 10-frame walk-cycle sprite sheet (bump ?v on regen)
+  player:     "character.png?v=4",   // standing/idle sprite — both feet planted, faces LEFT (bump ?v on regen)
+  walk:       "character_walk.png?v=6",   // 9-frame walk-cycle sprite sheet (art faces LEFT; bump ?v on regen)
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
@@ -349,7 +349,7 @@ const PIT_FALL_DEPTH = 20;     // px below GROUND_Y you must drop for a fall to 
 
 // Sprite sizes (match cropped art aspect ratios).
 const PLAYER_W = 30, PLAYER_H = 62;
-const WALK_FRAMES = 10;  // frames in character_walk.png (one full 2-step loop)
+const WALK_FRAMES = 9;   // frames in character_walk.png (one full 2-step loop)
 // Each walk cell is padded (headroom + side room for body bob/rock/sway); these
 // fractions must match gen_walk.py so the body draws at the standing-sprite scale.
 const WALK_PAD_X = 0.119, WALK_PAD_Y = 0.120;
