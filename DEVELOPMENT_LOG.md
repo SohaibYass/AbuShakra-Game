@@ -486,6 +486,29 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   wolf (+alpha). Earlier levels untouched (resolver falls through).
 - Added a **Test L5** button (data-level 4).
 
+### 31. Level 5 "nightmare" hazards
+- **Ice lakes:** `iceZones` (local-x ranges, repeat per tile) + `isOnIce(worldX)`.
+  Movement is normally instant (`vx = input`); on ice the velocity eases toward
+  input via a low "grip" lerp (`ICE_GRIP` while steering, `ICE_STOP_GRIP` when keys
+  release), so the player slides after stopping and is sluggish to turn — jumping
+  off an icy edge is harder but possible. Drawn as cyan patches hugging `surfaceY`.
+- **Strong wind:** `lvl.wind` → `windCurrent` = base + two out-of-phase gusts (swings
+  backward↔forward); pushes `player.x` each frame, ×0.55 on the ground, ×1.0 mid-air.
+- **Snowstorm:** `lvl.snowstorm` → `SNOW_COUNT` (110, capped for mobile) screen-space
+  flakes driven by the wind + a faint white fog overlay. `drawWeather` runs over the
+  world, under the HUD.
+- **Nightmare tuning:** L5 `enemySpeedMul 2.6`, `spawnMul 0.3`, `maxEnemies 9` (spawn
+  cap is now per-level: `lvl.maxEnemies || MAX_ENEMIES`). Creature mix = 3 falcons +
+  bear/wolf alphas + wolf + snake. Stomp/collision logic unchanged.
+- **Very rare carabiners:** `lvl.rareCarabiners` → `placeRareCarabiner` drops a single
+  clip on ~28% of tiles. Score values unchanged (clip +1, stomp +2).
+- **Music:** Level 5 plays `level5_niknet_art-super-suspense-adrenaline-trailer-...mp3`.
+- **Safety:** L5 ground is continuous + solid to the bottom, so there is no permanent
+  dead zone. A literal avalanche-wall instakill was deliberately *not* added (would be
+  unfair, not just hard) — wind + swarm + ice supply the pressure instead.
+- *(A crashing-platform system was built then removed from L5 at the user's request;
+  its engine code is left dormant, gated on a per-level `crashSpecs` no level sets.)*
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
