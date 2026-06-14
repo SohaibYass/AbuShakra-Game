@@ -403,6 +403,34 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   terrain with `score = prevTarget()` (so the `0/40` bar + target stay correct).
   Self-contained; easy to remove or extend into a full L1–L5 picker.
 
+### 26. Per-level enemies: snake slither (L1) + bear walk cycle (L2)
+- **Framework:** each level entry can carry `enemyMix` (type weights), an
+  `enemySprite` key, per-type `enemySize`, and one of two animation modes —
+  `enemyAnim` (procedural) or `enemyFrames` (sprite-strip). All coexist; a level
+  uses only what it sets.
+- **Snake (L1) — procedural slice-shear slither:** one static side-on
+  `enemy_snake.png` drawn in N vertical slices, each y-offset by an upward-biased
+  travelling sine `amp*(sin(...)-1)` so the belly stays planted and the body humps
+  between contacts. Each slice rests on the ground **at its own world x**
+  (`conform`), so a wide snake drapes over uneven/looping terrain instead of
+  floating. Enemies sample a **separate collision line** (`enemySurf`/`enemyFloorY`,
+  traced from `…_collisionline_Snake.png`) so the snake sits on the rock while the
+  player keeps `ZUG_SURF`/platforms.
+- **Bear (L2) — frame-based walk:** `enemyFrames:{key,count,fps,aspect}` cycles a
+  4-frame strip at 7 fps, desynced per enemy via `e.phase`, drawn at the frame's
+  true aspect on the bear's feet with a subtle bob layered on. Tank bears reuse the
+  frames at a larger size; the type-glow and armour-plate overlays are skipped for
+  any custom sprite.
+- **Asset-cutout gotcha (bear):** the first 4-frame sheet had **no alpha** and a
+  **dark brown vignette** — the bear's own legs/outline/shadows were the same tone,
+  so every auto-cutout (color-key, border flood-fill at any tolerance) either left a
+  halo or ate the legs (looked "transparent"/fragmented). Fix was upstream: regen
+  the frames on a **flat pure-magenta (#FF00FF) background** (a color absent from the
+  bear), then chroma-key with **binary** alpha (no partial pixels → no see-through),
+  auto-detect the 4 frames by column gaps, tight-crop, and assemble a uniform strip
+  (`enemy_bear_walk.png`, 408×254 cells). Lesson: **provide sprites with real alpha
+  or a flat contrasting chroma**, never on a tone that overlaps the subject.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
