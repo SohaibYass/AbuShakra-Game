@@ -152,6 +152,8 @@ const ASSETS = {
   carabiner:  "carabiner.png",    // climbing clip pickup
   rope:       "rope.png?v=1",      // braided swing rope (Level 4); drawn stretched/rotated
   ropeRock:   "rope_rock.png?v=1", // snow-capped anchor rock the rope hangs from
+  rope2:      "rope2.png?v=1",     // alternate silvery rope (the 2nd Level-4 rope)
+  ropeRock2:  "rope_rock2.png?v=1",// alternate wooden anchor post
   grip:       "rope_grip.png?v=2", // Abu hanging with hands clasped overhead (drawn while swinging)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
@@ -210,7 +212,7 @@ const MATTERHORN_PLATFORMS = [{x0:58,x1:205,top:202}, {x0:267,x1:418,top:228}, {
 // Swing ropes (Level 4): anchored HIGH on a rock; you jump to grab the low end,
 // climb UP toward the anchor to reach the clip at the top, pump to swing, and drop
 // (Down) to launch off. {x:anchor, top:anchor y, bottom:rope end}.
-const MATTERHORN_ROPES = [{x:205, top:46, bottom:232}, {x:485, top:118, bottom:262}];
+const MATTERHORN_ROPES = [{x:205, top:46, bottom:232}, {x:485, top:64, bottom:252, alt:true}];
 const MATTERHORN_SURF = [312.0, 312.0, 312.0, 312.0, 312.0, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 312.0, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.5, 333.5, 334.0, 334.4, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 336.6, 336.6, 336.6, 336.6, 336.6, 336.2, 336.2, 336.2, 336.2, 335.7, 335.7, 335.3, 335.3, 334.9, 334.4, 334.0, 333.5, 333.1, 332.2, 332.2, 331.8, 331.8, 331.3, 330.9, 330.9, 330.5, 330.0, 330.0, 330.0, 330.0, 328.3, 327.4, 327.0, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 327.4, 331.8, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 336.6, 336.2, 336.2, 335.7, 335.7, 335.7, 335.3, 335.3, 334.4, 334.0, 334.0, 334.0, 334.0, 334.0, 333.1, 331.3, 330.0, 328.7, 328.7, 327.8, 327.0, 327.0, 326.5, 326.5, 326.5, 326.1, 326.1, 325.6, 324.8, 323.4, 322.6, 322.6, 319.9, 318.6, 318.2, 316.8, 316.4, 316.4, 315.5, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 308.9, 308.5, 308.5, 308.5, 308.5, 308.5, 308.1, 308.1, 308.1, 308.1, 308.1, 309.8, 313.3, 316.4, 318.6, 319.9, 320.4, 320.4, 320.4, 320.4, 321.2, 321.7, 322.6, 323.0, 324.3, 324.3, 324.3, 324.3, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 324.8, 324.3, 323.9, 323.4, 323.4, 322.6, 322.1, 321.7, 321.2, 320.8, 320.8, 320.4, 319.9, 319.9, 319.5, 319.5, 319.0, 319.0, 318.6];
 // Level 3 "Cime Grande" (Italy) — two parallax layers (Grande_Back + transparent
 // Grande_Front); ground heightmap + 3 floating platforms derived from the
@@ -852,7 +854,7 @@ function generateAhead() {
       // Climbable swing ropes for the visible tiles (Level 4), same deterministic tiling.
       ropes = [];
       if (lvl.ropes) for (let t = a; t <= b; t++) for (const rp of lvl.ropes) {
-        ropes.push({ x: t * tw + rp.x, top: rp.top, bottom: rp.bottom });
+        ropes.push({ x: t * tw + rp.x, top: rp.top, bottom: rp.bottom, alt: rp.alt });
       }
     } else {
       // Natural terrain without platforms: scatter sparse ground carabiners.
@@ -1763,19 +1765,22 @@ function drawRopes() {
     const ex = onThis ? (player.x + player.w / 2 - cameraX) : ax;
     const ey = onThis ? player.y : r.bottom;
     const len = Math.max(8, Math.hypot(ex - ax, ey - r.top));
-    if (imgLoaded.rope) {
+    // Per-rope art: the `alt` rope uses the silvery rope + wooden post anchor.
+    const ropeKey = (r.alt && imgLoaded.rope2) ? "rope2" : "rope";
+    const rockKey = (r.alt && imgLoaded.ropeRock2) ? "ropeRock2" : "ropeRock";
+    if (imgLoaded[ropeKey]) {
       const ang = Math.atan2(ey - r.top, ex - ax) - Math.PI / 2;  // sprite hangs along +y
       ctx.save();
       ctx.translate(ax, r.top); ctx.rotate(ang);
-      ctx.drawImage(images.rope, -5, 0, 10, len);
+      ctx.drawImage(images[ropeKey], -5, 0, 10, len);
       ctx.restore();
     } else {
       ctx.strokeStyle = "#caa15a"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(ax, r.top); ctx.lineTo(ex, ey); ctx.stroke();
     }
-    // Anchor rock sits on the anchor point, its tie-off peg meeting the rope top.
-    if (imgLoaded.ropeRock) {
-      const img = images.ropeRock, rkW = 76, rkH = rkW * img.naturalHeight / img.naturalWidth;
+    // Anchor sits on the anchor point, its tie-off meeting the rope top.
+    if (imgLoaded[rockKey]) {
+      const img = images[rockKey], rkW = 76, rkH = rkW * img.naturalHeight / img.naturalWidth;
       ctx.drawImage(img, ax - rkW / 2, r.top - rkH + 14, rkW, rkH);
     } else {
       ctx.fillStyle = "#7a5a28"; ctx.fillRect(ax - 6, r.top - 4, 12, 6);
