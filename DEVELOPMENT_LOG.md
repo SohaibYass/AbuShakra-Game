@@ -535,6 +535,28 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   wind. The swoop clamps just above `enemyFloorY` so it never punches through the
   ground. Level 3/4 falcons (no flag) keep the original float.
 
+### 35. Level 4: swing ropes replace the platforms
+- **Platforms gone:** removed the floating-platform collision and **erased them from
+  the painted foreground** (flood-fill the ground up from the bottom row; erase any
+  opaque component not connected to it) → `Matterhorn_Front2.png`. No ghost ledges.
+- **Pendulum ropes** (`MATTERHORN_ROPES`, anchors at different heights) hung from
+  snow-capped rocks. `updateSwing` runs real pendulum physics: `alpha = -(g/L)sinθ`,
+  L/R pump `omega`, damping, angle clamp so it never loops the anchor. Grab by
+  jumping into the low end; the run speed carries into `omega`.
+- **Controls (all on the existing buttons):** HOLD Up = climb up the rope (escape
+  enemies, shortens L to `SWING_MIN_L`); a quick TAP of Up (< `ROPE_TAP` 0.16 s) =
+  jump off with an upward leap; Down = drop off. Hold-vs-tap is disambiguated with
+  `player.ropeHold`; the grab seeds it to 99 so the held jump that grabbed the rope
+  doesn't immediately fire a jump-off. Launch hands momentum to `player.launchVx`,
+  carried in the air (light steering + decay) in `updatePlayer`.
+- **Render:** Abu drawn from `rope_grip.png` (arms overhead), pivoted at the hands
+  and rotated by `-θ` so he grips and tilts along the rope; scaled so his BODY (the
+  sprite's lower ~83%) matches `player.h`, arms extending above. Facing follows
+  input, not the swing. Rope sprite stretched+rotated anchor→hands; rock at the top.
+- **Clips ground-only** (rope-top clips removed) to force Abu down among the wolves
+  /falcons. Added a Down touch button. `generateAhead` reworked so ropes generate
+  without `platforms`.
+
 ### 34. Level 5: falling icicles
 - Gated on `lvl.icicles`. On a difficulty-scaled timer a spike is scheduled at
   `player.x + rand(-50,340)` (threatening the path ahead). State machine:
