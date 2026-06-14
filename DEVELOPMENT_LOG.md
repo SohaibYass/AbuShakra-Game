@@ -535,6 +535,16 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   wind. The swoop clamps just above `enemyFloorY` so it never punches through the
   ground. Level 3/4 falcons (no flag) keep the original float.
 
+### 34. Level 5: falling icicles
+- Gated on `lvl.icicles`. On a difficulty-scaled timer a spike is scheduled at
+  `player.x + rand(-50,340)` (threatening the path ahead). State machine:
+  **warn → fall → done**. The warn state draws a **pulsing red chevron + ground
+  ring** at `surfaceY(x)` plus a glint at the top edge for `ICICLE_WARN` (0.8 s);
+  then a cyan spike falls from the top with gravity. AABB vs the player → `loseLife`
+  (self-guards on i-frames); ground contact → `iceBreak` shards + small shake.
+  Vertical is screen-space (no vertical camera) so the icicle's `y` and `player.y`
+  compare directly; only `x` is world-space. Dodgeable, but tight with ice + wind.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
