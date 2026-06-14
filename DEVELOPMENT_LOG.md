@@ -525,6 +525,16 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   to the old art. Replaced `character.png` with a new side-on standing pose — both
   feet planted, facing left — matching the walk character. Bumped `?v` on both.
 
+### 33. Level 5: dive-bombing falcons
+- Falcons flagged `dive: true` (per-creature, Level 5 only) run a small state machine
+  instead of the gentle bob: **cruise → dive → recover → cruise**. On a ~1.4–3.4 s
+  cooldown, when on-screen and in front of the player, the falcon **locks the
+  player's current centre** and swoops toward it at ~380 px/s (×difficulty), then
+  climbs back to cruise height. The target is captured at dive-start (not continuous
+  homing) so it's dodgeable by sidestepping — fair, but brutal alongside the ice +
+  wind. The swoop clamps just above `enemyFloorY` so it never punches through the
+  ground. Level 3/4 falcons (no flag) keep the original float.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
