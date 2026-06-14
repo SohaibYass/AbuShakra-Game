@@ -431,6 +431,22 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   (`enemy_bear_walk.png`, 408×254 cells). Lesson: **provide sprites with real alpha
   or a flat contrasting chroma**, never on a tone that overlaps the subject.
 
+### 27. Gyrfalcon flyers (L3) + flyer frame-anchoring
+- **Level 3 → all-aerial gyrfalcon gauntlet:** `enemyMix` is now 4× `flyer`; the
+  old generic flyers ("flying snakes") are gone. Same one-creature-per-level theme
+  as the snakes (L1) and bears (L2).
+- **Head-anchoring (vs. feet-anchoring):** the magenta source placed each bird at a
+  different height, so bottom-aligning the cropped frames (as with the bear) made
+  the body bob/jump. Fix: anchor each frame by the **head** — the median y of the
+  leftmost ~18% of the bird (beak/face), which is stable across a flap — so the body
+  hovers steady while the wings sweep. Anchoring by foreground centroid/median was
+  too skewed by wing spread.
+- **Draw path additions:** `enemyFrames.anchor:"center"` centres the body on the
+  hitbox (flyers) vs. the default feet-anchor (ground walkers); `enemyFrames.scale`
+  lets a wide-winged sprite spill past a smaller hitbox (falcon hitbox 52×40, drawn
+  ×1.5). The old procedural triangle-wing flyer draw is gated off whenever a level
+  has `enemyFrames`.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
