@@ -243,6 +243,14 @@ const LEVEL_BONUS_LIVES = 1;   // +1 life awarded on each level advance
 
 const ENEMY_SPAWN_MIN = 1.6, ENEMY_SPAWN_MAX = 3.2;  // seconds
 const MAX_ENEMIES     = 6;
+
+// --- Level 5 "nightmare" tuning ---
+const ICE_GRIP      = 2.6;   // how fast velocity catches up to input on ice (low = slippery)
+const ICE_STOP_GRIP = 1.0;   // even lazier when keys released -> long slide to a stop
+const WIND_BASE     = -64;   // px/s steady backward push
+const WIND_GUST     = 128;   // px/s gust amplitude (occasionally flips to a forward shove)
+const SNOW_COUNT    = 110;   // snowstorm flake count (capped so mobile stays smooth)
+const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before it breaks
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -303,20 +311,28 @@ const LEVELS = [
     terrain: "natural", bgMode: "parallax", surf: MATTERHORN_SURF, tileW: MATTERHORN_TILE_W, platforms: MATTERHORN_PLATFORMS,
     music: "level4_niknet_art-thriller-action-trailer-336723.mp3" },
   { id: 5, name: "Mont Blanc", country: "France", bg: "bgMontBlancBack", fg: "fgMontBlanc", target: 100,
-    enemySpeedMul: 2.2,  spawnMul: 0.45,
-    // FINAL GAUNTLET: every creature from Levels 1-4 at once — snake, bear (+alpha),
-    // gyrfalcon (air) and wolf (+alpha). Each carries its own sprite/anim/size.
+    // NIGHTMARE: brutal speed + spawn rate, a swarm cap, and a mix that leans hard
+    // on flyers / hoppers / tanks with only a couple of walkers.
+    enemySpeedMul: 2.6,  spawnMul: 0.3,  maxEnemies: 9,
+    // FINAL GAUNTLET: the four custom creatures from Levels 1-4 — snake, gyrfalcon
+    // (air), wolf (+alpha) and bear-alpha (tank). Each carries its own art (no
+    // generic enemy.png on this level).
     enemyCreatures: [
-      { name: "snake",     type: "walker", anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } },
-      { name: "bear",      type: "walker", size: { w: 60, h: 37 }, frames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, walk: { speed: 7, bob: 2, squash: 0.08, sway: 1 } },
-      { name: "bearAlpha", type: "tank",   size: { w: 98, h: 61 }, frames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, walk: { speed: 7, bob: 2, squash: 0.08, sway: 1 } },
       { name: "falcon",    type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
       { name: "falcon2",   type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
+      { name: "falcon3",   type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
+      { name: "bearAlpha", type: "tank",   size: { w: 98, h: 61 }, frames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, walk: { speed: 7, bob: 2, squash: 0.08, sway: 1 } },
+      { name: "wolfAlpha", type: "tank",   size: { w: 98, h: 54 }, frames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, walk: { speed: 9, bob: 2, squash: 0.06, sway: 1 } },
       { name: "wolf",      type: "walker", size: { w: 62, h: 34 }, frames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, walk: { speed: 9, bob: 2, squash: 0.06, sway: 1 } },
-      { name: "wolfAlpha", type: "tank",   size: { w: 98, h: 54 }, frames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, walk: { speed: 9, bob: 2, squash: 0.06, sway: 1 } }
+      { name: "snake",     type: "walker", anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } }
     ],
+    // Nightmare hazards: strong gusting wind, an active snowstorm, slippery ice
+    // lakes on the ground, and almost no clips.
+    wind: true, snowstorm: true, rareCarabiners: true,
+    iceZones: [{ x0: 60, x1: 280 }, { x0: 380, x1: 620 }],
     // Two parallax layers (far Mont Blanc massif + transparent snow ridge) with 2 floating platforms.
-    terrain: "natural", bgMode: "parallax", surf: MB_FRONT_SURF, tileW: MB_FRONT_TILE_W, platforms: MB_FRONT_PLATFORMS }
+    terrain: "natural", bgMode: "parallax", surf: MB_FRONT_SURF, tileW: MB_FRONT_TILE_W, platforms: MB_FRONT_PLATFORMS,
+    music: "level5_niknet_art-super-suspense-adrenaline-trailer-music-297760.mp3" }
 ];
 
 // Elevated stone platforms (the ones you jump onto).
@@ -584,6 +600,7 @@ function startAtLevel(idx) {
     player.y = surfaceY(player.x + player.w / 2) - player.h;
     player.vy = 0; player.onGround = true;
   }
+  enterLevelEffects();               // wind / snowstorm / crash-platform reset
   generateAhead();
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
@@ -624,6 +641,10 @@ let state = "start";   // start | playing | levelcomplete | won | gameover
 let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
+let crashPlats = []; // Level 5 breaking platforms (persistent state per instance)
+let weather = [];    // Level 5 snowstorm flakes (screen-space)
+let windCurrent = 0; // Level 5 wind force (px/s), varies over time
+let windT = 0;       // wind phase clock
 let cameraX, worldGenX;
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
@@ -783,11 +804,19 @@ function generateAhead() {
       const tw = lvl.tileW;
       while (worldGenX < target) {
         const tile = Math.floor(worldGenX / tw);
-        if (lvl.groundClipsOnly) {
+        if (lvl.rareCarabiners) {
+          placeRareCarabiner(tile, tw);                         // Level 5: almost none
+        } else if (lvl.groundClipsOnly) {
           placeGroundClips(tile, tw);                           // all clips on the ground (Level 3)
         } else {
           placePlatformCarabiners(tile, tw, lvl.platforms);     // clips on the ledges
           placeTrackCarabiners(tile, tw, lvl.platforms);        // clips in the ground gaps
+        }
+        // Level 5 crashing platforms: persistent per-instance state, spawned once
+        // per tile (deterministic x/top from lvl.crashSpecs).
+        if (lvl.crashSpecs) for (const cs of lvl.crashSpecs) {
+          crashPlats.push({ x: tile * tw + cs.x0, y: cs.top, w: cs.x1 - cs.x0, h: 14,
+            state: "solid", timer: 0, goneAt: 0, respawn: !!lvl.crashRespawn });
         }
         worldGenX += tw;
       }
@@ -820,6 +849,15 @@ function generateAhead() {
   platforms  = platforms.filter(p => p.x + p.w > cutoff);
   carabiners = carabiners.filter(c => c.x + c.w > cutoff);
   pits       = pits.filter(p => p.x + p.w > cutoff);
+  crashPlats = crashPlats.filter(p => p.x + p.w > cutoff);
+}
+
+// Level 5: a single carabiner only now and then (survival over collection).
+function placeRareCarabiner(tile, tw) {
+  if (Math.random() > 0.28) return;                 // ~most tiles get nothing
+  const x = tile * tw + rand(0.2, 0.8) * tw;
+  const y = surfaceY(x) - rand(12, 26) - CARABINER_H;
+  carabiners.push({ x: x - CARABINER_W / 2, y, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
 }
 
 // Interpolate a heightmap `surf` (spanning [0,tileW]) at local-x.
@@ -910,8 +948,8 @@ function updatePlatforms(dt) {
    ENEMIES — spawn ahead, always walk left, recycle behind camera.
    ============================================================= */
 function spawnEnemy() {
-  if (enemies.length >= MAX_ENEMIES) return;
   const lvl = currentLevel();
+  if (enemies.length >= (lvl.maxEnemies || MAX_ENEMIES)) return;
   // A level can list whole CREATURES (each with its own behaviour-type + sprite/
   // anim/frames/size) — used by the Level 5 gauntlet that mixes the snake, bear,
   // falcon and wolf. Otherwise fall back to the simple enemyMix of type strings.
@@ -981,7 +1019,7 @@ function updateEnemies(dt) {
    ============================================================= */
 function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
-             vx: 0, vy: 0, onGround: true, facing: 1, walkPhase: 0,
+             vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false };
 }
 
@@ -989,8 +1027,22 @@ function updatePlayer(dt) {
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
   if (anyKey(RIGHT_KEYS)) move += 1;
-  player.vx = move * PLAYER_SPEED;
   if (move !== 0) player.facing = move;
+
+  // Movement is normally instant (vx = input). On a Level-5 ice lake the velocity
+  // only eases toward the input, so the player keeps sliding after stopping and is
+  // sluggish to turn — jumping off an icy edge is harder but still possible.
+  const target = move * PLAYER_SPEED;
+  const onIce = currentLevel().terrain === "natural" && player.onGround &&
+                isOnIce(player.x + player.w / 2);
+  if (onIce) {
+    const grip = (move !== 0 ? ICE_GRIP : ICE_STOP_GRIP);
+    player.slideVx += (target - player.slideVx) * Math.min(1, grip * dt);
+    player.vx = player.slideVx;
+  } else {
+    player.vx = target;
+    player.slideVx = target;   // stay in sync so the first icy step is smooth
+  }
 
   // Advance the walk cycle only while moving on the ground, and kick up a
   // little dust on every footfall so it reads as walking, not sliding.
@@ -1050,6 +1102,13 @@ function updatePlayer(dt) {
   }
   player.x = nx;
 
+  // Strong wind (Level 5): a steady backward push plus gusts, stronger mid-air
+  // where the player has no footing.
+  if (currentLevel().wind) {
+    player.x += windCurrent * (player.onGround ? 0.55 : 1.0) * dt;
+    if (player.x < 0) player.x = 0;
+  }
+
   const prevBottom = player.y + player.h;
   player.y += player.vy * dt;
   player.onGround = false;
@@ -1062,6 +1121,18 @@ function updatePlayer(dt) {
       const overlapX = player.x + player.w > p.x && player.x < p.x + p.w;
       if (overlapX && prevBottom <= p.y + 1 && newBottom >= p.y) {
         player.y = p.y - player.h; player.vy = 0; player.onGround = true;
+        if (impactVy > 250) dustBurst(player.x + player.w / 2, p.y);
+        break;
+      }
+    }
+    // Level-5 crashing platforms: land normally, but stepping on a solid one starts
+    // it shaking (it breaks a moment later in updateCrashPlats).
+    if (!player.onGround) for (const p of crashPlats) {
+      if (p.state === "gone") continue;
+      const overlapX = player.x + player.w > p.x && player.x < p.x + p.w;
+      if (overlapX && prevBottom <= p.y + 1 && newBottom >= p.y) {
+        player.y = p.y - player.h; player.vy = 0; player.onGround = true;
+        if (p.state === "solid") { p.state = "shaking"; p.timer = rand(CRASH_FALL_MIN, CRASH_FALL_MAX); }
         if (impactVy > 250) dustBurst(player.x + player.w / 2, p.y);
         break;
       }
@@ -1196,6 +1267,126 @@ function poofBurst(x, y) {
     colors: ["#7bd36a", "#4f9e3f", "#bff2a8"] });
 }
 function addShake(mag) { if (mag > shake) shake = mag; }
+// Icy shards when a crash platform cracks / breaks.
+function iceCrack(x, y) {
+  spawnParticles(x, y, 2, { angMin: -Math.PI, angMax: 0, spdMin: 20, spdMax: 90,
+    grav: 500, lifeMin: 0.2, lifeMax: 0.4, sizeMin: 1.5, sizeMax: 3,
+    colors: ["#dff2fb", "#a9d4e8", "#ffffff"] });
+}
+function iceBreak(x, y, w) {
+  spawnParticles(x, y, 16, { angMin: 0, angMax: Math.PI, spdMin: 40, spdMax: 200,
+    grav: 720, lifeMin: 0.35, lifeMax: 0.7, sizeMin: 2, sizeMax: 5,
+    colors: ["#cfeaf6", "#9cc6db", "#ffffff", "#7fb4cf"] });
+}
+
+/* =============================================================
+   LEVEL 5 "NIGHTMARE" SYSTEMS — ice lakes, crashing platforms, wind, snowstorm.
+   All gated on per-level flags so other levels are untouched.
+   ============================================================= */
+// Reduced-friction zones repeat every tileW (local-x ranges in lvl.iceZones).
+function isOnIce(worldX) {
+  const lvl = currentLevel();
+  if (!lvl.iceZones) return false;
+  const tw = lvl.tileW || 675;
+  const local = ((worldX % tw) + tw) % tw;
+  for (const z of lvl.iceZones) if (local >= z.x0 && local <= z.x1) return true;
+  return false;
+}
+
+function updateCrashPlats(dt) {
+  for (const p of crashPlats) {
+    if (p.state === "shaking") {
+      p.timer -= dt;
+      if (Math.random() < dt * 16) iceCrack(p.x + Math.random() * p.w, p.y);
+      if (p.timer <= 0) { p.state = "gone"; p.goneAt = 0; iceBreak(p.x + p.w / 2, p.y, p.w); addShake(4); }
+    } else if (p.state === "gone" && p.respawn) {
+      p.goneAt += dt;
+      if (p.goneAt >= 5) p.state = "solid";
+    }
+  }
+}
+
+function drawCrashPlatforms() {
+  for (const p of crashPlats) {
+    if (p.state === "gone") continue;
+    let ox = 0, oy = 0;
+    if (p.state === "shaking") { ox = (Math.random() * 2 - 1) * 1.6; oy = (Math.random() * 2 - 1) * 1.6; }
+    const x = p.x - cameraX + ox, y = p.y + oy;
+    if (x > VIEW_W || x + p.w < 0) continue;
+    ctx.fillStyle = p.state === "shaking" ? "#bfe0ee" : "#d6eef8";
+    ctx.fillRect(x, y, p.w, p.h);
+    ctx.fillStyle = "#9cc6db"; ctx.fillRect(x, y + p.h - 4, p.w, 4);     // shaded underside
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(x, y, p.w, 3);              // snow cap
+    if (p.state === "shaking") {                                        // cracks
+      ctx.strokeStyle = "rgba(45,75,95,0.85)"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + p.w * 0.5, y);  ctx.lineTo(x + p.w * 0.42, y + p.h);
+      ctx.moveTo(x + p.w * 0.25, y); ctx.lineTo(x + p.w * 0.3, y + p.h);
+      ctx.moveTo(x + p.w * 0.75, y); ctx.lineTo(x + p.w * 0.68, y + p.h);
+      ctx.stroke();
+    }
+  }
+}
+
+// Cyan frozen patches hugging the terrain surface inside each ice zone.
+function drawIceLakes() {
+  const lvl = currentLevel();
+  if (!lvl.iceZones) return;
+  const tw = lvl.tileW || 675;
+  const a = Math.floor(cameraX / tw) - 1, b = Math.floor((cameraX + VIEW_W) / tw) + 1;
+  for (let t = a; t <= b; t++) for (const z of lvl.iceZones) {
+    const wx0 = t * tw + z.x0, wx1 = t * tw + z.x1;
+    if (wx1 - cameraX < 0 || wx0 - cameraX > VIEW_W) continue;
+    ctx.fillStyle = "rgba(150,225,245,0.42)";
+    ctx.beginPath();
+    let started = false;
+    for (let wx = wx0; wx <= wx1; wx += 8) { const gx = wx - cameraX, gy = surfaceY(wx); started ? ctx.lineTo(gx, gy) : (ctx.moveTo(gx, gy), started = true); }
+    for (let wx = wx1; wx >= wx0; wx -= 8) ctx.lineTo(wx - cameraX, surfaceY(wx) + 8);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let wx = wx0; wx <= wx1; wx += 8) { const gx = wx - cameraX, gy = surfaceY(wx); wx === wx0 ? ctx.moveTo(gx, gy) : ctx.lineTo(gx, gy); }
+    ctx.stroke();
+  }
+}
+
+function initWeather() {
+  weather = [];
+  if (!currentLevel().snowstorm) return;
+  for (let i = 0; i < SNOW_COUNT; i++)
+    weather.push({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, z: rand(0.4, 1.5), sway: Math.random() * 6.28 });
+}
+
+function updateWeather(dt) {
+  const lvl = currentLevel();
+  if (lvl.wind) {
+    windT += dt;
+    windCurrent = WIND_BASE + Math.sin(windT * 0.6) * WIND_GUST + Math.sin(windT * 1.7) * (WIND_GUST * 0.35);
+  } else windCurrent = 0;
+  if (!lvl.snowstorm) return;
+  for (const f of weather) {
+    f.sway += dt * 2;
+    f.x += (windCurrent * 0.7 * f.z + Math.sin(f.sway) * 14 - 26 * f.z) * dt;
+    f.y += (90 + 70 * f.z) * dt;
+    if (f.y > VIEW_H + 4) { f.y = -4; f.x = Math.random() * (VIEW_W + 40) - 20; }
+    if (f.x < -10) f.x += VIEW_W + 20;
+    else if (f.x > VIEW_W + 10) f.x -= VIEW_W + 20;
+  }
+}
+
+function drawWeather() {
+  if (!currentLevel().snowstorm) return;
+  ctx.fillStyle = "rgba(255,255,255,0.10)";     // faint whiteout fog
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  for (const f of weather) { const s = Math.max(1, Math.round(f.z * 2)); ctx.fillRect(f.x | 0, f.y | 0, s, s); }
+}
+
+// Called whenever a new level starts (test button, fresh game, or advance).
+function enterLevelEffects() {
+  crashPlats = []; windT = 0; windCurrent = 0;
+  initWeather();
+}
 
 function updateEffects(dt) {
   for (const p of particles) {
@@ -1906,6 +2097,7 @@ function resetGame() {
   } else {
     worldGenX = 300;
   }
+  enterLevelEffects();
   generateAhead();
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
@@ -1950,12 +2142,15 @@ function advanceLevel() {
     player.y = surfaceY(player.x + player.w / 2) - player.h;
     player.vy = 0; player.onGround = true;
   }
+  enterLevelEffects();   // arm the new level's wind/snowstorm; clear old crash platforms
   state = "playing";
 }
 
 function update(dt) {
+  updateWeather(dt);     // set this frame's wind before the player reads it
   updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
+  updateCrashPlats(dt);  // count down any platform the player just triggered
   updateCamera();
   generateAhead();
   updateEnemies(dt);
@@ -1969,12 +2164,15 @@ function draw() {
   if (state === "cutscene") { drawCutscene(); return; }
   drawBackground();
   drawGround();
+  drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
   drawPits();
   drawPlatforms();
+  drawCrashPlatforms();    // breaking ice ledges (Level 5)
   drawCarabiners();
   drawEnemies();
   drawPlayer();
   drawParticles();
+  drawWeather();           // snowstorm flakes + whiteout fog (Level 5), over the world
   drawHUD();
   if (state === "start") drawStartScreen();
   else if (state === "instructions") drawInstructions();

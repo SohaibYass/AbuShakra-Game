@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v66";
+const CACHE = "abushakra-v68";
 const ASSETS = [
   "./",
   "./index.html",
@@ -15,6 +15,7 @@ const ASSETS = [
   "./level2_energysound-action-risk-countdown-trailer-509281.mp3",
   "./level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3",
   "./level4_niknet_art-thriller-action-trailer-336723.mp3",
+  "./level5_niknet_art-super-suspense-adrenaline-trailer-music-297760.mp3",
   "./Grossglockner_Back.png",
   "./Grossglockner_Front2.png",
   "./Grande_Back.png",
