@@ -141,7 +141,8 @@
 const ASSETS = {
   player:     "character.png",
   walk:       "character_walk.png?v=4",   // 10-frame walk-cycle sprite sheet (bump ?v on regen)
-  enemy:      "enemy.png",
+  enemy:      "enemy.png",              // static fallback
+  enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
@@ -177,6 +178,10 @@ const TERR_STEP_DOWN = 28;   // auto-descend small drops; bigger and you fall
 const ZUG_TILE_W = 675;
 const ZUG_PLATFORMS = [{x0:49,x1:196,top:170}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159}];
 const ZUG_SURF = [329.6, 328.3, 329.2, 329.6, 330.0, 330.5, 330.5, 330.5, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.3, 316.4, 316.8, 316.4, 316.4, 316.0, 315.1, 314.6, 314.2, 313.3, 312.9, 312.0, 311.1, 309.8, 330.5, 330.0, 329.6, 329.2, 328.7, 328.7, 328.7, 328.7, 328.3, 327.8, 328.3, 332.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 350.7, 350.7, 351.1, 350.7, 351.1, 351.1, 351.1, 351.1, 350.7, 350.7, 351.1, 350.7, 350.2, 350.2, 349.8, 349.8, 349.4, 348.9, 348.5, 347.6, 347.2, 346.3, 345.4, 345.0, 344.1, 341.5, 339.3, 337.1, 334.4, 333.1, 330.5, 325.2, 319.9, 317.7, 317.3, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.8, 316.4, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 316.8, 318.2, 320.8, 323.4, 324.8, 326.5, 327.8, 329.6, 330.9, 332.2, 333.1, 333.5, 334.4, 335.3, 335.7, 335.7, 335.7, 334.9, 334.9, 334.0, 333.5, 333.5, 333.1, 332.7, 331.8, 330.5, 330.0, 329.2, 328.7, 328.3, 327.8, 327.0, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 323.9, 323.4, 323.4, 323.0];
+// Separate, lower collision line for the Level 1 SNAKES (traced from
+// Zugspitze_Front_Platforms2_collisionline_Snake.png) so they sit on the rock
+// while the player keeps ZUG_SURF. Enemies sample this via `enemySurf`.
+const ZUG_SNAKE_SURF = [329.6, 329.6, 330.0, 330.0, 330.0, 330.5, 330.9, 330.9, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 330.9, 330.9, 330.9, 330.9, 330.0, 330.0, 329.2, 328.7, 328.7, 328.7, 328.7, 328.7, 328.7, 328.7, 332.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 351.1, 350.7, 350.2, 350.2, 350.2, 349.4, 348.9, 348.5, 347.6, 347.6, 347.2, 346.3, 345.0, 344.5, 341.9, 339.3, 339.3, 337.1, 334.4, 333.1, 330.5, 324.3, 319.0, 317.3, 316.4, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 316.0, 315.5, 315.5, 315.5, 315.5, 316.0, 318.6, 319.9, 322.6, 324.3, 326.1, 327.4, 328.7, 330.0, 331.8, 332.7, 333.1, 334.0, 334.9, 334.9, 334.9, 334.9, 334.9, 334.9, 334.0, 334.0, 333.5, 332.7, 331.8, 330.9, 330.0, 330.0, 329.2, 328.7, 328.3, 327.8, 327.4, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 324.3, 324.3, 323.4, 323.4];
 // Level 2 "Grossglockner" (Austria) — same system, line from
 // Grossglockner_terrain_overlay.png. Each natural LEVELS entry points at its own
 // surf + tileW, and surfaceY reads the current level's.
@@ -234,7 +239,10 @@ const LEVELS = [
   // collision is the `surf` heightmap (traced from a *_terrain_overlay.png).
   { id: 1, name: "Zugspitze", country: "Germany", bg: "bgZugBack", fg: "fgZug", target: 20,
     enemySpeedMul: 1.0, spawnMul: 1.0,
-    enemyMix: ["walker", "walker", "walker", "hopper"],
+    enemyMix: ["walker", "walker", "walker", "walker"],
+    // Level 1 enemies are side-on snakes; the slither is procedural (slice-shear wave).
+    enemyAnim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 },
+    enemySurf: ZUG_SNAKE_SURF,   // snakes stand on their own (lower) line; player keeps ZUG_SURF
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
@@ -809,6 +817,19 @@ function surfaceY(worldX) {
   return sampleSurf(surf, tileW, local);
 }
 
+// Ground level for ENEMIES. If the level has a dedicated `enemySurf` (e.g. the
+// Level 1 snake line), enemies stand on that; otherwise they share surfaceY.
+function enemyFloorY(worldX) {
+  const lvl = currentLevel();
+  const es = lvl.enemySurf;
+  if (!es || lvl.tiles) return surfaceY(worldX);
+  const tileW = lvl.tileW;
+  const t = Math.floor(worldX / tileW);
+  let local = worldX - t * tileW;
+  if (lvl.bgMode !== "parallax" && (((t % 2) + 2) % 2) === 1) local = tileW - local;
+  return sampleSurf(es, tileW, local);
+}
+
 // True unless the given world-x sits over a lava pit (no solid floor there).
 function groundSolidAt(cx) {
   for (const pit of pits) if (cx > pit.x && cx < pit.x + pit.w) return false;
@@ -848,12 +869,14 @@ function spawnEnemy() {
   const mix = currentLevel().enemyMix;
   const type = mix[(Math.random() * mix.length) | 0];
   const t = ENEMY_TYPES[type];
+  const anim = currentLevel().enemyAnim || null;   // per-level animated sprite (e.g. snake)
+  const w = anim ? anim.w : t.w, h = anim ? anim.h : t.h;
   const x = cameraX + VIEW_W + rand(40, 280);
   // Flyers float at a jump-reachable height; everyone else sits on the ground.
-  const baseY = t.air ? GROUND_Y - t.h - rand(70, 120) : GROUND_Y - t.h;
+  const baseY = t.air ? GROUND_Y - h - rand(70, 120) : GROUND_Y - h;
   enemies.push({
-    type, x, y: baseY, w: t.w, h: t.h, alive: true,
-    speed: t.speed, hp: t.hp, points: t.points, color: t.color, air: t.air,
+    type, x, y: baseY, w, h, alive: true,
+    speed: t.speed, hp: t.hp, points: t.points, color: t.color, air: t.air, anim,
     vy: 0, baseY, phase: Math.random() * 6.28, jumpTimer: rand(0.3, 1.0), hitFlash: 0
   });
 }
@@ -863,7 +886,7 @@ function updateEnemies(dt) {
   for (const e of enemies) {
     e.x -= ENEMY_SPEED * e.speed * d * dt;
     if (e.hitFlash > 0) e.hitFlash -= dt;
-    const floor = natural ? surfaceY(e.x + e.w / 2) : GROUND_Y;
+    const floor = natural ? enemyFloorY(e.x + e.w / 2) : GROUND_Y;
     if (e.type === "hopper") {
       // Gravity + a periodic hop while grounded (on the local terrain surface).
       e.vy += GRAVITY * dt; e.y += e.vy * dt;
@@ -1349,6 +1372,29 @@ function drawCarabiners() {
   }
 }
 
+// Procedural slither: draw a single side-on snake sprite in vertical slices, each
+// pushed up/down by a traveling sine wave so the body undulates head-to-tail.
+// Per-enemy phase desyncs them; falls back to the static sprite if not loaded.
+function drawEnemyAnim(e, dx, dy, dw, dh) {
+  const a = e.anim;
+  if (!a || !imgLoaded[a.key]) { drawSprite("enemy", dx, dy, dw, dh, e.color); return; }
+  const img = images[a.key];
+  const sw = img.naturalWidth, sh = img.naturalHeight;
+  const N = a.slices || 24, amp = a.amp || 3, waves = a.waves || 2, speed = a.speed || 5;
+  const t = performance.now() / 1000;
+  const ssw = sw / N, dsw = dw / N;
+  const conform = a.conform !== false;   // each slice rests on the ground at its own x
+  for (let i = 0; i < N; i++) {
+    // Upward-biased wave (range [-2amp, 0]) so the belly stays planted and the
+    // body humps up between contacts — never floats.
+    const off = amp * (Math.sin((i / N) * waves * 6.2832 - t * speed + (e.phase || 0)) - 1);
+    // Conform to the terrain: a wide snake on uneven/looping ground would hang in
+    // the air if positioned by its centre, so sit each slice on the ground beneath it.
+    const top = conform ? (enemyFloorY(e.x + (i / N) * e.w) - dh + off) : (dy + off);
+    ctx.drawImage(img, i * ssw, 0, ssw, sh, dx + i * dsw, top, dsw + 1, dh);
+  }
+}
+
 function drawEnemies() {
   for (const e of enemies) {
     const sx = e.x - cameraX;
@@ -1389,7 +1435,8 @@ function drawEnemies() {
       const stretch = e.vy < -40 ? 1.12 : (e.vy > 80 ? 0.9 : 1);
       dh = e.h * stretch; dw = e.w * (2 - stretch); dy = e.y + (e.h - dh);
     }
-    drawSprite("enemy", sx + (e.w - dw) / 2, dy, dw, dh, e.color);
+    if (e.anim) drawEnemyAnim(e, sx + (e.w - dw) / 2, dy, dw, dh);
+    else drawSprite("enemy", sx + (e.w - dw) / 2, dy, dw, dh, e.color);
 
     // Tank: armour plate + remaining-HP pips above it.
     if (e.type === "tank") {
