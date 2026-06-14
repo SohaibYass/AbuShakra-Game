@@ -277,12 +277,17 @@ const LEVELS = [
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
   { id: 4, name: "Matterhorn", country: "Switzerland", bg: "bgMatterhornBack", fg: "fgMatterhorn", target: 80,
     enemySpeedMul: 2.0,  spawnMul: 0.5,
-    // Alpine wolves: a fast pack of ground walkers + a bigger "tank" alpha (2 hits).
-    enemyMix: ["walker", "walker", "walker", "tank"],
+    // Alpine wolves on the ground + gyrfalcons in the air at the same time — the
+    // hardest mix yet. Each type gets its own frame strip via enemyTypeFrames.
+    enemyMix: ["walker", "flyer", "walker", "tank", "flyer"],
     enemySprite: "enemyWolf",
-    enemySize: { walker: { w: 62, h: 34 }, tank: { w: 98, h: 54 } },
-    enemyFrames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, // 4-frame walk strip
-    enemyWalk: { speed: 9, bob: 2, squash: 0.06, sway: 1 },   // subtle bob over the frame walk
+    enemySize: { walker: { w: 62, h: 34 }, tank: { w: 98, h: 54 }, flyer: { w: 52, h: 40 } },
+    enemyTypeFrames: {
+      walker: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 },
+      tank:   { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 },
+      flyer:  { key: "enemyGyr",  count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 }
+    },
+    enemyWalk: { speed: 9, bob: 2, squash: 0.06, sway: 1 },   // subtle bob over the wolves' frame walk
     // Two parallax layers (far Matterhorn + transparent foreground) with 3 floating platforms.
     terrain: "natural", bgMode: "parallax", surf: MATTERHORN_SURF, tileW: MATTERHORN_TILE_W, platforms: MATTERHORN_PLATFORMS,
     music: "level4_niknet_art-thriller-action-trailer-336723.mp3" },
@@ -1421,8 +1426,14 @@ function drawEnemies() {
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
 
+    const lvl = currentLevel();
+    // A level can give each enemy TYPE its own frame strip (e.g. Level 4 runs
+    // wolves on the ground and falcons in the air at the same time), or share one
+    // level-wide strip via enemyFrames.
+    const frames = (lvl.enemyTypeFrames && lvl.enemyTypeFrames[e.type]) || lvl.enemyFrames;
+
     // Flapping wings behind a flyer (skipped when a frame-animated flyer sprite is used).
-    if (e.type === "flyer" && !currentLevel().enemyFrames) {
+    if (e.type === "flyer" && !frames) {
       const flap = Math.sin(performance.now() / 90) * 6;
       const wy = e.y + e.h * 0.4;
       ctx.fillStyle = "rgba(232,228,255,0.9)";
@@ -1434,7 +1445,7 @@ function drawEnemies() {
       ctx.closePath(); ctx.fill();
     }
 
-    const spriteKey = currentLevel().enemySprite || "enemy";
+    const spriteKey = lvl.enemySprite || "enemy";
     const customSprite = spriteKey !== "enemy";
     // A soft type-coloured glow so each variety reads at a glance (skip it for a
     // detailed per-level sprite like the bear, where it just muddies the art).
@@ -1458,8 +1469,7 @@ function drawEnemies() {
       const stretch = e.vy < -40 ? 1.12 : (e.vy > 80 ? 0.9 : 1);
       dh = e.h * stretch; dw = e.w * (2 - stretch); dy = e.y + (e.h - dh);
     }
-    const walk = currentLevel().enemyWalk;
-    const frames = currentLevel().enemyFrames;
+    const walk = lvl.enemyWalk;
     if (e.anim) {
       drawEnemyAnim(e, sx + (e.w - dw) / 2, dy, dw, dh);
     } else if (frames && imgLoaded[frames.key]) {
