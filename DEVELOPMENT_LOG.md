@@ -454,6 +454,17 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   Replaces the old hopper/flyer/tank mix. Same magenta-key → binary-alpha →
   column-split → bottom-align pipeline as the bear.
 
+### 29. Mixed-creature levels (L4: wolves + falcons)
+- **Per-type frame strips:** the draw loop now resolves
+  `enemyTypeFrames[e.type]` (falling back to the level-wide `enemyFrames`), so a
+  single level can animate **different creatures per enemy type**. The flyer
+  wing-gate, type-glow, and sprite-key all read the resolved config.
+- **Level 4 = wolves + gyrfalcons at once:** `enemyMix` is
+  `walker, flyer, walker, tank, flyer` — wolves (feet-anchored walk) on the ground
+  and gyrfalcons (centre-anchored flap, ×1.5 scale) in the air, plus a tank alpha
+  wolf. Hardest level. Earlier levels keep the single-strip `enemyFrames` path
+  unchanged.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
