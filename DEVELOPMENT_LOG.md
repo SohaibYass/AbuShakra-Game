@@ -509,6 +509,22 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 - *(A crashing-platform system was built then removed from L5 at the user's request;
   its engine code is left dormant, gated on a per-level `crashSpecs` no level sets.)*
 
+### 32. New Abu — full-body walk + matching idle
+- **Walk sheet:** regenerated `character_walk.png` as a **9-frame** cycle with real
+  full-body motion (striding legs, arms swinging in opposition, bobbing torso) vs the
+  old stiff-armed walk. Set `WALK_FRAMES` 10 → 9.
+- **Facing gotcha → "reverse walk":** the draw code mirrors the art when moving right
+  (`if (player.facing > 0) ctx.scale(-1,1)` — art is authored **facing left**). The
+  new sheet came facing **right**, so moving right mirrored it backward and Abu
+  moonwalked. Fix: mirror every frame to face left (keeping forward frame order).
+- **Cell padding preserved:** sliced frames were re-padded to the old sheet's
+  character/cell ratios (~81% width, ~89% height, feet on the baseline) so the
+  existing `WALK_PAD_X/Y` still size him correctly.
+- **Idle mismatch:** the standing sprite is a *separate* asset (`character.png`,
+  drawn when `vx≈0` / airborne), so updating only the walk made start/stop snap back
+  to the old art. Replaced `character.png` with a new side-on standing pose — both
+  feet planted, facing left — matching the walk character. Bumped `?v` on both.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
