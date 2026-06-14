@@ -115,12 +115,6 @@
     background: rgba(60,150,90,0.5);
   }
   #touch-controls #btn-jump.pressed { background: rgba(90,220,130,0.8); }
-  #touch-controls #btn-down {
-    right: calc(max(20px, env(safe-area-inset-right)) + 120px);
-    width: 80px; height: 80px; font-size: 30px;
-    background: rgba(150,110,60,0.5);
-  }
-  #touch-controls #btn-down.pressed { background: rgba(210,160,90,0.8); }
 </style>
 </head>
 <body>
@@ -135,7 +129,6 @@
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
   <div id="btn-right" class="btn">&#9654;</div>
-  <div id="btn-down"  class="btn">&#9660;</div>
   <div id="btn-jump"  class="btn">JUMP</div>
 </div>
 <script>
@@ -433,7 +426,6 @@ const keys = {};
 const JUMP_KEYS = ["Space", "ArrowUp", "KeyW"];
 const LEFT_KEYS = ["ArrowLeft", "KeyA"];
 const RIGHT_KEYS = ["ArrowRight", "KeyD"];
-const DOWN_KEYS = ["ArrowDown", "KeyS"];   // drop off a rope (also used by the swing)
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
@@ -501,7 +493,6 @@ function bindButton(id, code, onPress) {
 }
 bindButton("btn-left",  "ArrowLeft");
 bindButton("btn-right", "ArrowRight");
-bindButton("btn-down",  "ArrowDown");          // drop off a rope swing
 bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
 
 /* =============================================================
@@ -835,8 +826,10 @@ function generateAhead() {
         const tile = Math.floor(worldGenX / tw);
         if (lvl.rareCarabiners) {
           placeRareCarabiner(tile, tw);                         // Level 5: almost none
-        } else if (lvl.groundClipsOnly || (lvl.ropes && !lvl.platforms)) {
-          placeGroundClips(tile, tw);                           // clips on the ground (L3, and L4 ropes-only)
+        } else if (lvl.ropes && !lvl.platforms) {
+          placeSparseGroundClips(tile, tw);                     // Level 4: just one ground clip per tile
+        } else if (lvl.groundClipsOnly) {
+          placeGroundClips(tile, tw);                           // Level 3: 3 ground clips per tile
         } else if (lvl.platforms) {
           placePlatformCarabiners(tile, tw, lvl.platforms);     // clips on the ledges
           placeTrackCarabiners(tile, tw, lvl.platforms);        // clips in the ground gaps
@@ -884,6 +877,14 @@ function generateAhead() {
   carabiners = carabiners.filter(c => c.x + c.w > cutoff);
   pits       = pits.filter(p => p.x + p.w > cutoff);
   crashPlats = crashPlats.filter(p => p.x + p.w > cutoff);
+}
+
+// Level 4: a single ground clip per tile at a random spot — sparse, so Abu mostly
+// scores by stomping the wolves/falcons rather than collecting.
+function placeSparseGroundClips(tile, tw) {
+  const x = tile * tw + rand(0.25, 0.75) * tw;
+  const bottom = surfaceY(x) - rand(10, 24);
+  carabiners.push({ x: x - CARABINER_W / 2, y: bottom - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
 }
 
 // Level 5: a single carabiner only now and then (survival over collection).
@@ -1101,14 +1102,13 @@ function initPlayer() {
 
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
 // rope to grab; hold Left/Right to pump the swing; HOLD Up to CLIMB up the rope (to
-// climb above the enemies); a quick TAP of Up jumps off with a real upward leap;
-// Down just drops off. Returns true while on the rope (skips normal physics).
+// climb above the enemies); a quick TAP of Up jumps off with a real upward leap
+// (gravity brings him back to the ground). Returns true while on the rope.
 function updateSwing(dt) {
   if (!ropes.length) return false;
   const upHeld = anyKey(JUMP_KEYS);
   const upPressed = upHeld && !player.prevJump;
   const upReleased = !upHeld && player.prevJump;
-  const downPressed = anyKey(DOWN_KEYS);
   const left = anyKey(LEFT_KEYS), right = anyKey(RIGHT_KEYS);
 
   if (player.swinging) {
@@ -1131,12 +1131,11 @@ function updateSwing(dt) {
       if (player.ropeHold > ROPE_TAP) s.L = Math.max(SWING_MIN_L, s.L - SWING_CLIMB * dt);
     }
     const jumpOff = upReleased && player.ropeHold <= ROPE_TAP;   // released as a quick tap
-    // Leave the rope: tap-Up = jump off (real upward leap), Down = just drop off.
-    if (jumpOff || downPressed) {
-      const tvx = Math.cos(s.theta) * s.L * s.omega * SWING_RELEASE;
-      const tvy = -Math.sin(s.theta) * s.L * s.omega * SWING_RELEASE;
-      player.vx = tvx; player.launchVx = tvx;
-      player.vy = tvy - (jumpOff ? 470 : 90);
+    // Leave the rope with a jump off (real upward leap + the swing's momentum).
+    if (jumpOff) {
+      player.vx = Math.cos(s.theta) * s.L * s.omega * SWING_RELEASE;
+      player.vy = -Math.sin(s.theta) * s.L * s.omega * SWING_RELEASE - 470;
+      player.launchVx = player.vx;
       player.swinging = false; player.swing = null; player.onGround = false;
       player.prevJump = upHeld;
       return false;
