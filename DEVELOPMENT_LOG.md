@@ -554,8 +554,11 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   sprite's lower ~83%) matches `player.h`, arms extending above. Facing follows
   input, not the swing. Rope sprite stretched+rotated anchor→hands; rock at the top.
 - **Clips ground-only** (rope-top clips removed) to force Abu down among the wolves
-  /falcons. Added a Down touch button. `generateAhead` reworked so ropes generate
-  without `platforms`.
+  /falcons. `generateAhead` reworked so ropes generate without `platforms`.
+- **Later simplified:** ground clips thinned to **~1 per tile** (`placeSparseGroundClips`)
+  so scoring leans on stomps; the rope **drop-off (Down) and its phone button were
+  removed** — a tap of Up jumps off and gravity returns Abu to the ground, so Down
+  was redundant (mobile back to 3 buttons: ◀ ▶ JUMP).
 
 ### 34. Level 5: falling icicles
 - Gated on `lvl.icicles`. On a difficulty-scaled timer a spike is scheduled at
