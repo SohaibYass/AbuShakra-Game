@@ -145,6 +145,7 @@ const ASSETS = {
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
+  enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
@@ -263,9 +264,13 @@ const LEVELS = [
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
-    enemyMix: ["walker", "hopper", "flyer", "flyer", "tank", "tank"],
+    // Gyrfalcons: an all-aerial gauntlet — frame-based flap, no ground enemies.
+    enemyMix: ["flyer", "flyer", "flyer", "flyer"],
+    enemySprite: "enemyGyr",
+    enemySize: { flyer: { w: 52, h: 40 } },
+    enemyFrames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 },
     // Two parallax layers (far Dolomites towers + transparent foreground) with 3 floating platforms.
-    // Clips are on the GROUND only (not the platforms) so collecting means braving the snakes.
+    // Clips are on the GROUND only (not the platforms) so collecting means braving the falcons.
     terrain: "natural", bgMode: "parallax", surf: GRANDE_SURF, tileW: GRANDE_TILE_W, platforms: GRANDE_PLATFORMS,
     groundClipsOnly: true,
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
@@ -1410,8 +1415,8 @@ function drawEnemies() {
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
 
-    // Flapping wings behind a flyer.
-    if (e.type === "flyer") {
+    // Flapping wings behind a flyer (skipped when a frame-animated flyer sprite is used).
+    if (e.type === "flyer" && !currentLevel().enemyFrames) {
       const flap = Math.sin(performance.now() / 90) * 6;
       const wy = e.y + e.h * 0.4;
       ctx.fillStyle = "rgba(232,228,255,0.9)";
@@ -1452,22 +1457,29 @@ function drawEnemies() {
     if (e.anim) {
       drawEnemyAnim(e, sx + (e.w - dw) / 2, dy, dw, dh);
     } else if (frames && imgLoaded[frames.key]) {
-      // Frame-based walk cycle (e.g. the 4-frame bear): step through the strip at
-      // a fixed fps, desynced per enemy, with a subtle body bob layered on top.
+      // Frame-based animation strip (4-frame bear walk, gyrfalcon flap, …): step
+      // through the strip at a fixed fps, desynced per enemy via its phase.
       const img = images[frames.key];
       const count = frames.count || 4, fps = frames.fps || 7;
       const cellW = img.naturalWidth / count, cellH = img.naturalHeight;
       const fi = Math.floor(performance.now() / 1000 * fps + (e.phase || 0) * 2) % count;
-      // Draw at the frame's true aspect so the bear isn't squashed; sit it on its feet.
-      const drawW = dw, drawH = drawW / (frames.aspect || (cellW / cellH));
-      const ph = performance.now() / 1000 * (walk ? walk.speed : 7) + (e.phase || 0);
-      const bobY = walk ? -(walk.bob || 2) * Math.abs(Math.sin(ph)) : 0;
-      const footY = e.y + e.h, cx = sx + e.w / 2;
-      const flip = e.vx > 0;   // strip faces left; flip when walking right
+      // Draw at the frame's true aspect so nothing is squashed; `scale` lets a
+      // wide-winged sprite spill beyond its (smaller) hitbox.
+      const drawW = dw * (frames.scale || 1);
+      const drawH = drawW / (frames.aspect || (cellW / cellH));
+      const cx = sx + e.w / 2;
+      let topY;
+      if (frames.anchor === "center") {
+        topY = e.y + e.h / 2 - drawH / 2;          // flyer: centre the body on the box
+      } else {
+        const ph = performance.now() / 1000 * (walk ? walk.speed : 7) + (e.phase || 0);
+        const bobY = walk ? -(walk.bob || 2) * Math.abs(Math.sin(ph)) : 0;
+        topY = e.y + e.h + bobY - drawH;           // ground walker: sit on its feet
+      }
+      const flip = e.vx > 0;   // strip faces left; flip when moving right
       ctx.save();
       if (flip) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }
-      ctx.drawImage(img, fi * cellW, 0, cellW, cellH,
-        cx - drawW / 2, footY + bobY - drawH, drawW, drawH);
+      ctx.drawImage(img, fi * cellW, 0, cellW, cellH, cx - drawW / 2, topY, drawW, drawH);
       ctx.restore();
     } else if (walk && customSprite && imgLoaded[spriteKey]) {
       // Procedural lumbering walk for a static creature sprite (e.g. the bear):
