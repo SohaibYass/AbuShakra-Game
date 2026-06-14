@@ -146,6 +146,7 @@ const ASSETS = {
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
+  enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
@@ -276,7 +277,12 @@ const LEVELS = [
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
   { id: 4, name: "Matterhorn", country: "Switzerland", bg: "bgMatterhornBack", fg: "fgMatterhorn", target: 80,
     enemySpeedMul: 2.0,  spawnMul: 0.5,
-    enemyMix: ["hopper", "flyer", "flyer", "tank", "tank", "walker"],
+    // Alpine wolves: a fast pack of ground walkers + a bigger "tank" alpha (2 hits).
+    enemyMix: ["walker", "walker", "walker", "tank"],
+    enemySprite: "enemyWolf",
+    enemySize: { walker: { w: 62, h: 34 }, tank: { w: 98, h: 54 } },
+    enemyFrames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, // 4-frame walk strip
+    enemyWalk: { speed: 9, bob: 2, squash: 0.06, sway: 1 },   // subtle bob over the frame walk
     // Two parallax layers (far Matterhorn + transparent foreground) with 3 floating platforms.
     terrain: "natural", bgMode: "parallax", surf: MATTERHORN_SURF, tileW: MATTERHORN_TILE_W, platforms: MATTERHORN_PLATFORMS,
     music: "level4_niknet_art-thriller-action-trailer-336723.mp3" },
