@@ -318,9 +318,9 @@ const LEVELS = [
     // (air), wolf (+alpha) and bear-alpha (tank). Each carries its own art (no
     // generic enemy.png on this level).
     enemyCreatures: [
-      { name: "falcon",    type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
-      { name: "falcon2",   type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
-      { name: "falcon3",   type: "flyer",  size: { w: 52, h: 40 }, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
+      { name: "falcon",    type: "flyer",  size: { w: 52, h: 40 }, dive: true, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
+      { name: "falcon2",   type: "flyer",  size: { w: 52, h: 40 }, dive: true, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
+      { name: "falcon3",   type: "flyer",  size: { w: 52, h: 40 }, dive: true, frames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 } },
       { name: "bearAlpha", type: "tank",   size: { w: 98, h: 61 }, frames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, walk: { speed: 7, bob: 2, squash: 0.08, sway: 1 } },
       { name: "wolfAlpha", type: "tank",   size: { w: 98, h: 54 }, frames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, walk: { speed: 9, bob: 2, squash: 0.06, sway: 1 } },
       { name: "wolf",      type: "walker", size: { w: 62, h: 34 }, frames: { key: "enemyWolf", count: 4, fps: 9, aspect: 468 / 258 }, walk: { speed: 9, bob: 2, squash: 0.06, sway: 1 } },
@@ -974,6 +974,8 @@ function spawnEnemy() {
     speed: t.speed, hp: t.hp, points: t.points, color: t.color, air: t.air, anim,
     frames: cr ? (cr.frames || null) : null,   // per-creature frame strip (bear/falcon/wolf)
     walk:   cr ? (cr.walk   || null) : null,    // per-creature walk-bob params
+    dive:   cr ? !!cr.dive : false,            // Level 5: this flyer swoops at the player
+    diveState: "cruise", diveCd: rand(1.6, 3.4), diveTimer: 0, diveTx: 0, diveTy: 0,
     vy: 0, baseY, phase: Math.random() * 6.28, jumpTimer: rand(0.3, 1.0), hitFlash: 0
   });
 }
@@ -993,10 +995,39 @@ function updateEnemies(dt) {
         if (e.jumpTimer <= 0) { e.vy = HOPPER_JUMP; e.jumpTimer = rand(0.5, 1.2); }
       }
     } else if (e.type === "flyer") {
-      // Float, bobbing up and down (above the local surface on natural terrain).
       e.phase += dt * 3;
       const base = natural ? floor - e.h - 80 : e.baseY;
-      e.y = base + Math.sin(e.phase) * 26;
+      if (e.dive) {
+        // Dive-bomber (Level 5): cruise → swoop toward a locked-in target near the
+        // player → pull back up. The target is captured at dive-start (not homing)
+        // so the player can sidestep it.
+        if (e.diveState === "dive") {
+          const dx = e.diveTx - (e.x + e.w / 2), dy = e.diveTy - (e.y + e.h / 2);
+          const dist = Math.hypot(dx, dy) || 1;
+          const sp = 380 * d;
+          e.x += (dx / dist) * sp * dt;
+          e.y += (dy / dist) * sp * dt;
+          e.diveTimer -= dt;
+          if (e.y > floor - e.h - 4) e.y = floor - e.h - 4;     // don't punch through the ground
+          if (e.diveTimer <= 0 || dist < 14 || e.y >= floor - e.h - 4) e.diveState = "recover";
+        } else if (e.diveState === "recover") {
+          e.y += (base - e.y) * Math.min(1, 4 * dt);             // climb back to cruise height
+          if (Math.abs(e.y - base) < 5) { e.diveState = "cruise"; e.diveCd = rand(1.4, 3.0); }
+        } else {                                                 // cruise
+          e.y = base + Math.sin(e.phase) * 26;
+          e.diveCd -= dt;
+          const sxp = e.x - cameraX;
+          const ahead = (e.x + e.w / 2) > (player.x + player.w / 2);  // only swoop from in front
+          if (e.diveCd <= 0 && sxp > 40 && sxp < VIEW_W && ahead) {
+            e.diveState = "dive"; e.diveTimer = 1.1;
+            e.diveTx = player.x + player.w / 2;                  // lock the target now
+            e.diveTy = player.y + player.h / 2;
+          }
+        }
+      } else {
+        // Gentle float/bob (Levels 3-4).
+        e.y = base + Math.sin(e.phase) * 26;
+      }
     } else if (natural) {
       // walker & tank follow the uneven ground surface.
       e.y = floor - e.h;
