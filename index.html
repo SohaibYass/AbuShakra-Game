@@ -251,6 +251,9 @@ const WIND_BASE     = -64;   // px/s steady backward push
 const WIND_GUST     = 128;   // px/s gust amplitude (occasionally flips to a forward shove)
 const SNOW_COUNT    = 110;   // snowstorm flake count (capped so mobile stays smooth)
 const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before it breaks
+const ICICLE_MIN = 1.1, ICICLE_MAX = 2.3;  // s between icicle drops (before difficulty scaling)
+const ICICLE_WARN = 0.8;                    // s of ground-marker telegraph before it falls
+const ICICLE_W = 12, ICICLE_H = 30;         // icicle size (px)
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -328,7 +331,7 @@ const LEVELS = [
     ],
     // Nightmare hazards: strong gusting wind, an active snowstorm, slippery ice
     // lakes on the ground, and almost no clips.
-    wind: true, snowstorm: true, rareCarabiners: true,
+    wind: true, snowstorm: true, rareCarabiners: true, icicles: true,
     iceZones: [{ x0: 60, x1: 280 }, { x0: 380, x1: 620 }],
     // Two parallax layers (far Mont Blanc massif + transparent snow ridge) with 2 floating platforms.
     terrain: "natural", bgMode: "parallax", surf: MB_FRONT_SURF, tileW: MB_FRONT_TILE_W, platforms: MB_FRONT_PLATFORMS,
@@ -642,6 +645,8 @@ let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
 let crashPlats = []; // Level 5 breaking platforms (persistent state per instance)
+let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
+let icicleTimer = 0; // countdown to the next icicle drop
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
 let windT = 0;       // wind phase clock
@@ -1413,9 +1418,64 @@ function drawWeather() {
   for (const f of weather) { const s = Math.max(1, Math.round(f.z * 2)); ctx.fillRect(f.x | 0, f.y | 0, s, s); }
 }
 
+// Falling icicles (Level 5): a ground marker telegraphs the impact spot, then a
+// spike drops from the top. Dodgeable, but a real ranged threat with the ice/wind.
+function updateIcicles(dt) {
+  const lvl = currentLevel();
+  if (lvl.icicles) {
+    icicleTimer -= dt;
+    if (icicleTimer <= 0) {
+      const tx = player.x + player.w / 2 + rand(-50, 340);   // threaten the path ahead
+      icicles.push({ x: tx, state: "warn", timer: ICICLE_WARN, y: 0, vy: 0, w: ICICLE_W, h: ICICLE_H });
+      icicleTimer = rand(ICICLE_MIN, ICICLE_MAX) / difficulty();   // more frequent as difficulty ramps
+    }
+  }
+  for (const ic of icicles) {
+    if (ic.state === "warn") {
+      ic.timer -= dt;
+      if (ic.timer <= 0) { ic.state = "fall"; ic.y = -ICICLE_H; ic.vy = 520; }
+    } else if (ic.state === "fall") {
+      ic.vy += 700 * dt; ic.y += ic.vy * dt;
+      const gy = surfaceY(ic.x);
+      if (aabb(player, { x: ic.x - ic.w / 2, y: ic.y, w: ic.w, h: ic.h })) {
+        loseLife(); ic.state = "done"; iceBreak(ic.x, ic.y + ic.h, ic.w);   // loseLife self-guards on i-frames
+      } else if (ic.y + ic.h >= gy) {
+        ic.state = "done"; iceBreak(ic.x, gy, ic.w); addShake(3);
+      }
+    }
+  }
+  icicles = icicles.filter(ic => ic.state !== "done" && ic.x > cameraX - 200 && ic.x < cameraX + VIEW_W + 500);
+}
+
+function drawIcicles() {
+  if (!currentLevel().icicles) return;
+  const now = performance.now();
+  for (const ic of icicles) {
+    const sx = ic.x - cameraX;
+    if (sx < -40 || sx > VIEW_W + 40) continue;
+    if (ic.state === "warn") {
+      const gy = surfaceY(ic.x), pulse = 0.5 + 0.5 * Math.sin(now / 70);
+      ctx.globalAlpha = 0.45 + 0.45 * pulse;
+      ctx.strokeStyle = "#ff5a5a"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx - 8, gy - 24); ctx.lineTo(sx, gy - 13); ctx.lineTo(sx + 8, gy - 24); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(sx, gy - 3, 10, 4, 0, 0, 6.2832); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(205,238,252,0.85)";   // glint at the top, about to drop
+      ctx.beginPath(); ctx.moveTo(sx - 5, 0); ctx.lineTo(sx + 5, 0); ctx.lineTo(sx, 11); ctx.closePath(); ctx.fill();
+    } else if (ic.state === "fall") {
+      const grad = ctx.createLinearGradient(0, ic.y, 0, ic.y + ic.h);
+      grad.addColorStop(0, "#eaf7ff"); grad.addColorStop(1, "#7fb8d6");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.moveTo(sx - ic.w / 2, ic.y); ctx.lineTo(sx + ic.w / 2, ic.y); ctx.lineTo(sx, ic.y + ic.h); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(sx - ic.w / 2 + 2, ic.y, 2, ic.h * 0.6);
+    }
+  }
+}
+
 // Called whenever a new level starts (test button, fresh game, or advance).
 function enterLevelEffects() {
   crashPlats = []; windT = 0; windCurrent = 0;
+  icicles = []; icicleTimer = rand(ICICLE_MIN, ICICLE_MAX);
   initWeather();
 }
 
@@ -2185,6 +2245,7 @@ function update(dt) {
   updateCamera();
   generateAhead();
   updateEnemies(dt);
+  updateIcicles(dt);
   handleCarabiners();
   handleHazards();
   handleEnemies();
@@ -2202,6 +2263,7 @@ function draw() {
   drawCarabiners();
   drawEnemies();
   drawPlayer();
+  drawIcicles();           // telegraph markers + falling spikes (Level 5)
   drawParticles();
   drawWeather();           // snowstorm flakes + whiteout fog (Level 5), over the world
   drawHUD();
