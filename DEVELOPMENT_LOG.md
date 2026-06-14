@@ -465,6 +465,27 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   wolf. Hardest level. Earlier levels keep the single-strip `enemyFrames` path
   unchanged.
 
+### 30. Level 5 parallax Mont Blanc + final all-enemy gauntlet
+- **Mont Blanc → two-layer parallax** (was the last single-image level):
+  `MontBlanc_Back.png` (far massif, opaque, mirror-tiled) + transparent
+  `MontBlanc_Front.png` (snow ridge + 2 floating platforms). Removed a black
+  watermark box on the back summit via horizontal inpaint over the snow.
+- **Collision derivation (no overlay image needed):** the ground line is the **top
+  of the bottom-contiguous opaque band** per column — which automatically ignores
+  the floating platforms (separated from the ground by a transparent gap). 225
+  samples, median-smoothed + climb-capped. The 1536×1024 front scales uniformly
+  into one 675×450 tile (tileW 675 → scale 0.4395 on both axes). Platforms read off
+  as AABB boxes `{291–439 @276}`, `{503–650 @223}`. No pits; ground solid to bottom.
+- **Per-enemy creature system (`enemyCreatures`):** the per-TYPE map (§29) couldn't
+  distinguish snake/bear/wolf (all base type `walker`), so a level can now list
+  whole **creatures** — each with its own behaviour type (physics/HP) + sprite /
+  anim / frames / size. `spawnEnemy` stamps the chosen creature's art onto the
+  enemy; `drawEnemies` resolves art **per-creature → per-type → level-wide**, and a
+  `hasArt` flag skips the generic glow / triangle-wings / armour-plate for any enemy
+  with its own art. Level 5 fields all of L1–4: snake, bear (+alpha), gyrfalcon ×2,
+  wolf (+alpha). Earlier levels untouched (resolver falls through).
+- Added a **Test L5** button (data-level 4).
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
