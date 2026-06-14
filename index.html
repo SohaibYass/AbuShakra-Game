@@ -115,6 +115,12 @@
     background: rgba(60,150,90,0.5);
   }
   #touch-controls #btn-jump.pressed { background: rgba(90,220,130,0.8); }
+  #touch-controls #btn-down {
+    right: calc(max(20px, env(safe-area-inset-right)) + 120px);
+    width: 80px; height: 80px; font-size: 30px;
+    background: rgba(150,110,60,0.5);
+  }
+  #touch-controls #btn-down.pressed { background: rgba(210,160,90,0.8); }
 </style>
 </head>
 <body>
@@ -129,6 +135,7 @@
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
   <div id="btn-right" class="btn">&#9654;</div>
+  <div id="btn-down"  class="btn">&#9660;</div>
   <div id="btn-jump"  class="btn">JUMP</div>
 </div>
 <script>
@@ -150,6 +157,9 @@ const ASSETS = {
   enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
+  rope:       "rope.png?v=1",      // braided swing rope (Level 4); drawn stretched/rotated
+  ropeRock:   "rope_rock.png?v=1", // snow-capped anchor rock the rope hangs from
+  grip:       "rope_grip.png?v=2", // Abu hanging with hands clasped overhead (drawn while swinging)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
@@ -159,7 +169,7 @@ const ASSETS = {
   bgGrandeBack: "Grande_Back.png?v=1",      // Level 3 parallax: far Dolomites towers
   fgGrande:     "Grande_Front.png?v=1",     // Level 3 parallax: near terrain + platforms (transparent)
   bgMatterhornBack: "Matterhorn_Back.png?v=1",   // Level 4 parallax: far Matterhorn
-  fgMatterhorn:     "Matterhorn_Front1.png?v=1", // Level 4 parallax: near terrain + platforms (transparent)
+  fgMatterhorn:     "Matterhorn_Front2.png?v=1", // Level 4 parallax: near terrain (platforms erased — ropes instead)
   bgMontBlancBack:  "MontBlanc_Back.png?v=1",    // Level 5 parallax: far Mont Blanc massif
   fgMontBlanc:      "MontBlanc_Front.png?v=1"    // Level 5 parallax: near snow ridge + platforms (transparent)
 };
@@ -204,6 +214,10 @@ const MB_FRONT_SURF = [360.4, 360.4, 359.9, 359.9, 359.9, 359.9, 359.5, 359.5, 3
 // from the blue collision line on Matterhorn_Front2.png. All 3 reach from ground.
 const MATTERHORN_TILE_W = 675;
 const MATTERHORN_PLATFORMS = [{x0:58,x1:205,top:202}, {x0:267,x1:418,top:228}, {x0:520,x1:663,top:198}];
+// Swing ropes (Level 4): anchored HIGH on a rock; you jump to grab the low end,
+// climb UP toward the anchor to reach the clip at the top, pump to swing, and drop
+// (Down) to launch off. {x:anchor, top:anchor y, bottom:rope end}.
+const MATTERHORN_ROPES = [{x:205, top:46, bottom:232}, {x:485, top:118, bottom:262}];
 const MATTERHORN_SURF = [312.0, 312.0, 312.0, 312.0, 312.0, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 311.1, 312.0, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.1, 333.5, 333.5, 334.0, 334.4, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 336.6, 336.6, 336.6, 336.6, 336.6, 336.2, 336.2, 336.2, 336.2, 335.7, 335.7, 335.3, 335.3, 334.9, 334.4, 334.0, 333.5, 333.1, 332.2, 332.2, 331.8, 331.8, 331.3, 330.9, 330.9, 330.5, 330.0, 330.0, 330.0, 330.0, 328.3, 327.4, 327.0, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 326.1, 327.4, 331.8, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 337.1, 336.6, 336.2, 336.2, 335.7, 335.7, 335.7, 335.3, 335.3, 334.4, 334.0, 334.0, 334.0, 334.0, 334.0, 333.1, 331.3, 330.0, 328.7, 328.7, 327.8, 327.0, 327.0, 326.5, 326.5, 326.5, 326.1, 326.1, 325.6, 324.8, 323.4, 322.6, 322.6, 319.9, 318.6, 318.2, 316.8, 316.4, 316.4, 315.5, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 308.9, 308.5, 308.5, 308.5, 308.5, 308.5, 308.1, 308.1, 308.1, 308.1, 308.1, 309.8, 313.3, 316.4, 318.6, 319.9, 320.4, 320.4, 320.4, 320.4, 321.2, 321.7, 322.6, 323.0, 324.3, 324.3, 324.3, 324.3, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 325.2, 324.8, 324.3, 323.9, 323.4, 323.4, 322.6, 322.1, 321.7, 321.2, 320.8, 320.8, 320.4, 319.9, 319.9, 319.5, 319.5, 319.0, 319.0, 318.6];
 // Level 3 "Cime Grande" (Italy) — two parallax layers (Grande_Back + transparent
 // Grande_Front); ground heightmap + 3 floating platforms derived from the
@@ -250,6 +264,15 @@ const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before
 const ICICLE_MIN = 1.1, ICICLE_MAX = 2.3;  // s between icicle drops (before difficulty scaling)
 const ICICLE_WARN = 0.8;                    // s of ground-marker telegraph before it falls
 const ICICLE_W = 12, ICICLE_H = 30;         // icicle size (px)
+// Rope swing (Level 4): a pendulum you grab, pump, and launch off.
+const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
+const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
+const SWING_DAMP    = 0.5;    // gentle per-second damping on angular velocity
+const SWING_MAX     = 1.45;   // max angle from vertical (~83deg) — never loops over the anchor
+const SWING_RELEASE = 1.05;   // launch-velocity multiplier when letting go
+const SWING_CLIMB   = 115;    // px/s the rope shortens while holding Up (climb toward anchor)
+const SWING_MIN_L   = 30;     // shortest rope length — Abu's hands near the anchor/clip
+const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer hold climbs
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -306,8 +329,10 @@ const LEVELS = [
       flyer:  { key: "enemyGyr",  count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 }
     },
     enemyWalk: { speed: 9, bob: 2, squash: 0.06, sway: 1 },   // subtle bob over the wolves' frame walk
-    // Two parallax layers (far Matterhorn + transparent foreground) with 3 floating platforms.
-    terrain: "natural", bgMode: "parallax", surf: MATTERHORN_SURF, tileW: MATTERHORN_TILE_W, platforms: MATTERHORN_PLATFORMS,
+    // Two parallax layers (far Matterhorn + transparent foreground). No floating
+    // platforms — verticality and the high clips come from the climbable swing ropes.
+    terrain: "natural", bgMode: "parallax", surf: MATTERHORN_SURF, tileW: MATTERHORN_TILE_W,
+    ropes: MATTERHORN_ROPES,
     music: "level4_niknet_art-thriller-action-trailer-336723.mp3" },
   { id: 5, name: "Mont Blanc", country: "France", bg: "bgMontBlancBack", fg: "fgMontBlanc", target: 100,
     // NIGHTMARE: brutal speed + spawn rate, a swarm cap, and a mix that leans hard
@@ -408,6 +433,7 @@ const keys = {};
 const JUMP_KEYS = ["Space", "ArrowUp", "KeyW"];
 const LEFT_KEYS = ["ArrowLeft", "KeyA"];
 const RIGHT_KEYS = ["ArrowRight", "KeyD"];
+const DOWN_KEYS = ["ArrowDown", "KeyS"];   // drop off a rope (also used by the swing)
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
@@ -475,6 +501,7 @@ function bindButton(id, code, onPress) {
 }
 bindButton("btn-left",  "ArrowLeft");
 bindButton("btn-right", "ArrowRight");
+bindButton("btn-down",  "ArrowDown");          // drop off a rope swing
 bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
 
 /* =============================================================
@@ -641,6 +668,7 @@ let score, lives, invulnTimer, enemySpawnTimer;
 let player, platforms, carabiners, enemies;
 let pits = [];      // empty holes in the ground {x, w}
 let crashPlats = []; // Level 5 breaking platforms (persistent state per instance)
+let ropes = [];      // Level 4 climbable ropes (world-space, rebuilt per frame)
 let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
 let icicleTimer = 0; // countdown to the next icicle drop
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
@@ -799,17 +827,17 @@ function generateAhead() {
   const target = cameraX + VIEW_W + 400;
   if (currentLevel().terrain === "natural") {
     const lvl = currentLevel();
-    if (lvl.platforms) {
-      // Platform level (Zugspitze): carabiners live ON the floating platforms.
-      // Generate them once per tile (worldGenX steps a whole tile at a time).
+    if (lvl.platforms || lvl.ropes || lvl.groundClipsOnly || lvl.rareCarabiners) {
+      // Tiled generation (carabiners + platforms/ropes/crash-platforms), once per
+      // tile (worldGenX steps a whole tile at a time).
       const tw = lvl.tileW;
       while (worldGenX < target) {
         const tile = Math.floor(worldGenX / tw);
         if (lvl.rareCarabiners) {
           placeRareCarabiner(tile, tw);                         // Level 5: almost none
-        } else if (lvl.groundClipsOnly) {
-          placeGroundClips(tile, tw);                           // all clips on the ground (Level 3)
-        } else {
+        } else if (lvl.groundClipsOnly || (lvl.ropes && !lvl.platforms)) {
+          placeGroundClips(tile, tw);                           // clips on the ground (L3, and L4 ropes-only)
+        } else if (lvl.platforms) {
           placePlatformCarabiners(tile, tw, lvl.platforms);     // clips on the ledges
           placeTrackCarabiners(tile, tw, lvl.platforms);        // clips in the ground gaps
         }
@@ -821,12 +849,17 @@ function generateAhead() {
         }
         worldGenX += tw;
       }
-      // Floating-platform collision boxes (painted into the fg art): rebuild for
-      // the visible tiles each frame (deterministic, repeats every tileW).
       const a = Math.floor((cameraX - tw) / tw), b = Math.floor((cameraX + VIEW_W + tw) / tw);
+      // Floating-platform collision boxes (painted into the fg art): rebuild for the
+      // visible tiles each frame (deterministic, repeats every tileW).
       platforms = [];
-      for (let t = a; t <= b; t++) for (const bx of lvl.platforms) {
+      if (lvl.platforms) for (let t = a; t <= b; t++) for (const bx of lvl.platforms) {
         platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true });
+      }
+      // Climbable swing ropes for the visible tiles (Level 4), same deterministic tiling.
+      ropes = [];
+      if (lvl.ropes) for (let t = a; t <= b; t++) for (const rp of lvl.ropes) {
+        ropes.push({ x: t * tw + rp.x, top: rp.top, bottom: rp.bottom });
       }
     } else {
       // Natural terrain without platforms: scatter sparse ground carabiners.
@@ -859,6 +892,16 @@ function placeRareCarabiner(tile, tw) {
   const x = tile * tw + rand(0.2, 0.8) * tw;
   const y = surfaceY(x) - rand(12, 26) - CARABINER_H;
   carabiners.push({ x: x - CARABINER_W / 2, y, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+}
+
+// Level 4: a clip near the TOP of each rope, just below its anchor rock — only
+// reachable by climbing all the way up the rope.
+function placeRopeCarabiners(tile, tw, ropeList) {
+  const base = tile * tw;
+  for (const rp of ropeList) {
+    const x = base + rp.x;
+    carabiners.push({ x: x - CARABINER_W / 2, y: rp.top + SWING_MIN_L + 6, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+  }
 }
 
 // Interpolate a heightmap `surf` (spanning [0,tileW]) at local-x.
@@ -1052,26 +1095,105 @@ function updateEnemies(dt) {
 function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
              vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
-             coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false };
+             coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
+             swinging: false, swing: null, launchVx: 0, ropeHold: 0 };
+}
+
+// Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
+// rope to grab; hold Left/Right to pump the swing; HOLD Up to CLIMB up the rope (to
+// climb above the enemies); a quick TAP of Up jumps off with a real upward leap;
+// Down just drops off. Returns true while on the rope (skips normal physics).
+function updateSwing(dt) {
+  if (!ropes.length) return false;
+  const upHeld = anyKey(JUMP_KEYS);
+  const upPressed = upHeld && !player.prevJump;
+  const upReleased = !upHeld && player.prevJump;
+  const downPressed = anyKey(DOWN_KEYS);
+  const left = anyKey(LEFT_KEYS), right = anyKey(RIGHT_KEYS);
+
+  if (player.swinging) {
+    const s = player.swing;
+    // Pendulum: gravity restores toward vertical; holding L/R pumps the swing.
+    let alpha = -(SWING_G / s.L) * Math.sin(s.theta);
+    if (right) alpha += SWING_PUMP;
+    if (left)  alpha -= SWING_PUMP;
+    s.omega += alpha * dt;
+    s.omega -= s.omega * SWING_DAMP * dt;
+    s.theta += s.omega * dt;
+    if (s.theta >  SWING_MAX) { s.theta =  SWING_MAX; if (s.omega > 0) s.omega = 0; }
+    if (s.theta < -SWING_MAX) { s.theta = -SWING_MAX; if (s.omega < 0) s.omega = 0; }
+    if (right) player.facing = 1;          // facing follows input, not the swing
+    else if (left) player.facing = -1;
+    // Up: a quick tap jumps off; holding past ROPE_TAP climbs up the rope.
+    if (upPressed) player.ropeHold = 0;
+    if (upHeld) {
+      player.ropeHold += dt;
+      if (player.ropeHold > ROPE_TAP) s.L = Math.max(SWING_MIN_L, s.L - SWING_CLIMB * dt);
+    }
+    const jumpOff = upReleased && player.ropeHold <= ROPE_TAP;   // released as a quick tap
+    // Leave the rope: tap-Up = jump off (real upward leap), Down = just drop off.
+    if (jumpOff || downPressed) {
+      const tvx = Math.cos(s.theta) * s.L * s.omega * SWING_RELEASE;
+      const tvy = -Math.sin(s.theta) * s.L * s.omega * SWING_RELEASE;
+      player.vx = tvx; player.launchVx = tvx;
+      player.vy = tvy - (jumpOff ? 470 : 90);
+      player.swinging = false; player.swing = null; player.onGround = false;
+      player.prevJump = upHeld;
+      return false;
+    }
+    // Hang from the anchor at length L.
+    player.x = s.ax + Math.sin(s.theta) * s.L - player.w / 2;
+    player.y = s.ay + Math.cos(s.theta) * s.L;
+    player.vx = 0; player.vy = 0;
+    player.walkPhase += dt * (Math.abs(s.omega) + 1);
+    if (invulnTimer > 0) invulnTimer -= dt;
+    player.prevJump = upHeld;
+    return true;
+  }
+
+  // Grab: hands near a rope's hanging span and pressing Up (or flying into it).
+  const cx = player.x + player.w / 2, hy = player.y;
+  if (upPressed || !player.onGround) for (const r of ropes) {
+    const L = r.bottom - r.top, ax = r.x, ay = r.top;
+    if (Math.abs(cx - ax) < 26 && hy > ay && hy < r.bottom + 24 && (upPressed || Math.abs(player.vx) > 30)) {
+      const dx = cx - ax, dy = Math.max(SWING_MIN_L, hy - ay);
+      const len = Math.min(L, Math.hypot(dx, dy));
+      player.swinging = true;
+      player.swing = { ax, ay, L: len, theta: Math.atan2(dx, dy), omega: player.vx / Math.max(40, len) };
+      player.onGround = false; player.vy = 0;
+      player.ropeHold = 99;   // treat the grab's held jump as a "hold" so releasing it doesn't fire a jump-off
+      player.prevJump = upHeld;
+      return true;
+    }
+  }
+  return false;
 }
 
 function updatePlayer(dt) {
+  if (updateSwing(dt)) return;     // on a rope — the pendulum handles movement this frame
+
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
   if (anyKey(RIGHT_KEYS)) move += 1;
   if (move !== 0) player.facing = move;
 
-  // Movement is normally instant (vx = input). On a Level-5 ice lake the velocity
-  // only eases toward the input, so the player keeps sliding after stopping and is
-  // sluggish to turn — jumping off an icy edge is harder but still possible.
+  // Movement is normally instant (vx = input). Two exceptions:
+  //  - just launched off a rope swing: keep that horizontal momentum in the air
+  //    (with light steering + decay) so the launch carries Abu forward.
+  //  - on a Level-5 ice lake: velocity only eases toward input, so he slides.
   const target = move * PLAYER_SPEED;
-  const onIce = currentLevel().terrain === "natural" && player.onGround &&
-                isOnIce(player.x + player.w / 2);
-  if (onIce) {
+  if (!player.onGround && Math.abs(player.launchVx) > 5) {
+    player.launchVx += move * 150 * dt;     // a little air steering
+    player.launchVx *= (1 - 0.9 * dt);      // decay back toward normal control
+    player.vx = player.launchVx;
+  } else if (currentLevel().terrain === "natural" && player.onGround &&
+             isOnIce(player.x + player.w / 2)) {
+    player.launchVx = 0;
     const grip = (move !== 0 ? ICE_GRIP : ICE_STOP_GRIP);
     player.slideVx += (target - player.slideVx) * Math.min(1, grip * dt);
     player.vx = player.slideVx;
   } else {
+    player.launchVx = 0;
     player.vx = target;
     player.slideVx = target;   // stay in sync so the first icy step is smooth
   }
@@ -1472,6 +1594,7 @@ function drawIcicles() {
 function enterLevelEffects() {
   crashPlats = []; windT = 0; windCurrent = 0;
   icicles = []; icicleTimer = rand(ICICLE_MIN, ICICLE_MAX);
+  ropes = []; if (player) { player.swinging = false; player.swing = null; player.launchVx = 0; }
   initWeather();
 }
 
@@ -1626,6 +1749,37 @@ function drawParallaxScene(lvl) {
       const x = i * tileW - cameraX;
       if (x >= VIEW_W) break;
       ctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, 0, tileW + 1, VIEW_H);
+    }
+  }
+}
+
+// Swing ropes (Level 4): a rope sprite stretched from the anchor to Abu's hands
+// (tracking the swing angle), hung from a snow-capped anchor rock.
+function drawRopes() {
+  const sw = player.swinging ? player.swing : null;
+  for (const r of ropes) {
+    const ax = r.x - cameraX;
+    if (ax < -160 || ax > VIEW_W + 160) continue;
+    const onThis = sw && sw.ax === r.x && sw.ay === r.top;
+    const ex = onThis ? (player.x + player.w / 2 - cameraX) : ax;
+    const ey = onThis ? player.y : r.bottom;
+    const len = Math.max(8, Math.hypot(ex - ax, ey - r.top));
+    if (imgLoaded.rope) {
+      const ang = Math.atan2(ey - r.top, ex - ax) - Math.PI / 2;  // sprite hangs along +y
+      ctx.save();
+      ctx.translate(ax, r.top); ctx.rotate(ang);
+      ctx.drawImage(images.rope, -5, 0, 10, len);
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = "#caa15a"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(ax, r.top); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+    // Anchor rock sits on the anchor point, its tie-off peg meeting the rope top.
+    if (imgLoaded.ropeRock) {
+      const img = images.ropeRock, rkW = 76, rkH = rkW * img.naturalHeight / img.naturalWidth;
+      ctx.drawImage(img, ax - rkW / 2, r.top - rkH + 14, rkW, rkH);
+    } else {
+      ctx.fillStyle = "#7a5a28"; ctx.fillRect(ax - 6, r.top - 4, 12, 6);
     }
   }
 }
@@ -1848,6 +2002,27 @@ function drawEnemies() {
 function drawPlayer() {
   if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
   const sx = player.x - cameraX;
+
+  // On a rope: pivot at the hands (top of the sprite) and tilt the body along the
+  // rope so Abu reads as gripping and swinging, not dangling upright. Uses a
+  // dedicated grip sprite (arms overhead) when present, else the standing sprite.
+  if (player.swinging && player.swing) {
+    const useGrip = imgLoaded.grip;
+    const img = useGrip ? images.grip : (imgLoaded.player ? images.player : null);
+    // The grip sprite's raised arms are only ~17% of its height, so scale it so the
+    // BODY matches Abu's normal size (player.h) with the arms extending above to the
+    // rope. Hands sit at the rope end; the body hangs below.
+    const dw = player.w * 1.05;
+    const dh = useGrip ? player.h * 1.2 : player.h * 1.05;
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y);        // pivot at the hands / rope end
+    ctx.rotate(-player.swing.theta);                    // body trails along the rope line
+    if (player.facing > 0) ctx.scale(-1, 1);
+    if (img) ctx.drawImage(img, -dw / 2, useGrip ? -2 : -8, dw, dh);
+    else { ctx.fillStyle = "#2980b9"; ctx.fillRect(-dw / 2, -8, dw, dh); }
+    ctx.restore();
+    return;
+  }
 
   // --- Procedural animation: derive bob / lean / squash from state ---
   let bob = 0, lean = 0, squashY = 1;
@@ -2256,6 +2431,7 @@ function draw() {
   drawPits();
   drawPlatforms();
   drawCrashPlatforms();    // breaking ice ledges (Level 5)
+  drawRopes();             // climbable ropes (Level 4)
   drawCarabiners();
   drawEnemies();
   drawPlayer();
