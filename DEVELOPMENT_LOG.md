@@ -447,6 +447,13 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   ×1.5). The old procedural triangle-wing flyer draw is gated off whenever a level
   has `enemyFrames`.
 
+### 28. Alpine wolf pack (L4)
+- **Level 4 → alpine-wolf pack:** `enemyMix` is fast `walker` wolves + a bigger
+  `tank` alpha (2 hits), reusing the bear-style **feet-anchored** frame walk
+  (`enemy_wolf_walk.png`, 468×258 cells) at 9 fps to match the level's 2× speed.
+  Replaces the old hopper/flyer/tank mix. Same magenta-key → binary-alpha →
+  column-split → bottom-align pipeline as the bear.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
