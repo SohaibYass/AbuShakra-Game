@@ -584,6 +584,12 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   from `abu_mantle.png` (frame 0 hang / frame 1 pull-up, top-aligned so the gripping
   hands sit at the ledge), flipped toward the caught edge; falls back to the
   rope-grip pose. Gated on the per-level `ledgeGrab` flag.
+- **Level-1 descent ropes:** flagged platforms (`rope:true`, not all) hang a thin
+  rope off their right end from an eye-bolt anchor (`descend_anchor.png` +
+  `descend_ropeseg.png`). The rope ends ~50px **above** the ground so Abu drops off
+  the last stretch (never touches ground). Hold **Down** at the edge → grab
+  (`updateDescend`): Down climbs down, Up climbs back onto the deck, Jump/sideways
+  lets go. Re-added the Down touch button (▼). `descend` per-level flag.
 
 ---
 
