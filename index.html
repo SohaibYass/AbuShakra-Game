@@ -2041,9 +2041,8 @@ function drawPlayer() {
     // The walk sprite sheet carries the bob + leg motion; just add a slight
     // forward lean for momentum.
     lean = 0.03 * player.facing;
-  } else {
-    bob = Math.sin(performance.now() / 600) * 1.5; // idle breathing
   }
+  // (standing still: no bob — Abu holds a static pose)
 
   const drawW = player.w, drawH = player.h * squashY;
   const footY = player.y + player.h + bob;       // keep feet anchored
