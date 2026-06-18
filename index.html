@@ -1882,13 +1882,24 @@ function drawEnemyAnim(e, dx, dy, dw, dh) {
   const t = performance.now() / 1000;
   const ssw = sw / N, dsw = dw / N;
   const conform = a.conform !== false;   // each slice rests on the ground at its own x
+  // Per-slice ground height, then SMOOTHED: a sharp terrain step or a tile seam
+  // would otherwise drop adjacent slices far apart and tear the snake into two
+  // pieces — smoothing makes the body bend over it in one continuous run.
+  let floor = null;
+  if (conform) {
+    floor = new Array(N);
+    for (let i = 0; i < N; i++) floor[i] = enemyFloorY(e.x + ((i + 0.5) / N) * e.w);
+    for (let pass = 0; pass < 6; pass++) {
+      const cp = floor.slice();
+      for (let i = 0; i < N; i++)
+        floor[i] = (cp[Math.max(0, i - 1)] + cp[i] + cp[Math.min(N - 1, i + 1)]) / 3;
+    }
+  }
   for (let i = 0; i < N; i++) {
     // Upward-biased wave (range [-2amp, 0]) so the belly stays planted and the
     // body humps up between contacts — never floats.
     const off = amp * (Math.sin((i / N) * waves * 6.2832 - t * speed + (e.phase || 0)) - 1);
-    // Conform to the terrain: a wide snake on uneven/looping ground would hang in
-    // the air if positioned by its centre, so sit each slice on the ground beneath it.
-    const top = conform ? (enemyFloorY(e.x + (i / N) * e.w) - dh + off) : (dy + off);
+    const top = conform ? (floor[i] - dh + off) : (dy + off);
     ctx.drawImage(img, i * ssw, 0, ssw, sh, dx + i * dsw, top, dsw + 1, dh);
   }
 }
