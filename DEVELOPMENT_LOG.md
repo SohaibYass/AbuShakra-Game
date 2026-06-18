@@ -570,6 +570,21 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   Vertical is screen-space (no vertical camera) so the icicle's `y` and `player.y`
   compare directly; only `x` is world-space. Dodgeable, but tight with ice + wind.
 
+### 36. Snake de-split + Level 1 ledge mantle
+- **Snake no longer tears:** the procedural snake places each vertical slice on the
+  terrain at its own x; a ~22px ground ledge (bigger than the 16px snake) dropped
+  adjacent slices apart and left a gap, splitting the body. Box-blur the per-slice
+  floor (6 passes) → worst step ~5px, so it bends over the ledge in one run.
+- **Static idle:** removed the idle "breathing" bob — Abu holds a still pose when
+  standing.
+- **Level-1 ledge grab + mantle:** Level 1 jump shortened (`jumpMul` 0.86) so Abu
+  can't reach the platform tops directly. A short jump that catches a platform lip
+  (hands at the top band, feet still below, near apex) sets `player.mantle` →
+  `updateMantle` runs a hang (~0.2 s) then an eased pull-up onto the deck. Drawn
+  from `abu_mantle.png` (frame 0 hang / frame 1 pull-up, top-aligned so the gripping
+  hands sit at the ledge), flipped toward the caught edge; falls back to the
+  rope-grip pose. Gated on the per-level `ledgeGrab` flag.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
