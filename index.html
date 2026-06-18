@@ -155,6 +155,7 @@ const ASSETS = {
   rope2:      "rope2.png?v=1",     // alternate silvery rope (the 2nd Level-4 rope)
   ropeRock2:  "rope_rock2.png?v=1",// alternate wooden anchor post
   grip:       "rope_grip.png?v=2", // Abu hanging with hands clasped overhead (drawn while swinging)
+  abuMantle:  "abu_mantle.png?v=1", // 2-frame ledge mantle (hang -> pull up), Level 1
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
@@ -286,7 +287,8 @@ const LEVELS = [
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
-    music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3" },
+    music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
+    jumpMul: 0.86, ledgeGrab: true },   // short jump; catch a platform edge and mantle up
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
@@ -1099,7 +1101,7 @@ function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
              vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
-             swinging: false, swing: null, launchVx: 0, ropeHold: 0 };
+             swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null };
 }
 
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
@@ -1170,8 +1172,29 @@ function updateSwing(dt) {
   return false;
 }
 
+// Ledge mantle (Level 1): hang from the caught edge, then pull up onto the platform.
+function updateMantle(dt) {
+  const m = player.mantle;
+  m.t += dt;
+  if (m.phase === "hang") {
+    if (m.t >= 0.20) { m.phase = "climb"; m.t = 0; m.fromY = player.y; }
+  } else {
+    const k = Math.min(1, m.t / 0.40), ease = 1 - (1 - k) * (1 - k);
+    player.y = m.fromY + (m.top - player.h - m.fromY) * ease;
+    const tx = Math.max(m.px + 4, Math.min(m.px + m.pw - player.w - 4, player.x));
+    player.x += (tx - player.x) * Math.min(1, 8 * dt);   // slide onto the deck
+    if (k >= 1) {
+      player.y = m.top - player.h; player.x = tx;
+      player.onGround = true; player.vy = 0; player.mantle = null;
+      dustBurst(player.x + player.w / 2, m.top);
+    }
+  }
+  if (invulnTimer > 0) invulnTimer -= dt;
+}
+
 function updatePlayer(dt) {
   if (updateSwing(dt)) return;     // on a rope — the pendulum handles movement this frame
+  if (player.mantle) { updateMantle(dt); return; }   // climbing a platform edge
 
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
@@ -1227,7 +1250,7 @@ function updatePlayer(dt) {
   else if (player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
   if (player.jumpBufferTimer > 0 && (player.onGround || player.coyoteTimer > 0)) {
-    player.vy = JUMP_VELOCITY;
+    player.vy = JUMP_VELOCITY * (currentLevel().jumpMul || 1);
     player.onGround = false;
     player.coyoteTimer = 0;
     player.jumpBufferTimer = 0;
@@ -1300,6 +1323,25 @@ function updatePlayer(dt) {
       if (newBottom >= gs && solid) {
         player.y = gs - player.h; player.vy = 0; player.onGround = true;
         if (impactVy > 250) dustBurst(player.x + player.w / 2, gs);
+      }
+    }
+  }
+
+  // Ledge grab (Level 1): a short jump that catches a platform edge — Abu grabs the
+  // lip and mantles up (handled by updateMantle) instead of standing on it directly.
+  if (currentLevel().ledgeGrab && !player.onGround && !player.mantle && player.vy > -260) {
+    const cx = player.x + player.w / 2, handY = player.y;
+    for (const p of platforms) {
+      const nearX = cx > p.x - 10 && cx < p.x + p.w + 10;
+      const handsAtLip = handY >= p.y - 34 && handY <= p.y + 22;   // hands around the lip
+      const feetBelow = player.y + player.h > p.y + 8;             // feet still below the top
+      if (nearX && handsAtLip && feetBelow) {
+        player.mantle = { px: p.x, pw: p.w, top: p.y, t: 0, phase: "hang" };
+        player.vx = 0; player.vy = 0;
+        player.y = p.y - 4;                                        // hands at the lip, body hanging below
+        player.x = Math.max(p.x - player.w * 0.45, Math.min(p.x + p.w - player.w * 0.55, player.x));
+        player.facing = (cx < p.x + p.w / 2) ? 1 : -1;            // face into the platform
+        break;
       }
     }
   }
@@ -2020,6 +2062,34 @@ function drawEnemies() {
 function drawPlayer() {
   if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
   const sx = player.x - cameraX;
+
+  // Mantling a platform edge (Level 1): draw Abu gripping/pulling up. Uses a
+  // dedicated climb sprite when present, else the rope-grip pose, else standing.
+  if (player.mantle) {
+    if (imgLoaded.abuMantle) {
+      // Dedicated 2-frame mantle: frame 0 = hanging, frame 1 = pulling up. Hands
+      // sit at the cell top, so draw the top at the ledge (player.y).
+      const img = images.abuMantle, cw = img.naturalWidth / 2, ch = img.naturalHeight;
+      const fi = player.mantle.phase === "hang" ? 0 : 1;
+      const dh = player.h * 1.45, dw = dh * (cw / ch);
+      ctx.save();
+      ctx.translate(sx + player.w / 2, player.y);
+      if (player.facing > 0) ctx.scale(-1, 1);
+      ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -4, dw, dh);
+      ctx.restore();
+      return;
+    }
+    const grip = imgLoaded.grip;
+    const img = grip ? images.grip : (imgLoaded.player ? images.player : null);
+    const dw = player.w * 1.1, dh = player.h * (grip ? 1.2 : 1.05);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y);
+    if (player.facing > 0) ctx.scale(-1, 1);
+    if (img) ctx.drawImage(img, -dw / 2, -2, dw, dh);
+    else { ctx.fillStyle = "#2980b9"; ctx.fillRect(-dw / 2, 0, dw, player.h); }
+    ctx.restore();
+    return;
+  }
 
   // On a rope: pivot at the hands (top of the sprite) and tilt the body along the
   // rope so Abu reads as gripping and swinging, not dangling upright. Uses a
