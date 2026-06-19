@@ -306,7 +306,7 @@ const LEVELS = [
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
-    jumpMul: 0.86, ledgeGrab: true, descend: true, power: true },   // mantle/rope + power bar & shelter (on platform 3)
+    jumpMul: 0.86, ledgeGrab: true, descend: true, power: true, groundClipsOnly: true, sparseClips: true },   // ground clips, spaced out
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
@@ -857,7 +857,8 @@ function generateAhead() {
         } else if (lvl.ropes && !lvl.platforms) {
           placeSparseGroundClips(tile, tw);                     // Level 4: just one ground clip per tile
         } else if (lvl.groundClipsOnly) {
-          placeGroundClips(tile, tw);                           // Level 3: 3 ground clips per tile
+          if (lvl.sparseClips) placeSparseGroundClips(tile, tw); // Level 1: one ground clip per loop
+          else placeGroundClips(tile, tw);                       // Level 3: 3 ground clips per tile
         } else if (lvl.platforms) {
           placePlatformCarabiners(tile, tw, lvl.platforms);     // clips on the ledges
           placeTrackCarabiners(tile, tw, lvl.platforms);        // clips in the ground gaps
