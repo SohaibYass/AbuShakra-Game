@@ -590,6 +590,15 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   the last stretch (never touches ground). Hold **Down** at the edge → grab
   (`updateDescend`): Down climbs down, Up climbs back onto the deck, Jump/sideways
   lets go. Re-added the Down touch button (▼). `descend` per-level flag.
+- **Level-1 power / shelter:** a `power` stamina meter (HUD top-right) drains on
+  effort — mantling (`POWER_MANTLE` 14), climbing a descent rope (`POWER_CLIMB_RATE`
+  14/s), and dropping off a platform to the ground instead of the rope
+  (`POWER_FALL` 22, tracked via `player.onPlatform`). Empty → `loseLife` + refill.
+  A wooden hut (`shelter.png`) sits on **platform 3, every other loop** (tile parity);
+  standing on it is a safe zone — `updatePower` refills `POWER_REFILL` 45/s and
+  `playerSheltered` blocks enemy damage. Snakes are ground-only so they never reach
+  it (no despawn hack); the ground path stays clear. All gated on the `power` flag;
+  values are tunable.
 
 ---
 
