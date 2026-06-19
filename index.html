@@ -166,6 +166,7 @@ const ASSETS = {
   descendAnchor: "descend_anchor.png?v=1", // eye-bolt fixture at a platform edge
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
   shelter:    "shelter.png?v=1",    // wooden hut, placed on Level 1's 3rd platform
+  abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
@@ -2194,6 +2195,19 @@ function drawEnemies() {
 function drawPlayer() {
   if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
   const sx = player.x - cameraX;
+
+  // Resting inside a shelter (Level 1): sit down and breathe while power recharges.
+  if (playerSheltered && player.onGround && Math.abs(player.vx) < 1 && imgLoaded.abuRest) {
+    const img = images.abuRest, cw = img.naturalWidth / 2, ch = img.naturalHeight;
+    const fi = Math.floor(performance.now() / 700) % 2;   // slow breathing loop
+    const dh = 52, dw = dh * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h);   // seat on the platform top
+    if (player.facing < 0) ctx.scale(-1, 1);                  // rest sprite faces right
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
+    ctx.restore();
+    return;
+  }
 
   // Descending a platform-edge rope (Level 1): Abu grips the rope (grip pose).
   if (player.descend) {
