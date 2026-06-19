@@ -165,6 +165,7 @@ const ASSETS = {
   abuMantle:  "abu_mantle.png?v=1", // 2-frame ledge mantle (hang -> pull up), Level 1
   descendAnchor: "descend_anchor.png?v=1", // eye-bolt fixture at a platform edge
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
+  shelter:    "shelter.png?v=1",    // wooden hut, placed on Level 1's 3rd platform
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
@@ -198,7 +199,7 @@ const TERR_STEP_DOWN = 28;   // auto-descend small drops; bigger and you fall
 // traced from Zugspitze_Front_Platforms2_collisionline_1.png.
 const ZUG_TILE_W = 675;
 // `rope:true` hangs a descent rope off that platform's end (not every platform has one).
-const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true}];
+const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true,shelter:true}];
 const ZUG_SURF = [329.6, 328.3, 329.2, 329.6, 330.0, 330.5, 330.5, 330.5, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.3, 316.4, 316.8, 316.4, 316.4, 316.0, 315.1, 314.6, 314.2, 313.3, 312.9, 312.0, 311.1, 309.8, 330.5, 330.0, 329.6, 329.2, 328.7, 328.7, 328.7, 328.7, 328.3, 327.8, 328.3, 332.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 350.7, 350.7, 351.1, 350.7, 351.1, 351.1, 351.1, 351.1, 350.7, 350.7, 351.1, 350.7, 350.2, 350.2, 349.8, 349.8, 349.4, 348.9, 348.5, 347.6, 347.2, 346.3, 345.4, 345.0, 344.1, 341.5, 339.3, 337.1, 334.4, 333.1, 330.5, 325.2, 319.9, 317.7, 317.3, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.8, 316.4, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 316.8, 318.2, 320.8, 323.4, 324.8, 326.5, 327.8, 329.6, 330.9, 332.2, 333.1, 333.5, 334.4, 335.3, 335.7, 335.7, 335.7, 334.9, 334.9, 334.0, 333.5, 333.5, 333.1, 332.7, 331.8, 330.5, 330.0, 329.2, 328.7, 328.3, 327.8, 327.0, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 323.9, 323.4, 323.4, 323.0];
 // Separate, lower collision line for the Level 1 SNAKES (traced from
 // Zugspitze_Front_Platforms2_collisionline_Snake.png) so they sit on the rock
@@ -280,6 +281,12 @@ const SWING_CLIMB   = 115;    // px/s the rope shortens while holding Up (climb 
 const SWING_MIN_L   = 30;     // shortest rope length — Abu's hands near the anchor/clip
 const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer hold climbs
 const DESCEND_SPEED = 165;    // px/s climbing down (or up) a platform-edge descent rope
+// Level-1 power / stamina (tunable):
+const POWER_MAX        = 100;
+const POWER_FALL       = 22;   // dropping off a platform to the ground (instead of the rope)
+const POWER_MANTLE     = 14;   // each ledge mantle
+const POWER_CLIMB_RATE = 14;   // per second climbing a descent rope
+const POWER_REFILL     = 45;   // per second recovering inside a shelter
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -299,7 +306,7 @@ const LEVELS = [
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
-    jumpMul: 0.86, ledgeGrab: true, descend: true },   // short jump + mantle up; rope down at platform ends
+    jumpMul: 0.86, ledgeGrab: true, descend: true, power: true },   // mantle/rope + power bar & shelter (on platform 3)
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
@@ -678,6 +685,9 @@ let pits = [];      // empty holes in the ground {x, w}
 let crashPlats = []; // Level 5 breaking platforms (persistent state per instance)
 let ropes = [];      // Level 4 climbable ropes (world-space, rebuilt per frame)
 let descentRopes = []; // Level 1 ropes hung off platform edges (rebuilt per frame)
+let shelters = [];     // Level 1 wooden shelters (rebuilt per frame)
+let power = 100;       // Level 1 stamina (drains climbing/falling, refills in a shelter)
+let playerSheltered = false;  // is Abu currently inside a shelter?
 let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
 let icicleTimer = 0; // countdown to the next icicle drop
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
@@ -864,8 +874,11 @@ function generateAhead() {
       // Floating-platform collision boxes (painted into the fg art): rebuild for the
       // visible tiles each frame (deterministic, repeats every tileW).
       platforms = [];
-      if (lvl.platforms) for (let t = a; t <= b; t++) for (const bx of lvl.platforms) {
-        platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope });
+      if (lvl.platforms) for (let t = a; t <= b; t++) {
+        const evenTile = (((t % 2) + 2) % 2) === 0;   // shelter on every OTHER loop
+        for (const bx of lvl.platforms) {
+          platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, shelter: bx.shelter && evenTile });
+        }
       }
       // Climbable swing ropes for the visible tiles (Level 4), same deterministic tiling.
       ropes = [];
@@ -879,6 +892,12 @@ function generateAhead() {
         if (!p.rope) continue;
         const rx = p.x + p.w - 6;
         descentRopes.push({ x: rx, top: p.y, bottom: surfaceY(rx) - 50 });
+      }
+      // Shelter safe-zones = the shelter ledges (up on a platform, off the ground path).
+      shelters = [];
+      if (lvl.power) for (const p of platforms) {
+        if (!p.shelter) continue;
+        shelters.push({ x: p.x, w: p.w, cx: p.x + p.w / 2, top: p.y });
       }
     } else {
       // Natural terrain without platforms: scatter sparse ground carabiners.
@@ -1123,7 +1142,8 @@ function initPlayer() {
   player = { x: 80, y: GROUND_Y - PLAYER_H, w: PLAYER_W, h: PLAYER_H,
              vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
-             swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null, descend: null };
+             swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null, descend: null,
+             onPlatform: false };
 }
 
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
@@ -1207,7 +1227,8 @@ function updateMantle(dt) {
     player.x += (tx - player.x) * Math.min(1, 8 * dt);   // slide onto the deck
     if (k >= 1) {
       player.y = m.top - player.h; player.x = tx;
-      player.onGround = true; player.vy = 0; player.mantle = null;
+      player.onGround = true; player.onPlatform = true; player.vy = 0; player.mantle = null;
+      drainPower(POWER_MANTLE);                          // climbing up costs stamina
       dustBurst(player.x + player.w / 2, m.top);
     }
   }
@@ -1227,8 +1248,8 @@ function updateDescend(dt) {
     player.vy = jumpPressed ? -360 : -120; player.prevJump = up;
     return;
   }
-  if (down) player.y += DESCEND_SPEED * dt;
-  else if (up) player.y -= DESCEND_SPEED * dt;
+  if (down) { player.y += DESCEND_SPEED * dt; drainPower(POWER_CLIMB_RATE * dt); }
+  else if (up) { player.y -= DESCEND_SPEED * dt; drainPower(POWER_CLIMB_RATE * dt); }
   if (player.y + player.h <= d.top) {                 // back up to the platform deck
     player.y = d.top - player.h; player.descend = null; player.onGround = true;
   }
@@ -1346,7 +1367,7 @@ function updatePlayer(dt) {
       if (p.solid === false) continue;   // fallen crumbling block — no landing
       const overlapX = player.x + player.w > p.x && player.x < p.x + p.w;
       if (overlapX && prevBottom <= p.y + 1 && newBottom >= p.y) {
-        player.y = p.y - player.h; player.vy = 0; player.onGround = true;
+        player.y = p.y - player.h; player.vy = 0; player.onGround = true; player.onPlatform = true;
         if (impactVy > 250) dustBurst(player.x + player.w / 2, p.y);
         break;
       }
@@ -1370,6 +1391,8 @@ function updatePlayer(dt) {
       const solid = natural ? true : groundSolidAt(player.x + player.w / 2);
       if (newBottom >= gs && solid) {
         player.y = gs - player.h; player.vy = 0; player.onGround = true;
+        if (player.onPlatform) drainPower(POWER_FALL);   // dropped off a platform instead of the rope
+        player.onPlatform = false;
         if (impactVy > 250) dustBurst(player.x + player.w / 2, gs);
       }
     }
@@ -1401,7 +1424,7 @@ function updatePlayer(dt) {
     for (const dr of descentRopes) {
       if (Math.abs(cx - dr.x) < 22 && Math.abs(feet - dr.top) < 12 && dr.bottom - dr.top > 30) {
         player.descend = { x: dr.x, top: dr.top, bottom: dr.bottom };
-        player.x = dr.x - player.w / 2; player.y = dr.top - 6; player.vy = 0; player.onGround = false;
+        player.x = dr.x - player.w / 2; player.y = dr.top - 6; player.vy = 0; player.onGround = false; player.onPlatform = false;
         break;
       }
     }
@@ -1428,6 +1451,23 @@ function loseLife() {
   } else {
     Music.sfxHurt();
   }
+}
+
+// Level-1 stamina: exertion drains it; empty -> lose a life and refill.
+function drainPower(amt) {
+  if (!currentLevel().power) return;
+  power -= amt;
+  if (power <= 0) { power = POWER_MAX; loseLife(); }
+}
+// Recover inside a shelter; track whether Abu is sheltered (for enemy safety).
+function updatePower(dt) {
+  playerSheltered = false;
+  if (!currentLevel().power) return;
+  const cx = player.x + player.w / 2, feet = player.y + player.h;
+  for (const s of shelters) {
+    if (cx > s.x && cx < s.x + s.w && player.onGround && Math.abs(feet - s.top) < 10) { playerSheltered = true; break; }
+  }
+  if (playerSheltered) power = Math.min(POWER_MAX, power + POWER_REFILL * dt);
 }
 
 /* =============================================================
@@ -1473,7 +1513,7 @@ function handleEnemies() {
         e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
       }
     }
-    else loseLife();
+    else if (!playerSheltered) loseLife();   // safe inside a shelter
   }
   enemies = enemies.filter(e => e.alive);
 }
@@ -1698,8 +1738,9 @@ function drawIcicles() {
 function enterLevelEffects() {
   crashPlats = []; windT = 0; windCurrent = 0;
   icicles = []; icicleTimer = rand(ICICLE_MIN, ICICLE_MAX);
-  ropes = []; descentRopes = [];
-  if (player) { player.swinging = false; player.swing = null; player.launchVx = 0; player.descend = null; }
+  ropes = []; descentRopes = []; shelters = [];
+  power = POWER_MAX; playerSheltered = false;
+  if (player) { player.swinging = false; player.swing = null; player.launchVx = 0; player.descend = null; player.onPlatform = false; }
   initWeather();
 }
 
@@ -1908,6 +1949,18 @@ function drawDescentRopes() {
       const img = images.descendAnchor, aw = 24, ah = aw * img.naturalHeight / img.naturalWidth;
       ctx.drawImage(img, sx - aw / 2, dr.top - ah + 8, aw, ah);   // anchor sits at the platform edge
     }
+  }
+}
+
+// Wooden hut sitting on Level 1's 3rd platform — a safe refuge that refills power.
+const SHELTER_H = 72;   // hut draw height (sits on the platform top)
+function drawShelters() {
+  if (!imgLoaded.shelter) return;
+  const img = images.shelter, sw = SHELTER_H * img.naturalWidth / img.naturalHeight;
+  for (const s of shelters) {
+    const sx = s.cx - cameraX;
+    if (sx < -sw || sx > VIEW_W + sw) continue;
+    ctx.drawImage(img, sx - sw / 2, s.top - SHELTER_H + 4, sw, SHELTER_H);   // hut base on the platform top
   }
 }
 
@@ -2302,6 +2355,20 @@ function drawHUD() {
   ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(barX, barY, barW, barH);
   ctx.fillStyle = "#7fd6ff"; ctx.fillRect(barX, barY, barW * prog, barH);
   ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(barX + 0.5, barY + 0.5, barW, barH);
+
+  // Power / stamina meter (Level 1), top-right under the hearts.
+  if (lvl.power) {
+    const pw = 132, ph = 10, px = VIEW_W - 16 - pw, py = 46;
+    const frac = Math.max(0, Math.min(1, power / POWER_MAX));
+    ctx.font = "bold 13px Segoe UI, Arial"; ctx.textAlign = "right";
+    ctx.fillStyle = playerSheltered ? "#9ef0a8" : "#fff";
+    ctx.fillText("POWER", px - 6, py + 10);
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = frac > 0.5 ? "#5ad06a" : frac > 0.25 ? "#ffd84d" : "#ff5a4a";
+    ctx.fillRect(px, py, pw * frac, ph);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
+    ctx.textAlign = "left";
+  }
 }
 
 function drawCenteredText(lines) {
@@ -2594,6 +2661,7 @@ function update(dt) {
   updateCrashPlats(dt);  // count down any platform the player just triggered
   updateCamera();
   generateAhead();
+  updatePower(dt);       // shelter refill + sheltered flag (before enemies read it)
   updateEnemies(dt);
   updateIcicles(dt);
   handleCarabiners();
@@ -2606,6 +2674,7 @@ function draw() {
   if (state === "cutscene") { drawCutscene(); return; }
   drawBackground();
   drawGround();
+  drawShelters();          // wooden refuges on the ground (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
   drawPits();
   drawPlatforms();
