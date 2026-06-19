@@ -165,7 +165,7 @@ const ASSETS = {
   abuMantle:  "abu_mantle.png?v=1", // 2-frame ledge mantle (hang -> pull up), Level 1
   descendAnchor: "descend_anchor.png?v=1", // eye-bolt fixture at a platform edge
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
-  shelter:    "shelter.png?v=1",    // wooden hut, placed on Level 1's 3rd platform
+  shelter:    "shelter.png?v=4",    // wooden cabin (flag + smoke), on Level 1's 3rd platform
   abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
@@ -1955,7 +1955,7 @@ function drawDescentRopes() {
 }
 
 // Wooden hut sitting on Level 1's 3rd platform — a safe refuge that refills power.
-const SHELTER_H = 72;   // hut draw height (sits on the platform top)
+const SHELTER_H = 128;   // cabin draw height (sits on the platform top; flag + smoke rise above)
 function drawShelters() {
   if (!imgLoaded.shelter) return;
   const img = images.shelter, sw = SHELTER_H * img.naturalWidth / img.naturalHeight;
