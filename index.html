@@ -212,11 +212,11 @@ const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}
 // upper_platform.png) — reached by jumping up from platform 1/2. The hidden Climbing
 // Shoes sit on it, and the camera pans UP to reveal it as Abu climbs.
 const UPPER_PLAT = { scale: 0.256, cellW: 469, cellH: 215, grassY: 12, grassCx: 222, grassHalfW: 150,
-  ledges: [ { cxOff: 250, top: 30 },        // 1st ledge above the platforms (jump + mantle up from platform 1/2)
-            { cxOff: 360, top: -70 },       // 2nd ledge, up-right
-            { cxOff: 450, top: -220, wMul: 1.4, shoes: true, guard: true } ] };  // 3rd (top) ledge: Shoes, guarded by a red snake
+  ledges: [ { cxOff: 250, top: 25 },        // 1st ledge — mantle up from platform 1/2 (~155px)
+            { cxOff: 360, top: -130 },      // 2nd ledge — mantle up from ledge 1 (~155px)
+            { cxOff: 450, top: -290, wMul: 1.4, shoes: true, guard: true } ] };  // 3rd (top) ledge — mantle up; Shoes + red snake
 const UPPER_CAM_ENGAGE = 150;   // pan the camera up once Abu's feet rise above this (i.e. above the platforms)
-const UPPER_CAM_MIN = -545;     // furthest the camera pans up (reaches the top ledge)
+const UPPER_CAM_MIN = -620;     // furthest the camera pans up (reaches the top ledge)
 const ZUG_SURF = [329.6, 328.3, 329.2, 329.6, 330.0, 330.5, 330.5, 330.5, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.3, 316.4, 316.8, 316.4, 316.4, 316.0, 315.1, 314.6, 314.2, 313.3, 312.9, 312.0, 311.1, 309.8, 330.5, 330.0, 329.6, 329.2, 328.7, 328.7, 328.7, 328.7, 328.3, 327.8, 328.3, 332.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 350.7, 350.7, 351.1, 350.7, 351.1, 351.1, 351.1, 351.1, 350.7, 350.7, 351.1, 350.7, 350.2, 350.2, 349.8, 349.8, 349.4, 348.9, 348.5, 347.6, 347.2, 346.3, 345.4, 345.0, 344.1, 341.5, 339.3, 337.1, 334.4, 333.1, 330.5, 325.2, 319.9, 317.7, 317.3, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.8, 316.4, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 316.8, 318.2, 320.8, 323.4, 324.8, 326.5, 327.8, 329.6, 330.9, 332.2, 333.1, 333.5, 334.4, 335.3, 335.7, 335.7, 335.7, 334.9, 334.9, 334.0, 333.5, 333.5, 333.1, 332.7, 331.8, 330.5, 330.0, 329.2, 328.7, 328.3, 327.8, 327.0, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 323.9, 323.4, 323.4, 323.0];
 // Separate, lower collision line for the Level 1 SNAKES (traced from
 // Zugspitze_Front_Platforms2_collisionline_Snake.png) so they sit on the rock
@@ -1122,7 +1122,6 @@ function spawnEnemy() {
 // instead of scrolling in from the right. Stomp it to clear the way to the shoes.
 const GUARD_SPEED = 72;
 function spawnGuardSnake(cx, top, ledgeW) {
-  enemies = enemies.filter(e => !e.guard);           // only one guard at a time
   const w = 88, h = 19;                               // side-on red snake, 2-frame walk like the green snake
   enemies.push({ guard: true, type: "walker", x: cx - w / 2, y: top - h, w, h,
     x0: cx - ledgeW / 2 - 12, x1: cx + ledgeW / 2 + 12, dir: 1, ledgeTop: top,   // small overhang at the ledge edges
@@ -1616,40 +1615,38 @@ function pickDescentSpot(base) {
   const ahead = descentRopes.filter(r => r.x >= base - 40).sort((a, b) => a.x - b.x);
   return ahead[0] || descentRopes.slice().sort((a, b) => a.x - b.x)[0];
 }
-// The first upper ledge at/after `base` (the shoes sit up here, higher than the shelter).
-function pickUpperSpot(lvl, base) {
-  if (!lvl.upperPlat) return null;
+// Top-ledge spots on 3 successive climb LOOPS (every other tile) at/after `base`.
+function gearClimbSpots(lvl, base) {
   const tw = lvl.tileW; let t = Math.floor(base / tw);
-  if ((((t % 2) + 2) % 2) !== 0) t++;           // next even (shelter) tile
-  const L = UPPER_PLAT.ledges.find(l => l.shoes) || UPPER_PLAT.ledges[0];   // shoes sit on the flagged (top) ledge
-  return { cx: t * tw + L.cxOff, top: L.top };
+  if ((((t % 2) + 2) % 2) !== 0) t++;                       // first even (climb) tile at/after base
+  const L = UPPER_PLAT.ledges.find(l => l.shoes) || UPPER_PLAT.ledges[UPPER_PLAT.ledges.length - 1];
+  return [0, 1, 2].map(k => ({ cx: (t + k * 2) * tw + L.cxOff, top: L.top }));
 }
+// Gear placement. On the climb level each gear sits on the TOP ledge of its own loop
+// (shoes loop 1, helmet loop 2, rope loop 3) — Abu climbs the whole stack each time —
+// and a red snake guards every gear ledge. Other levels drop gear on the ground.
 function spawnGearForLevel(base = 0) {
   gearItems = [];
-  const lvl = currentLevel(), spots = gearPlatformSpots(lvl, base);
-  const upperSpot = pickUpperSpot(lvl, base);    // shoes go on the high ledge above the shelter
-  let pIdx = 0, gIdx = 0;
-  GEAR.forEach((g) => {
+  enemies = enemies.filter(e => !e.guard);                  // clear old guards (respawned below)
+  const lvl = currentLevel();
+  const gearW = g => g.h * ((imgLoaded[g.asset] && images[g.asset].naturalHeight) ? images[g.asset].naturalWidth / images[g.asset].naturalHeight : 1);
+  if (lvl.upperPlat) {
+    const spots = gearClimbSpots(lvl, base), slot = { shoes: 0, helmet: 1, rope: 2 };
+    const gL = UPPER_PLAT.ledges.find(l => l.guard);
+    const ledgeW = UPPER_PLAT.grassHalfW * 2 * UPPER_PLAT.scale * ((gL && gL.wMul) || 1);
+    GEAR.forEach((g) => {
+      if (gearThisLevel[g.id]) return;
+      const sp = spots[slot[g.id]], w = gearW(g);
+      gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: sp.cx - w / 2, y: sp.top - g.h, w, h: g.h, t: Math.random() * 6.28 });
+      spawnGuardSnake(sp.cx, sp.top, ledgeW);                // a snake guards each gear ledge
+    });
+    return;
+  }
+  GEAR.forEach((g, i) => {
     if (gearThisLevel[g.id]) return;
-    const img = images[g.asset];
-    const aspect = (imgLoaded[g.asset] && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1;
-    const w = g.h * aspect;
-    let cx, feetY;
-    if (g.id === "shoes" && upperSpot) {          // high ledge above the shelter (jump up from a platform)
-      cx = upperSpot.cx; feetY = upperSpot.top;
-    } else if (spots[pIdx]) {                      // perched on a platform (jump-chain + mantle)
-      cx = spots[pIdx].cx; feetY = spots[pIdx].top; pIdx++;
-    } else {                                       // fallback: ground (levels without platforms)
-      cx = base + GEAR_SPAWN_X[gIdx]; feetY = surfaceY(cx) - 8;
-    }
-    gIdx++;
-    gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: feetY - g.h, w, h: g.h, t: Math.random() * 6.28 });
+    const w = gearW(g), cx = base + GEAR_SPAWN_X[i];
+    gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: surfaceY(cx) - 8 - g.h, w, h: g.h, t: Math.random() * 6.28 });
   });
-  // Red snake guarding the shoes ledge.
-  const gL = lvl.upperPlat ? UPPER_PLAT.ledges.find(l => l.guard) : null;
-  if (gL && upperSpot && !gearThisLevel.shoes) {
-    spawnGuardSnake(upperSpot.cx, upperSpot.top, UPPER_PLAT.grassHalfW * 2 * UPPER_PLAT.scale * (gL.wMul || 1));
-  } else { enemies = enemies.filter(e => !e.guard); }
 }
 // Forgiving pickup: collect the gear, flag it, jingle + sparkle + toast.
 function handleGear() {
