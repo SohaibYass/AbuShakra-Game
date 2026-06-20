@@ -121,6 +121,14 @@
     background: rgba(150,110,60,0.5);
   }
   #touch-controls #btn-down.pressed { background: rgba(210,160,90,0.8); }
+  #touch-controls #btn-throw {
+    right: max(20px, env(safe-area-inset-right));
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 120px);
+    width: 80px; height: 80px;
+    background: rgba(70,120,170,0.5);
+  }
+  #touch-controls #btn-throw img { width: 46px; height: 46px; pointer-events: none; }
+  #touch-controls #btn-throw.pressed { background: rgba(110,170,230,0.85); }
 </style>
 </head>
 <body>
@@ -137,6 +145,7 @@
   <div id="btn-right" class="btn">&#9654;</div>
   <div id="btn-down"  class="btn">&#9660;</div>
   <div id="btn-jump"  class="btn">JUMP</div>
+  <div id="btn-throw" class="btn"><img src="carabiner.png" alt="throw" /></div>
 </div>
 <script>
 "use strict";
@@ -174,6 +183,7 @@ const ASSETS = {
   abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
   abuExhausted: "abu_exhausted.png?v=1", // 3-frame panting/hunch when stamina is low
   abuFatalFall: "abu_fatal_fall.png?v=1", // 3-frame fatal fall: shock -> crash -> collapsed
+  abuThrow:   "abu_throw.png?v=2",   // 3-frame carabiner throw (wind-up -> release -> follow-through)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
   bgZugBack:   "Zugspitze_Back.png?v=1",   // Level 1 parallax: far mountains
@@ -309,6 +319,13 @@ const EXHAUST_SPEED_MUL = 0.62;// movement speed multiplier while exhausted
 const COLLAPSE_TIME    = 1.6;  // seconds Abu is doubled over (catching his breath) at 0 stamina
 const FATAL_FALL_DIST  = 320;  // dropping more than this from the airborne peak is a lethal fall (Level 1 high ledges)
 const DEATH_SEQ_TIME   = 0.85; // crash -> collapsed animation before the life is docked
+// Throwable carabiner attack
+const THROW_TIME       = 0.30; // throw animation length (3 frames); another throw can't start until it ends
+const THROW_RELEASE    = 0.55; // fraction of THROW_TIME at which the projectile leaves the hand (frame 2)
+const THROW_COOLDOWN   = 0.22; // extra gap after a throw so holding F can't rapid-fire
+const PROJ_SPEED       = 520;  // carabiner flight speed (px/s)
+const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
+const START_CARABINERS = 5;    // carabiners Abu starts each level with (collect more to refill)
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -478,6 +495,7 @@ const JUMP_KEYS = ["Space", "ArrowUp", "KeyW"];
 const LEFT_KEYS = ["ArrowLeft", "KeyA"];
 const RIGHT_KEYS = ["ArrowRight", "KeyD"];
 const DOWN_KEYS = ["ArrowDown", "KeyS"];   // grab a descent rope at a platform edge
+const THROW_KEYS = ["KeyF"];               // throw a carabiner
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
@@ -547,6 +565,7 @@ bindButton("btn-left",  "ArrowLeft");
 bindButton("btn-right", "ArrowRight");
 bindButton("btn-down",  "ArrowDown");          // grab a descent rope
 bindButton("btn-jump",  "Space", tapAdvance);  // jump also starts/restarts
+bindButton("btn-throw", "KeyF");               // throw a carabiner
 
 /* =============================================================
    MUSIC — background track is an mp3 (looped HTML5 <audio>); the
@@ -667,6 +686,7 @@ function startAtLevel(idx) {
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
+  carabinerAmmo = START_CARABINERS; projectiles = [];
   invulnTimer = INVULN_TIME;
   if (currentLevel().terrain === "natural") {
     player.x = 80;
@@ -748,6 +768,8 @@ let gearItems = [];   // spawned gear pickups in the world (this level)
 let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
 let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
 let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
+let carabinerAmmo = START_CARABINERS;  // throwable carabiners in hand (HUD count)
+let projectiles = [];          // thrown carabiners in flight
 let toast = null;     // { text, timer } transient pickup message
 let shake = 0;        // current screen-shake magnitude (px), decays to 0
 let newBest = false;  // did this run beat the saved high score?
@@ -1212,7 +1234,8 @@ function initPlayer() {
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
              swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null, descend: null,
              onPlatform: false, exhausted: false, collapsed: false, collapseTimer: 0,
-             airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0 };
+             airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0,
+             throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false };
 }
 
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
@@ -1585,7 +1608,7 @@ function updatePower(dt) {
    ============================================================= */
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;
+    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1; carabinerAmmo += 1;
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
@@ -1694,6 +1717,72 @@ function handleEnemies() {
     else if (!playerSheltered) loseLife();   // safe inside a shelter
   }
   enemies = enemies.filter(e => e.alive);
+}
+
+// --- Throwable carabiner attack ---------------------------------------------
+// Press F: play a 3-frame throw; release a spinning carabiner at frame 2. Movement
+// and gravity continue during the throw, but another can't start until it finishes.
+function updateThrow(dt) {
+  if (player.throwCd > 0) player.throwCd -= dt;
+  const held = anyKey(THROW_KEYS), pressed = held && !player.prevThrow;
+  player.prevThrow = held;
+  const busy = player.dying || player.collapsed || player.swinging || player.descend || player.mantle;
+  if (pressed && !player.throwing && player.throwCd <= 0 && carabinerAmmo > 0 && !busy) {
+    player.throwing = true; player.throwTimer = 0; player.threw = false;
+    carabinerAmmo -= 1;                         // each throw uses one stored carabiner
+  }
+  if (player.throwing) {
+    player.throwTimer += dt;
+    if (!player.threw && player.throwTimer >= THROW_TIME * THROW_RELEASE) { player.threw = true; spawnCarabiner(); }
+    if (player.throwTimer >= THROW_TIME) { player.throwing = false; player.throwCd = THROW_COOLDOWN; }
+  }
+}
+function spawnCarabiner() {
+  const dir = player.facing >= 0 ? 1 : -1;
+  const hx = player.x + player.w / 2 + dir * (player.w * 0.75);   // at the extended throwing hand
+  const hy = player.y + player.h * 0.40;
+  projectiles.push({ x: hx - PROJ_W / 2, y: hy - PROJ_H / 2, w: PROJ_W, h: PROJ_H, vx: PROJ_SPEED * dir, dir, angle: 0 });
+  Music.sfxJump();   // quick throw whoosh
+}
+function updateProjectiles(dt) {
+  const lvl = currentLevel();
+  for (const pr of projectiles) {
+    if (pr.dead) continue;
+    pr.x += pr.vx * dt;                          // horizontal flight
+    pr.angle += pr.dir * 14 * dt;               // spin
+    const sx = pr.x - cameraX;
+    if (sx < -60 || sx > VIEW_W + 60) { pr.dead = true; continue; }   // left the screen
+    const cx = pr.x + pr.w / 2, cy = pr.y + pr.h / 2;
+    for (const e of enemies) {                  // enemy hit (one projectile damages once)
+      if (!e.alive) continue;
+      if (pr.x + pr.w > e.x && pr.x < e.x + e.w && pr.y + pr.h > e.y && pr.y < e.y + e.h) {
+        e.hp -= 1;
+        if (e.hp <= 0) { e.alive = false; score += e.points; poofBurst(e.x + e.w / 2, e.y + e.h / 2); }
+        else { e.hitFlash = 0.3; poofBurst(cx, cy); }
+        sparkleBurst(cx, cy); Music.sfxStomp(); addShake(4);
+        pr.dead = true; break;
+      }
+    }
+    if (pr.dead) continue;
+    let blocked = (lvl.terrain === "natural") ? (cy >= surfaceY(cx)) : (cy >= GROUND_Y);   // hit the ground/terrain
+    if (!blocked) for (const p of platforms) {  // hit a solid platform
+      if (p.solid === false) continue;
+      if (cx > p.x && cx < p.x + p.w && cy > p.y && cy < p.y + p.h) { blocked = true; break; }
+    }
+    if (blocked) { poofBurst(cx, cy); pr.dead = true; }
+  }
+  enemies = enemies.filter(e => e.alive);
+  projectiles = projectiles.filter(pr => !pr.dead);
+}
+function drawProjectiles() {
+  for (const pr of projectiles) {
+    const sx = pr.x + pr.w / 2 - cameraX, sy = pr.y + pr.h / 2;
+    ctx.save();
+    ctx.translate(sx, sy); ctx.rotate(pr.angle);
+    if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, -pr.w / 2, -pr.h / 2, pr.w, pr.h);
+    else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, pr.w / 2 - 1, pr.h / 2 - 1, 0, 0, 6.28); ctx.stroke(); }
+    ctx.restore();
+  }
 }
 
 /* =============================================================
@@ -2531,6 +2620,19 @@ function drawPlayer() {
     return;
   }
 
+  // Throwing a carabiner: 3-frame throw animation (movement/gravity still apply).
+  if (player.throwing && imgLoaded.abuThrow) {
+    const img = images.abuThrow, n = 3, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const fi = Math.min(n - 1, Math.floor(player.throwTimer / THROW_TIME * n));
+    const dh = player.h * 1.08, dw = dh * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h);
+    if (player.facing < 0) ctx.scale(-1, 1);   // art faces RIGHT; flip when facing left
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
+    ctx.restore();
+    return;
+  }
+
   // --- Procedural animation: derive bob / lean / squash from state ---
   let bob = 0, lean = 0, squashY = 1;
   const ph = player.walkPhase;
@@ -2633,6 +2735,12 @@ function drawHUD() {
   drawGearHUD();
   ctx.fillStyle = "#fff"; ctx.font = "bold 20px Segoe UI, Arial";
   ctx.textAlign = "left";   ctx.fillText("Score: " + score, 116, 28);
+  // Throwable carabiner ammo, right after the score: icon + count.
+  const ax = 116 + ctx.measureText("Score: " + score).width + 18;
+  if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, ax, 7, 16, 22);
+  else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(ax + 8, 18, 7, 10, 0, 0, 6.28); ctx.stroke(); }
+  ctx.fillStyle = carabinerAmmo > 0 ? "#cfe8ff" : "#ff7a6a"; ctx.textAlign = "left";
+  ctx.fillText("× " + carabinerAmmo, ax + 21, 28);
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
 
   // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
@@ -2906,6 +3014,7 @@ function resetGame() {
   particles = []; shake = 0; newBest = false;
   gearItems = []; gearThisLevel = { shoes: false, rope: false, helmet: false };
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
+  carabinerAmmo = START_CARABINERS; projectiles = [];
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
     player.y = surfaceY(player.x + player.w / 2) - player.h;   // stand on the painted ledge
@@ -2952,6 +3061,7 @@ function advanceLevel() {
   levelCarabiners = 0; dashboard = null;   // fresh counter for the new level
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets each level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
+  carabinerAmmo = START_CARABINERS; projectiles = [];
   invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
   Music.setTrack(currentLevel().music);    // switch to the new level's track (keeps playing)
   // Entering a natural level: drop the player onto the new painted surface so
@@ -2970,11 +3080,13 @@ function update(dt) {
   updateWeather(dt);     // set this frame's wind before the player reads it
   updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
+  updateThrow(dt);       // carabiner throw animation + release
   updateCrashPlats(dt);  // count down any platform the player just triggered
   updateCamera(dt);
   generateAhead();
   updatePower(dt);       // shelter refill + sheltered flag (before enemies read it)
   updateEnemies(dt);
+  updateProjectiles(dt); // thrown carabiners: fly, hit enemies/terrain
   updateIcicles(dt);
   handleCarabiners();
   handleGear();
@@ -3000,6 +3112,7 @@ function draw() {
   drawCarabiners();
   drawGear();              // collectible shoes / rope / helmet on the path
   drawEnemies();
+  drawProjectiles();       // thrown carabiners in flight
   drawPlayer();
   drawIcicles();           // telegraph markers + falling spikes (Level 5)
   drawParticles();
