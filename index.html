@@ -681,7 +681,7 @@ function startAtLevel(idx) {
   resetGame();                       // fresh player / lives / effects, state="playing"
   levelIndex = idx;
   score = prevTarget();              // arrive with the cumulative score of prior levels
-  cameraX = 0; cameraY = 0; worldGenX = 0;
+  cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
   platforms = []; carabiners = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
@@ -748,6 +748,7 @@ let windCurrent = 0; // Level 5 wind force (px/s), varies over time
 let windT = 0;       // wind phase clock
 let cameraX, worldGenX;
 let cameraY = 0;   // vertical camera pan (Level 1 upper-ledge climb); 0 otherwise
+let camAnchorFeet = 9999;  // feet-Y of the ledge the camera is anchored to (the last grounded ledge)
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
 let dashboard = null;      // between-levels "Mountain Progress" screen data
@@ -1790,12 +1791,13 @@ function drawProjectiles() {
    ============================================================= */
 function updateCamera(dt) {
   cameraX = Math.max(0, player.x + player.w / 2 - VIEW_W * CAMERA_ANCHOR);
-  // Vertical pan (Level 1): once Abu climbs above the platforms, follow him UP so the
-  // high ledge comes into view; ease back to 0 when he drops back down.
+  // Vertical pan (Level 1): the camera follows the LEDGE Abu is standing on, not his
+  // jump arc — so it pans only when he climbs to a new ledge, and stays put when he
+  // just jumps in place on a ledge. The anchor updates only while he's grounded.
   let targetY = 0;
   if (currentLevel().upperPlat) {
-    const feet = player.y + player.h;
-    if (feet < UPPER_CAM_ENGAGE) targetY = Math.max(UPPER_CAM_MIN, Math.min(0, feet - VIEW_H * 0.70));
+    if (player.onGround) camAnchorFeet = player.y + player.h;   // remember this ledge's level
+    if (camAnchorFeet < UPPER_CAM_ENGAGE) targetY = Math.max(UPPER_CAM_MIN, Math.min(0, camAnchorFeet - VIEW_H * 0.70));
   }
   cameraY += (targetY - cameraY) * Math.min(1, (dt || 0.016) * 7);
   if (Math.abs(cameraY) < 0.5) cameraY = 0;
@@ -3008,7 +3010,7 @@ function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
-  cameraX = 0; cameraY = 0; worldGenX = 0;
+  cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
   platforms = []; carabiners = []; enemies = [];
   pits = []; levelCarabiners = 0; dashboard = null;
   particles = []; shake = 0; newBest = false;
