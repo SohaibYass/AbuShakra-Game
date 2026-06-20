@@ -151,12 +151,17 @@ const ASSETS = {
   walk:       "character_walk.png?v=6",   // 9-frame walk-cycle sprite sheet (art faces LEFT; bump ?v on regen)
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
+  enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
   enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
+  gearShoes:  "gear_shoes.png?v=1",  // collectible gear: climbing shoes
+  gearRope:   "gear_rope.png?v=1",   // collectible gear: rope
+  gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
+  upperPlat:  "upper_platform.png?v=1", // Level 1 high ledge above the shelter (holds the shoes)
   rope:       "rope.png?v=1",      // braided swing rope (Level 4); drawn stretched/rotated
   ropeRock:   "rope_rock.png?v=1", // snow-capped anchor rock the rope hangs from
   rope2:      "rope2.png?v=1",     // alternate silvery rope (the 2nd Level-4 rope)
@@ -201,6 +206,15 @@ const TERR_STEP_DOWN = 28;   // auto-descend small drops; bigger and you fall
 const ZUG_TILE_W = 675;
 // `rope:true` hangs a descent rope off that platform's end (not every platform has one).
 const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true,shelter:true}];
+// A high floating ledge up-LEFT, above the regular platforms (drawn from
+// upper_platform.png) — reached by jumping up from platform 1/2. The hidden Climbing
+// Shoes sit on it, and the camera pans UP to reveal it as Abu climbs.
+const UPPER_PLAT = { scale: 0.256, cellW: 469, cellH: 215, grassY: 12, grassCx: 222, grassHalfW: 150,
+  ledges: [ { cxOff: 250, top: 30 },        // 1st ledge above the platforms (jump + mantle up from platform 1/2)
+            { cxOff: 360, top: -70 },       // 2nd ledge, up-right
+            { cxOff: 450, top: -220, wMul: 1.4, shoes: true, guard: true } ] };  // 3rd (top) ledge: Shoes, guarded by a red snake
+const UPPER_CAM_ENGAGE = 150;   // pan the camera up once Abu's feet rise above this (i.e. above the platforms)
+const UPPER_CAM_MIN = -545;     // furthest the camera pans up (reaches the top ledge)
 const ZUG_SURF = [329.6, 328.3, 329.2, 329.6, 330.0, 330.5, 330.5, 330.5, 330.9, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.8, 331.3, 331.8, 331.8, 331.3, 331.8, 331.8, 331.8, 331.3, 316.4, 316.8, 316.4, 316.4, 316.0, 315.1, 314.6, 314.2, 313.3, 312.9, 312.0, 311.1, 309.8, 330.5, 330.0, 329.6, 329.2, 328.7, 328.7, 328.7, 328.7, 328.3, 327.8, 328.3, 332.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 353.8, 354.2, 354.2, 354.2, 354.2, 353.8, 354.2, 353.8, 353.8, 353.3, 353.3, 352.4, 351.6, 351.1, 350.7, 350.7, 351.1, 350.7, 351.1, 351.1, 351.1, 351.1, 350.7, 350.7, 351.1, 350.7, 350.2, 350.2, 349.8, 349.8, 349.4, 348.9, 348.5, 347.6, 347.2, 346.3, 345.4, 345.0, 344.1, 341.5, 339.3, 337.1, 334.4, 333.1, 330.5, 325.2, 319.9, 317.7, 317.3, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.8, 316.4, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 316.8, 318.2, 320.8, 323.4, 324.8, 326.5, 327.8, 329.6, 330.9, 332.2, 333.1, 333.5, 334.4, 335.3, 335.7, 335.7, 335.7, 334.9, 334.9, 334.0, 333.5, 333.5, 333.1, 332.7, 331.8, 330.5, 330.0, 329.2, 328.7, 328.3, 327.8, 327.0, 327.0, 326.5, 326.1, 325.6, 325.6, 325.6, 325.6, 325.2, 324.8, 323.9, 323.4, 323.4, 323.0];
 // Separate, lower collision line for the Level 1 SNAKES (traced from
 // Zugspitze_Front_Platforms2_collisionline_Snake.png) so they sit on the rock
@@ -307,7 +321,7 @@ const LEVELS = [
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, platforms: ZUG_PLATFORMS,
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
-    jumpMul: 0.86, ledgeGrab: true, descend: true, power: true, groundClipsOnly: true, sparseClips: true },   // ground clips, spaced out
+    jumpMul: 0.86, ledgeGrab: true, descend: true, power: true, upperPlat: true, groundClipsOnly: true, sparseClips: true },   // ground clips, spaced out
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
@@ -396,6 +410,13 @@ const WALK_PAD_X = 0.119, WALK_PAD_Y = 0.120;
 const ENEMY_W  = 46, ENEMY_H  = 46;
 // A carabiner is taller than it is wide (art is ~140x200, ratio 0.7).
 const CARABINER_W = 23, CARABINER_H = 31;
+// Collectible climbing gear — all three required in every level (gate wired later).
+// `h` is the on-screen height; width derives from each sprite's aspect at draw time.
+const GEAR = [
+  { id: "shoes",  asset: "gearShoes",  label: "Climbing Shoes", h: 30 },
+  { id: "rope",   asset: "gearRope",   label: "Climbing Rope",  h: 40 },
+  { id: "helmet", asset: "gearHelmet", label: "Climbing Helmet", h: 38 },
+];
 
 /* Enemy types. `speed` multiplies ENEMY_SPEED; `hp` is stomps-to-kill;
    `air` floats (no gravity). Every stomp kill is worth STOMP_POINTS (+2),
@@ -595,6 +616,7 @@ const Music = (() => {
     sfxOver()  { if (!sfxReady()) return; const t = actx.currentTime; blip(523, t, 0.16, "square", 0.5); blip(392, t + 0.16, 0.16, "square", 0.5); blip(262, t + 0.32, 0.42, "square", 0.6); },
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
+    sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -633,9 +655,11 @@ function startAtLevel(idx) {
   resetGame();                       // fresh player / lives / effects, state="playing"
   levelIndex = idx;
   score = prevTarget();              // arrive with the cumulative score of prior levels
-  cameraX = 0; worldGenX = 0;
+  cameraX = 0; cameraY = 0; worldGenX = 0;
   platforms = []; carabiners = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
+  gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
+  gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   invulnTimer = INVULN_TIME;
   if (currentLevel().terrain === "natural") {
     player.x = 80;
@@ -644,6 +668,7 @@ function startAtLevel(idx) {
   }
   enterLevelEffects();               // wind / snowstorm / crash-platform reset
   generateAhead();
+  spawnGearForLevel();               // one shoes/rope/helmet on the main path
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -695,6 +720,7 @@ let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
 let windT = 0;       // wind phase clock
 let cameraX, worldGenX;
+let cameraY = 0;   // vertical camera pan (Level 1 upper-ledge climb); 0 otherwise
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
 let dashboard = null;      // between-levels "Mountain Progress" screen data
@@ -711,6 +737,11 @@ let cutsceneDone = false;
 cutsceneVideo.addEventListener("ended", () => { if (state === "cutscene") endCutscene(); });
 cutsceneVideo.addEventListener("error", () => { if (state === "cutscene") endCutscene(); });
 let particles = [];   // cosmetic dust / sparkle / poof bits
+let gearItems = [];   // spawned gear pickups in the world (this level)
+let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
+let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
+let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
+let toast = null;     // { text, timer } transient pickup message
 let shake = 0;        // current screen-shake magnitude (px), decays to 0
 let newBest = false;  // did this run beat the saved high score?
 let bestScore = (() => {
@@ -880,6 +911,15 @@ function generateAhead() {
         const evenTile = (((t % 2) + 2) % 2) === 0;   // shelter on every OTHER loop
         for (const bx of lvl.platforms) {
           platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, shelter: bx.shelter && evenTile });
+        }
+      }
+      // Upper ledges above the platforms (Level 1) — a stacked climb per shelter tile.
+      if (lvl.upperPlat) for (let t = a; t <= b; t++) {
+        if ((((t % 2) + 2) % 2) !== 0) continue;       // even (shelter) tiles
+        const w = UPPER_PLAT.grassHalfW * 2 * UPPER_PLAT.scale;
+        for (const L of UPPER_PLAT.ledges) {
+          const cx = t * tw + L.cxOff, lw = w * (L.wMul || 1);
+          platforms.push({ x: cx - lw / 2, y: L.top, w: lw, h: 26, kind: "static", solid: true, upper: true, cx, guard: !!L.guard });
         }
       }
       // Climbable swing ropes for the visible tiles (Level 4), same deterministic tiling.
@@ -1071,10 +1111,30 @@ function spawnEnemy() {
     vy: 0, baseY, phase: Math.random() * 6.28, jumpTimer: rand(0.3, 1.0), hitFlash: 0
   });
 }
+// A red snake GUARD that patrols a fixed ledge (back and forth, turning at the edges)
+// instead of scrolling in from the right. Stomp it to clear the way to the shoes.
+const GUARD_SPEED = 72;
+function spawnGuardSnake(cx, top, ledgeW) {
+  enemies = enemies.filter(e => !e.guard);           // only one guard at a time
+  const w = 88, h = 19;                               // side-on red snake, 2-frame walk like the green snake
+  enemies.push({ guard: true, type: "walker", x: cx - w / 2, y: top - h, w, h,
+    x0: cx - ledgeW / 2 - 12, x1: cx + ledgeW / 2 + 12, dir: 1, ledgeTop: top,   // small overhang at the ledge edges
+    alive: true, hp: 1, points: STOMP_POINTS, color: "#d22", phase: Math.random() * 6.28, hitFlash: 0,
+    frames: { key: "enemySnakeRedWalk", count: 2, fps: 6 } });
+}
+
 function updateEnemies(dt) {
   const d = difficulty();
   const natural = currentLevel().terrain === "natural";
   for (const e of enemies) {
+    if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
+      e.x += e.dir * GUARD_SPEED * d * dt;
+      if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
+      else if (e.x + e.w >= e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
+      e.y = e.ledgeTop - e.h; e.phase += dt * 6;
+      if (e.hitFlash > 0) e.hitFlash -= dt;
+      continue;
+    }
     e.x -= ENEMY_SPEED * e.speed * d * dt;
     if (e.hitFlash > 0) e.hitFlash -= dt;
     const floor = natural ? enemyFloorY(e.x + e.w / 2) : GROUND_Y;
@@ -1126,7 +1186,7 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && e.x + e.w > cameraX - 200);
+  enemies = enemies.filter(e => e.alive && (e.guard || e.x + e.w > cameraX - 200));
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -1477,11 +1537,81 @@ function updatePower(dt) {
    ============================================================= */
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1;
+    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
   carabiners = carabiners.filter(c => !c.collected);
+}
+
+// One shoes/rope/helmet per level, on fixed reachable ground spots along the path.
+const GEAR_SPAWN_X = [480, 1100, 1800];
+// Pick up to 3 floating-platform tops (spread across the next few tiles, skipping
+// the shelter platform) so each gear must be reached by a jump-chain + mantle.
+function gearPlatformSpots(lvl, base) {
+  if (!lvl.platforms) return [];
+  const tw = lvl.tileW, startTile = Math.floor(base / tw), spots = [];
+  for (let t = startTile; spots.length < 3 && t < startTile + 8; t++) {
+    const evenTile = (((t % 2) + 2) % 2) === 0;
+    for (const bx of lvl.platforms) {
+      if (bx.shelter && evenTile) continue;                 // leave the cabin platform clear
+      spots.push({ cx: t * tw + (bx.x0 + bx.x1) / 2, top: bx.top });
+      if (spots.length >= 3) break;
+    }
+  }
+  return spots;
+}
+// The descent rope nearest (and ahead of) `base`, to hang a gear at the bottom of.
+function pickDescentSpot(base) {
+  if (!descentRopes.length) return null;
+  const ahead = descentRopes.filter(r => r.x >= base - 40).sort((a, b) => a.x - b.x);
+  return ahead[0] || descentRopes.slice().sort((a, b) => a.x - b.x)[0];
+}
+// The first upper ledge at/after `base` (the shoes sit up here, higher than the shelter).
+function pickUpperSpot(lvl, base) {
+  if (!lvl.upperPlat) return null;
+  const tw = lvl.tileW; let t = Math.floor(base / tw);
+  if ((((t % 2) + 2) % 2) !== 0) t++;           // next even (shelter) tile
+  const L = UPPER_PLAT.ledges.find(l => l.shoes) || UPPER_PLAT.ledges[0];   // shoes sit on the flagged (top) ledge
+  return { cx: t * tw + L.cxOff, top: L.top };
+}
+function spawnGearForLevel(base = 0) {
+  gearItems = [];
+  const lvl = currentLevel(), spots = gearPlatformSpots(lvl, base);
+  const upperSpot = pickUpperSpot(lvl, base);    // shoes go on the high ledge above the shelter
+  let pIdx = 0, gIdx = 0;
+  GEAR.forEach((g) => {
+    if (gearThisLevel[g.id]) return;
+    const img = images[g.asset];
+    const aspect = (imgLoaded[g.asset] && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1;
+    const w = g.h * aspect;
+    let cx, feetY;
+    if (g.id === "shoes" && upperSpot) {          // high ledge above the shelter (jump up from a platform)
+      cx = upperSpot.cx; feetY = upperSpot.top;
+    } else if (spots[pIdx]) {                      // perched on a platform (jump-chain + mantle)
+      cx = spots[pIdx].cx; feetY = spots[pIdx].top; pIdx++;
+    } else {                                       // fallback: ground (levels without platforms)
+      cx = base + GEAR_SPAWN_X[gIdx]; feetY = surfaceY(cx) - 8;
+    }
+    gIdx++;
+    gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: feetY - g.h, w, h: g.h, t: Math.random() * 6.28 });
+  });
+  // Red snake guarding the shoes ledge.
+  const gL = lvl.upperPlat ? UPPER_PLAT.ledges.find(l => l.guard) : null;
+  if (gL && upperSpot && !gearThisLevel.shoes) {
+    spawnGuardSnake(upperSpot.cx, upperSpot.top, UPPER_PLAT.grassHalfW * 2 * UPPER_PLAT.scale * (gL.wMul || 1));
+  } else { enemies = enemies.filter(e => !e.guard); }
+}
+// Forgiving pickup: collect the gear, flag it, jingle + sparkle + toast.
+function handleGear() {
+  const pad = 8, box = { x: player.x - pad, y: player.y - pad, w: player.w + 2 * pad, h: player.h + 2 * pad };
+  for (const it of gearItems) if (!it.collected && aabb(box, it)) {
+    it.collected = true; gearThisLevel[it.id] = true; gearPop[it.id] = 0.45;
+    sparkleBurst(it.x + it.w / 2, it.y + it.h / 2);
+    Music.sfxGear();
+    toast = { text: "Found: " + it.label + "!", timer: 1.6 };
+  }
+  gearItems = gearItems.filter(it => !it.collected);
 }
 function handleHazards() {
   // Empty holes — falling in costs a life; rescue back to the near solid edge.
@@ -1523,8 +1653,17 @@ function handleEnemies() {
 /* =============================================================
    CAMERA
    ============================================================= */
-function updateCamera() {
+function updateCamera(dt) {
   cameraX = Math.max(0, player.x + player.w / 2 - VIEW_W * CAMERA_ANCHOR);
+  // Vertical pan (Level 1): once Abu climbs above the platforms, follow him UP so the
+  // high ledge comes into view; ease back to 0 when he drops back down.
+  let targetY = 0;
+  if (currentLevel().upperPlat) {
+    const feet = player.y + player.h;
+    if (feet < UPPER_CAM_ENGAGE) targetY = Math.max(UPPER_CAM_MIN, Math.min(0, feet - VIEW_H * 0.70));
+  }
+  cameraY += (targetY - cameraY) * Math.min(1, (dt || 0.016) * 7);
+  if (Math.abs(cameraY) < 0.5) cameraY = 0;
 }
 
 /* =============================================================
@@ -1752,6 +1891,8 @@ function updateEffects(dt) {
   }
   particles = particles.filter(p => p.life > 0);
   if (shake > 0) shake = Math.max(0, shake - 36 * dt);
+  for (const k in gearPop) if (gearPop[k] > 0) gearPop[k] = Math.max(0, gearPop[k] - dt);
+  if (toast) { toast.timer -= dt; if (toast.timer <= 0) toast = null; }
 }
 function drawParticles() {
   for (const p of particles) {
@@ -1879,11 +2020,13 @@ function drawParallaxScene(lvl) {
       if (x >= VIEW_W) break;
       const mir = (((i % 2) + 2) % 2) === 1;
       ctx.save();
+      // Pin the far sky to the camera vertically so it always fills the screen during
+      // the upper-ledge pan (cameraY is 0 normally, so no change).
       if (mir) {
         ctx.translate(x + bw + bleed, 0); ctx.scale(-1, 1);
-        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, 0, 0, bw + bleed, VIEW_H);
+        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, 0, cameraY, bw + bleed, VIEW_H);
       } else {
-        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, x, 0, bw + bleed, VIEW_H);
+        ctx.drawImage(bg, 0, 0, bg.naturalWidth, bg.naturalHeight, x, cameraY, bw + bleed, VIEW_H);
       }
       ctx.restore();
     }
@@ -1966,6 +2109,20 @@ function drawShelters() {
   }
 }
 
+// The high floating ledge above the shelter (Level 1): a small rock island, drawn so
+// its grass surface meets the platform's collision top.
+function drawUpperPlatforms() {
+  if (!imgLoaded.upperPlat) return;
+  const img = images.upperPlat;
+  for (const p of platforms) {
+    if (!p.upper) continue;
+    const S = p.w / (UPPER_PLAT.grassHalfW * 2);   // scale the sprite to this ledge's width
+    const drawX = p.cx - UPPER_PLAT.grassCx * S - cameraX, drawY = p.y - UPPER_PLAT.grassY * S;
+    if (drawX > VIEW_W || drawX + UPPER_PLAT.cellW * S < 0) continue;
+    ctx.drawImage(img, drawX, drawY, UPPER_PLAT.cellW * S, UPPER_PLAT.cellH * S);
+  }
+}
+
 function drawPlatforms() {
   // On natural levels the platforms are painted into the foreground art; the
   // collision boxes are invisible, so don't draw them.
@@ -2045,6 +2202,21 @@ function drawCarabiners() {
   }
 }
 
+// Collectible gear sitting on the path: gentle bob + soft glow ring so it reads as a pickup.
+function drawGear() {
+  for (const it of gearItems) {
+    const sx = it.x - cameraX;
+    if (sx > VIEW_W || sx + it.w < 0) continue;
+    const bob = Math.sin(performance.now() / 320 + it.t) * 3, cy = it.y + bob;
+    ctx.save();
+    ctx.globalAlpha = 0.5; ctx.fillStyle = "#ffe07a";
+    ctx.beginPath(); ctx.ellipse(sx + it.w / 2, cy + it.h / 2, it.w * 0.7, it.h * 0.6, 0, 0, 6.28); ctx.fill();
+    ctx.restore();
+    if (imgLoaded[it.asset]) ctx.drawImage(images[it.asset], sx, cy, it.w, it.h);
+    else { ctx.fillStyle = "#ffb627"; ctx.fillRect(sx, cy, it.w, it.h); }
+  }
+}
+
 // Procedural slither: draw a single side-on snake sprite in vertical slices, each
 // pushed up/down by a traveling sine wave so the body undulates head-to-tail.
 // Per-enemy phase desyncs them; falls back to the static sprite if not loaded.
@@ -2083,6 +2255,17 @@ function drawEnemies() {
   for (const e of enemies) {
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
+    if (e.guard) {                                       // red ledge-patrol snake (2-frame walk)
+      const fr = e.frames, img = images[fr.key];
+      ctx.save();
+      if (imgLoaded[fr.key]) {
+        const cw = img.naturalWidth / fr.count, fi = Math.floor(performance.now() / (1000 / fr.fps)) % fr.count;
+        if (e.dir > 0) { ctx.translate(sx + e.w, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, 0, e.y, e.w, e.h); }
+        else ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, sx, e.y, e.w, e.h);   // faces left; flip moving right
+      } else { ctx.fillStyle = "#c33"; ctx.fillRect(sx, e.y, e.w, e.h); }
+      ctx.restore();
+      continue;
+    }
 
     const lvl = currentLevel();
     // Resolve this enemy's animation, most-specific first: a per-CREATURE strip
@@ -2340,10 +2523,40 @@ function drawHeart(cx, cy, s, fill) {
   ctx.fillStyle = fill; ctx.fill();
 }
 
+// 3 gear slots at the top-left: dim until collected, full-colour + pop on pickup.
+function drawGearHUD() {
+  const sz = 26, gap = 6, y0 = 6;
+  GEAR.forEach((g, i) => {
+    const x = 14 + i * (sz + gap), got = gearThisLevel[g.id];
+    ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x - 2, y0 - 2, sz + 4, sz + 4);   // dark chip
+    const img = images[g.asset];
+    const aspect = (imgLoaded[g.asset] && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1;
+    let dw = sz, dh = sz; if (aspect > 1) dh = sz / aspect; else dw = sz * aspect;
+    const pop = gearPop[g.id] > 0 ? 1 + Math.sin((1 - gearPop[g.id] / 0.45) * Math.PI) * 0.28 : 1;
+    dw *= pop; dh *= pop;
+    const dx = x + (sz - dw) / 2, dy = y0 + (sz - dh) / 2;
+    ctx.save(); ctx.globalAlpha = got ? 1 : 0.28;
+    if (imgLoaded[g.asset]) ctx.drawImage(img, dx, dy, dw, dh);
+    else { ctx.fillStyle = "#ffb627"; ctx.fillRect(dx, dy, dw, dh); }
+    ctx.restore();
+  });
+}
+function drawToast() {
+  if (!toast) return;
+  const a = Math.min(1, toast.timer / 0.4);
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.font = "bold 18px Segoe UI, Arial"; ctx.textAlign = "center";
+  const w = ctx.measureText(toast.text).width + 28, x = VIEW_W / 2 - w / 2, y = 78;
+  ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x, y, w, 30);
+  ctx.fillStyle = "#ffe07a"; ctx.fillText(toast.text, VIEW_W / 2, y + 21);
+  ctx.restore(); ctx.textAlign = "left";
+}
+
 function drawHUD() {
   ctx.fillStyle = "#000"; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, VIEW_W, 40); ctx.globalAlpha = 1;
-  ctx.fillStyle = "#fff"; ctx.font = "bold 22px Segoe UI, Arial";
-  ctx.textAlign = "left";   ctx.fillText("Score: " + score, 16, 28);
+  drawGearHUD();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 20px Segoe UI, Arial";
+  ctx.textAlign = "left";   ctx.fillText("Score: " + score, 116, 28);
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
 
   // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
@@ -2384,6 +2597,7 @@ function drawHUD() {
     ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
     ctx.textAlign = "left";
   }
+  drawToast();
 }
 
 function drawCenteredText(lines) {
@@ -2610,10 +2824,12 @@ function resetGame() {
   score = 0; lives = START_LIVES; invulnTimer = 0;
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
-  cameraX = 0; worldGenX = 0;
+  cameraX = 0; cameraY = 0; worldGenX = 0;
   platforms = []; carabiners = []; enemies = [];
   pits = []; levelCarabiners = 0; dashboard = null;
   particles = []; shake = 0; newBest = false;
+  gearItems = []; gearThisLevel = { shoes: false, rope: false, helmet: false };
+  gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
     player.y = surfaceY(player.x + player.w / 2) - player.h;   // stand on the painted ledge
@@ -2622,6 +2838,7 @@ function resetGame() {
   }
   enterLevelEffects();
   generateAhead();
+  spawnGearForLevel();
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
@@ -2657,6 +2874,8 @@ function checkLevelProgress() {
 function advanceLevel() {
   if (levelIndex < LEVELS.length - 1) levelIndex += 1;
   levelCarabiners = 0; dashboard = null;   // fresh counter for the new level
+  gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets each level
+  gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
   Music.setTrack(currentLevel().music);    // switch to the new level's track (keeps playing)
   // Entering a natural level: drop the player onto the new painted surface so
@@ -2666,6 +2885,8 @@ function advanceLevel() {
     player.vy = 0; player.onGround = true;
   }
   enterLevelEffects();   // arm the new level's wind/snowstorm; clear old crash platforms
+  generateAhead();
+  spawnGearForLevel(player.x + 150);   // gear ahead of the player on the new level's path
   state = "playing";
 }
 
@@ -2674,12 +2895,13 @@ function update(dt) {
   updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
   updateCrashPlats(dt);  // count down any platform the player just triggered
-  updateCamera();
+  updateCamera(dt);
   generateAhead();
   updatePower(dt);       // shelter refill + sheltered flag (before enemies read it)
   updateEnemies(dt);
   updateIcicles(dt);
   handleCarabiners();
+  handleGear();
   handleHazards();
   handleEnemies();
   checkLevelProgress();
@@ -2687,9 +2909,12 @@ function update(dt) {
 
 function draw() {
   if (state === "cutscene") { drawCutscene(); return; }
+  ctx.save();
+  if (cameraY) ctx.translate(0, -Math.round(cameraY));   // vertical pan (Level 1 upper ledge); no-op elsewhere
   drawBackground();
   drawGround();
   drawShelters();          // wooden refuges on the ground (Level 1)
+  drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
   drawPits();
   drawPlatforms();
@@ -2697,11 +2922,13 @@ function draw() {
   drawRopes();             // climbable ropes (Level 4)
   drawDescentRopes();      // platform-edge descent ropes (Level 1)
   drawCarabiners();
+  drawGear();              // collectible shoes / rope / helmet on the path
   drawEnemies();
   drawPlayer();
   drawIcicles();           // telegraph markers + falling spikes (Level 5)
   drawParticles();
   drawWeather();           // snowstorm flakes + whiteout fog (Level 5), over the world
+  ctx.restore();           // end vertical-camera pan
   drawHUD();
   if (state === "start") drawStartScreen();
   else if (state === "instructions") drawInstructions();
