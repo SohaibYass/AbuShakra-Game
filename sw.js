@@ -1,8 +1,15 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v121";
+const CACHE = "abushakra-v122";
 const ASSETS = [
   "./",
   "./index.html",
+  "./privacy.html",
+  "./competition-rules.html",
+  "./js/validation.js",
+  "./js/supabase-config.js",
+  "./js/run-tracker.js",
+  "./js/leaderboard.js",
+  "./js/player-registration.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -82,6 +89,11 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
+  // Never touch cross-origin requests (Supabase API/auth, the supabase-js CDN).
+  // Let the browser fetch them normally so dynamic API responses are never
+  // served from the static app-shell cache.
+  if (url.origin !== self.location.origin) return;
+
   const isDoc =
     req.mode === "navigate" ||
     url.pathname.endsWith("/") ||
