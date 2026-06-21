@@ -36,6 +36,29 @@
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
   }
 
+  /* iOS "Add to Home Screen for fullscreen" hint banner. */
+  #ios-hint {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    left: 50%; transform: translateX(-50%);
+    max-width: 92vw; z-index: 50;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: rgba(20,22,34,0.92);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 12px;
+    color: #fff; font-size: 14px; line-height: 1.25;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+  }
+  #ios-hint b { color: #ffd84d; }
+  #ios-hint-x {
+    flex: 0 0 auto;
+    width: 26px; height: 26px; border-radius: 50%;
+    border: none; background: rgba(255,255,255,0.16);
+    color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
+    touch-action: manipulation;
+  }
+
   /* Music on/off — always visible, top-right. */
   #btn-mute {
     position: fixed;
@@ -106,8 +129,11 @@
     border-color: #fff;
     transform: scale(0.92);
   }
-  #touch-controls #btn-left  { left: max(20px, env(safe-area-inset-left)); }
-  #touch-controls #btn-right { left: calc(max(20px, env(safe-area-inset-left)) + 104px); }
+  /* Left D-pad: ◀ ▶ on a raised top row, ▼ centred just below them. */
+  #touch-controls #btn-left  { left: max(20px, env(safe-area-inset-left));
+                               bottom: calc(max(22px, env(safe-area-inset-bottom)) + 100px); }
+  #touch-controls #btn-right { left: calc(max(20px, env(safe-area-inset-left)) + 104px);
+                               bottom: calc(max(22px, env(safe-area-inset-bottom)) + 100px); }
   #touch-controls #btn-jump  {
     right: max(20px, env(safe-area-inset-right));
     width: 104px; height: 104px;
@@ -116,7 +142,7 @@
   }
   #touch-controls #btn-jump.pressed { background: rgba(90,220,130,0.8); }
   #touch-controls #btn-down {
-    right: calc(max(20px, env(safe-area-inset-right)) + 120px);
+    left: calc(max(20px, env(safe-area-inset-left)) + 56px);
     width: 80px; height: 80px; font-size: 30px;
     background: rgba(150,110,60,0.5);
   }
@@ -134,6 +160,12 @@
 <body>
 <canvas id="game" width="800" height="450"></canvas>
 <button id="btn-mute" aria-label="Toggle music">&#128266;</button>
+<!-- iOS-only fullscreen hint: Safari can't hide its bars from web code, so point
+     iPhone/iPad users to "Add to Home Screen" (manifest opens it edge-to-edge). -->
+<div id="ios-hint" hidden>
+  <span>For fullscreen on iPhone: tap <b>Share&nbsp;&#x2191;</b> &rarr; <b>Add to Home Screen</b></span>
+  <button id="ios-hint-x" aria-label="Dismiss">&times;</button>
+</div>
 <div id="test-buttons">
   <button class="test-btn" data-level="1" aria-label="Test Level 2">&#9654; L2</button>
   <button class="test-btn" data-level="2" aria-label="Test Level 3">&#9654; L3</button>
@@ -534,6 +566,28 @@ function goFullscreen() {
     try { const p = screen.orientation.lock("landscape"); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
 }
+
+// iOS Safari can't hide its toolbars from web code, so show a one-time
+// "Add to Home Screen for fullscreen" hint there (not on Android, not once
+// installed/standalone, not after it's been dismissed).
+(function iosFullscreenHint() {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const standalone = window.navigator.standalone === true ||
+                     (window.matchMedia && (matchMedia("(display-mode: standalone)").matches ||
+                                            matchMedia("(display-mode: fullscreen)").matches));
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("abushakra_ioshint") === "1"; } catch (e) {}
+  if (!isIOS || standalone || dismissed) return;
+  const hint = document.getElementById("ios-hint");
+  if (!hint) return;
+  hint.hidden = false;
+  const hide = () => { hint.hidden = true; try { localStorage.setItem("abushakra_ioshint", "1"); } catch (e) {} };
+  const x = document.getElementById("ios-hint-x");
+  if (x) x.addEventListener("click", hide);
+  setTimeout(() => { hint.hidden = true; }, 9000);   // auto-hide (without marking dismissed)
+})();
 
 /* iOS Safari ignores `user-scalable=no`, so the page can still zoom while
    playing. Block the two culprits: pinch (gesture* events) and double-tap. */
