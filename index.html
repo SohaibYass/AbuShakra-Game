@@ -328,7 +328,7 @@ const THROW_RELEASE    = 0.55; // fraction of THROW_TIME at which the projectile
 const THROW_COOLDOWN   = 0.22; // extra gap after a throw so holding F can't rapid-fire
 const PROJ_SPEED       = 520;  // carabiner flight speed (px/s)
 const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
-const START_CARABINERS = 5;    // carabiners Abu starts each level with (collect more to refill)
+const START_CARABINERS = 6;    // knives Abu starts each level with (fixed — collecting carabiners does NOT refill them)
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -1623,7 +1623,7 @@ function updatePower(dt) {
    ============================================================= */
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1; carabinerAmmo += 1;
+    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;  // collecting carabiners does NOT add knives
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
@@ -2750,16 +2750,13 @@ function drawToast() {
 function drawHUD() {
   ctx.fillStyle = "#000"; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, VIEW_W, 40); ctx.globalAlpha = 1;
   drawGearHUD();
-  ctx.fillStyle = "#fff"; ctx.font = "bold 20px Segoe UI, Arial";
-  ctx.textAlign = "left";   ctx.fillText("Score: " + score, 116, 28);
-  // Throwable knife ammo, right after the score: icon + count.
-  const ax = 116 + ctx.measureText("Score: " + score).width + 18;
+  ctx.fillStyle = "#fff"; ctx.font = "bold 20px Segoe UI, Arial"; ctx.textAlign = "left";
+  // Throwable knife ammo (score removed from the HUD), top-left after the gear slots: icon + count.
+  const ax = 116;
   if (imgLoaded.knife) { const kw = 26, kh = kw * images.knife.naturalHeight / images.knife.naturalWidth; ctx.drawImage(images.knife, ax, 20 - kh / 2, kw, kh); }
   else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ax, 26); ctx.lineTo(ax + 22, 10); ctx.stroke(); }
   ctx.fillStyle = carabinerAmmo > 0 ? "#cfe8ff" : "#ff7a6a"; ctx.textAlign = "left";
   ctx.fillText("× " + carabinerAmmo, ax + 30, 28);
-  ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
-
   // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
   const HS = 18, HG = 7;                    // heart size + gap between hearts
   if (lives <= 6) {
@@ -2778,8 +2775,14 @@ function drawHUD() {
   const lo = prevTarget(), hi = lvl.target;
   const prog = Math.max(0, Math.min(1, (score - lo) / (hi - lo)));
   ctx.fillStyle = "#fff"; ctx.font = "bold 15px Segoe UI, Arial"; ctx.textAlign = "left";
-  const lvlLabel = lvl.name + (lvl.country ? " (" + lvl.country + ")" : "");
-  ctx.fillText("Lv " + lvl.id + " · " + lvlLabel + " — " + score + " / " + hi, 16, 58);
+  // "Lv 1 · Zugspitze [flag] — [carabiner] N / 20"  (country name replaced by its flag)
+  const pre = "Lv " + lvl.id + " · " + lvl.name + " ";
+  ctx.fillText(pre, 16, 58);
+  let tx = 16 + ctx.measureText(pre).width;
+  if (lvl.country) { const fw = 21, fh = 13; drawFlag(lvl.country, tx + fw / 2, 45, fw, fh); tx += fw + 8; }
+  ctx.fillStyle = "#fff"; ctx.fillText("— ", tx, 58); tx += ctx.measureText("— ").width;
+  if (imgLoaded.carabiner) { const cw = 11, ch = cw * images.carabiner.naturalHeight / images.carabiner.naturalWidth; ctx.drawImage(images.carabiner, tx, 58 - ch + 1, cw, ch); tx += cw + 5; }
+  ctx.fillText(score + " / " + hi, tx, 58);
   const barX = 16, barY = 64, barW = 240, barH = 8;
   ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(barX, barY, barW, barH);
   ctx.fillStyle = "#7fd6ff"; ctx.fillRect(barX, barY, barW * prog, barH);
