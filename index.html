@@ -36,29 +36,6 @@
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
   }
 
-  /* iOS "Add to Home Screen for fullscreen" hint banner.
-     Scoped to :not([hidden]) so the `hidden` attribute can actually hide it. */
-  #ios-hint:not([hidden]) {
-    position: fixed;
-    top: max(8px, env(safe-area-inset-top));
-    left: 50%; transform: translateX(-50%);
-    max-width: 92vw; z-index: 50;
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px;
-    background: rgba(20,22,34,0.92);
-    border: 1px solid rgba(255,255,255,0.35);
-    border-radius: 12px;
-    color: #fff; font-size: 14px; line-height: 1.25;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
-  }
-  #ios-hint b { color: #ffd84d; }
-  #ios-hint-x {
-    flex: 0 0 auto;
-    width: 26px; height: 26px; border-radius: 50%;
-    border: none; background: rgba(255,255,255,0.16);
-    color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
-    touch-action: manipulation;
-  }
 
   /* Music on/off — always visible, top-right. */
   #btn-mute {
@@ -182,12 +159,6 @@
 <canvas id="game" width="800" height="450"></canvas>
 <button id="btn-mute" aria-label="Toggle music">&#128266;</button>
 <button id="btn-fullscreen" aria-label="Fullscreen">&#9974;</button>
-<!-- iOS-only fullscreen hint: Safari can't hide its bars from web code, so point
-     iPhone/iPad users to "Add to Home Screen" (manifest opens it edge-to-edge). -->
-<div id="ios-hint" hidden>
-  <span>For fullscreen on iPhone: tap <b>Share&nbsp;&#x2191;</b> &rarr; <b>Add to Home Screen</b></span>
-  <button id="ios-hint-x" aria-label="Dismiss">&times;</button>
-</div>
 <div id="test-buttons">
   <button class="test-btn" data-level="1" aria-label="Test Level 2">&#9654; L2</button>
   <button class="test-btn" data-level="2" aria-label="Test Level 3">&#9654; L3</button>
@@ -591,8 +562,7 @@ function goFullscreen() {
 
 // Fullscreen toggle button. Android / iPad / desktop have the Fullscreen API,
 // so the button really goes fullscreen (and locks landscape). iPhone Safari has
-// NO element-fullscreen API, so there the button instead surfaces the
-// "Add to Home Screen" install hint — the only way to get fullscreen on iPhone.
+// NO element-fullscreen API, so the button is hidden there (see setup below).
 function toggleFullscreen() {
   const el = document.documentElement;
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
@@ -607,44 +577,20 @@ function toggleFullscreen() {
     if (screen.orientation && screen.orientation.lock) {
       try { const p = screen.orientation.lock("landscape"); if (p && p.catch) p.catch(() => {}); } catch (e) {}
     }
-  } else {
-    // iPhone Safari: no fullscreen API — point the user at Add to Home Screen.
-    const hint = document.getElementById("ios-hint");
-    if (hint) { hint.hidden = false; try { localStorage.removeItem("abushakra_ioshint"); } catch (e) {} }
   }
 }
 (function setupFullscreenButton() {
   const btn = document.getElementById("btn-fullscreen");
   if (!btn) return;
+  // No element-fullscreen API (iPhone Safari) → hide the button; it can't work
+  // there, and the user explains "Add to Home Screen" on the start screen.
+  const el = document.documentElement;
+  if (!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen)) {
+    btn.style.display = "none"; return;
+  }
   const press = (e) => { e.preventDefault(); e.stopPropagation(); toggleFullscreen(); };
   btn.addEventListener("click", press);
   btn.addEventListener("touchend", press, { passive: false });
-})();
-
-// iOS Safari can't hide its toolbars from web code, so show a one-time
-// "Add to Home Screen for fullscreen" hint there (not on Android, not once
-// installed/standalone, not after it's been dismissed).
-(function iosFullscreenHint() {
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
-                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const standalone = window.navigator.standalone === true ||
-                     (window.matchMedia && (matchMedia("(display-mode: standalone)").matches ||
-                                            matchMedia("(display-mode: fullscreen)").matches));
-  let dismissed = false;
-  try { dismissed = localStorage.getItem("abushakra_ioshint") === "1"; } catch (e) {}
-  if (!isIOS || standalone || dismissed) return;
-  const hint = document.getElementById("ios-hint");
-  if (!hint) return;
-  hint.hidden = false;
-  const hide = (e) => {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    hint.hidden = true;
-    try { localStorage.setItem("abushakra_ioshint", "1"); } catch (e2) {}
-  };
-  // Tap the × — or anywhere on the banner — to dismiss. touchend for iOS reliability.
-  ["click", "touchend"].forEach((ev) => hint.addEventListener(ev, hide, { passive: false }));
-  setTimeout(() => { hint.hidden = true; }, 12000);   // also auto-hide after a while
 })();
 
 /* iOS Safari ignores `user-scalable=no`, so the page can still zoom while
