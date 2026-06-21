@@ -145,7 +145,7 @@
   <div id="btn-right" class="btn">&#9654;</div>
   <div id="btn-down"  class="btn">&#9660;</div>
   <div id="btn-jump"  class="btn">JUMP</div>
-  <div id="btn-throw" class="btn"><img src="carabiner.png" alt="throw" /></div>
+  <div id="btn-throw" class="btn"><img src="camping_knife.png" alt="throw" /></div>
 </div>
 <script>
 "use strict";
@@ -167,6 +167,7 @@ const ASSETS = {
   enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
+  knife:      "camping_knife.png?v=1", // thrown projectile (camping knife)
   gearShoes:  "gear_shoes.png?v=1",  // collectible gear: climbing shoes
   gearRope:   "gear_rope.png?v=1",   // collectible gear: rope
   gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
@@ -310,12 +311,14 @@ const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer 
 const DESCEND_SPEED = 165;    // px/s climbing down (or up) a platform-edge descent rope
 // Level-1 power / stamina (tunable):
 const POWER_MAX        = 100;
-const POWER_FALL       = 22;   // dropping off a platform to the ground (instead of the rope)
-const POWER_MANTLE     = 14;   // each ledge mantle
+const POWER_MOVE_RATE  = 1.2;  // per second: drains while moving/exerting, recovers at the same pace standing still
+const POWER_FALL       = 12;   // dropping off a platform to the ground without a rope — a little extra
+const POWER_MANTLE     = 0;    // mantling a ledge is free (removed — the climb shouldn't tire him out)
 const POWER_CLIMB_RATE = 14;   // per second climbing a descent rope
 const POWER_REFILL     = 45;   // per second recovering inside a shelter
-const POWER_EXHAUST    = 25;   // below this, Abu is exhausted (pants when idle, moves slower)
-const EXHAUST_SPEED_MUL = 0.62;// movement speed multiplier while exhausted
+const POWER_EXHAUST    = 10;   // below this, Abu is exhausted (pants when idle, moves slower)
+const POWER_FLASH      = 5;    // below this %, the HUD meter flashes/pulses (critical)
+const EXHAUST_SPEED_MUL = 0.72;// movement speed multiplier while exhausted (gentle)
 const COLLAPSE_TIME    = 1.6;  // seconds Abu is doubled over (catching his breath) at 0 stamina
 const FATAL_FALL_DIST  = 320;  // dropping more than this from the airborne peak is a lethal fall (Level 1 high ledges)
 const DEATH_SEQ_TIME   = 0.85; // crash -> collapsed animation before the life is docked
@@ -1596,6 +1599,17 @@ function updatePower(dt) {
     if (cx > s.x && cx < s.x + s.w && player.onGround && Math.abs(feet - s.top) < 10) { playerSheltered = true; break; }
   }
   if (playerSheltered) power = Math.min(POWER_MAX, power + POWER_REFILL * dt);
+  else if (!player.collapsed) {
+    // Moving/exerting drains; standing still recovers at the very same pace (catching his breath).
+    const exerting = Math.abs(player.vx) > 1 || !player.onGround ||
+                     player.mantle || player.descend || player.swinging || player.throwing;
+    if (exerting) {
+      power = Math.max(0, power - POWER_MOVE_RATE * dt);
+      if (power <= 0) startCollapse();
+    } else {
+      power = Math.min(POWER_MAX, power + POWER_MOVE_RATE * dt);
+    }
+  }
   if (player.collapsed) {                                     // doubled over, catching his breath
     player.collapseTimer -= dt;
     power = Math.min(POWER_MAX * 0.4, power + POWER_REFILL * 0.8 * dt);
@@ -1780,7 +1794,8 @@ function drawProjectiles() {
     const sx = pr.x + pr.w / 2 - cameraX, sy = pr.y + pr.h / 2;
     ctx.save();
     ctx.translate(sx, sy); ctx.rotate(pr.angle);
-    if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, -pr.w / 2, -pr.h / 2, pr.w, pr.h);
+    if (imgLoaded.knife) { const img = images.knife, dw = 40, dh = dw * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh); }
+    else if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, -pr.w / 2, -pr.h / 2, pr.w, pr.h);
     else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, pr.w / 2 - 1, pr.h / 2 - 1, 0, 0, 6.28); ctx.stroke(); }
     ctx.restore();
   }
@@ -2737,12 +2752,12 @@ function drawHUD() {
   drawGearHUD();
   ctx.fillStyle = "#fff"; ctx.font = "bold 20px Segoe UI, Arial";
   ctx.textAlign = "left";   ctx.fillText("Score: " + score, 116, 28);
-  // Throwable carabiner ammo, right after the score: icon + count.
+  // Throwable knife ammo, right after the score: icon + count.
   const ax = 116 + ctx.measureText("Score: " + score).width + 18;
-  if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, ax, 7, 16, 22);
-  else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(ax + 8, 18, 7, 10, 0, 0, 6.28); ctx.stroke(); }
+  if (imgLoaded.knife) { const kw = 26, kh = kw * images.knife.naturalHeight / images.knife.naturalWidth; ctx.drawImage(images.knife, ax, 20 - kh / 2, kw, kh); }
+  else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ax, 26); ctx.lineTo(ax + 22, 10); ctx.stroke(); }
   ctx.fillStyle = carabinerAmmo > 0 ? "#cfe8ff" : "#ff7a6a"; ctx.textAlign = "left";
-  ctx.fillText("× " + carabinerAmmo, ax + 21, 28);
+  ctx.fillText("× " + carabinerAmmo, ax + 30, 28);
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.fillText("Best: " + bestScore, VIEW_W / 2, 28);
 
   // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
@@ -2774,13 +2789,20 @@ function drawHUD() {
   if (lvl.power) {
     const pw = 132, ph = 10, px = VIEW_W - 16 - pw, py = 46;
     const frac = Math.max(0, Math.min(1, power / POWER_MAX));
+    // Critical: flash/pulse the meter (and label) when stamina is below POWER_FLASH%.
+    const critical = power < POWER_FLASH;
+    const pulse = critical ? 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 130)) : 1;
+    ctx.save();
+    ctx.globalAlpha = pulse;
     ctx.font = "bold 13px Segoe UI, Arial"; ctx.textAlign = "right";
-    ctx.fillStyle = playerSheltered ? "#9ef0a8" : "#fff";
+    ctx.fillStyle = playerSheltered ? "#9ef0a8" : (critical ? "#ff5a4a" : "#fff");
     ctx.fillText("POWER", px - 6, py + 10);
     ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(px, py, pw, ph);
     ctx.fillStyle = frac > 0.5 ? "#5ad06a" : frac > 0.25 ? "#ffd84d" : "#ff5a4a";
     ctx.fillRect(px, py, pw * frac, ph);
-    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
+    ctx.strokeStyle = critical ? "#ff5a4a" : "rgba(255,255,255,0.6)"; ctx.lineWidth = critical ? 2 : 1;
+    ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
+    ctx.restore();
     ctx.textAlign = "left";
   }
   drawToast();
