@@ -36,8 +36,9 @@
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
   }
 
-  /* iOS "Add to Home Screen for fullscreen" hint banner. */
-  #ios-hint {
+  /* iOS "Add to Home Screen for fullscreen" hint banner.
+     Scoped to :not([hidden]) so the `hidden` attribute can actually hide it. */
+  #ios-hint:not([hidden]) {
     position: fixed;
     top: max(8px, env(safe-area-inset-top));
     left: 50%; transform: translateX(-50%);
@@ -583,10 +584,14 @@ function goFullscreen() {
   const hint = document.getElementById("ios-hint");
   if (!hint) return;
   hint.hidden = false;
-  const hide = () => { hint.hidden = true; try { localStorage.setItem("abushakra_ioshint", "1"); } catch (e) {} };
-  const x = document.getElementById("ios-hint-x");
-  if (x) x.addEventListener("click", hide);
-  setTimeout(() => { hint.hidden = true; }, 9000);   // auto-hide (without marking dismissed)
+  const hide = (e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    hint.hidden = true;
+    try { localStorage.setItem("abushakra_ioshint", "1"); } catch (e2) {}
+  };
+  // Tap the × — or anywhere on the banner — to dismiss. touchend for iOS reliability.
+  ["click", "touchend"].forEach((ev) => hint.addEventListener(ev, hide, { passive: false }));
+  setTimeout(() => { hint.hidden = true; }, 12000);   // also auto-hide after a while
 })();
 
 /* iOS Safari ignores `user-scalable=no`, so the page can still zoom while
