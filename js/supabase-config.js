@@ -6,8 +6,8 @@
    Only the PUBLIC anon key may live in the browser. NEVER put the service-role
    key here.
    ============================================================================ */
-const SUPABASE_URL = "REPLACE_WITH_SUPABASE_URL";
-const SUPABASE_ANON_KEY = "REPLACE_WITH_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://vrcnqtsrjnyvcflijwff.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyY25xdHNyam55dmNmbGlqd2ZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzgxNzQsImV4cCI6MjA5NzYxNDE3NH0.94N9_XzibfNEuQPB97d0sFTkZ12zKkN7duEXHDVM2cI";
 
 /* Version stored with every run (bump on each deploy). */
 const GAME_VERSION = "abushakra-v122";
