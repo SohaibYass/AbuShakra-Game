@@ -197,6 +197,7 @@ const ASSETS = {
   gearShoes:  "gear_shoes.png?v=1",  // collectible gear: climbing shoes
   gearRope:   "gear_rope.png?v=1",   // collectible gear: rope
   gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
+  summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -769,6 +770,7 @@ function startAtLevel(idx) {
   resetGame();                       // fresh player / lives / effects, state="playing"
   levelIndex = idx;
   score = prevTarget();              // arrive with the cumulative score of prior levels
+  runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
   platforms = []; carabiners = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
@@ -852,6 +854,7 @@ let cameraY = 0;   // vertical camera pan (Level 1 upper-ledge climb); 0 otherwi
 let camAnchorFeet = 9999;  // feet-Y of the ledge the camera is anchored to (the last grounded ledge)
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
+let runScore = 0;        // competitive run score (enemy kills + carabiners) — for comparing players, NOT a level-pass condition
 let dashboard = null;      // between-levels "Mountain Progress" screen data
 const HOWTO_SECONDS = 5;   // how long the "How to Play" screen holds before play
 let howtoTimer = 0;
@@ -1727,7 +1730,7 @@ function updatePower(dt) {
    ============================================================= */
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
-    c.collected = true; score += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;  // collecting carabiners does NOT add knives
+    c.collected = true; score += CARABINER_POINTS; runScore += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;  // carabiners add to the competitive score; the gate counts carabinersThisLevel separately
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
@@ -1826,7 +1829,7 @@ function handleEnemies() {
       player.vy = STOMP_BOUNCE; player.onGround = false;
       e.hp -= 1;
       if (e.hp <= 0) {
-        e.alive = false; score += e.points;
+        e.alive = false; score += e.points; runScore += e.points;
         poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
       } else {
         // Survived (tank): flash, small poof, keep going.
@@ -1876,7 +1879,7 @@ function updateProjectiles(dt) {
       if (!e.alive) continue;
       if (pr.x + pr.w > e.x && pr.x < e.x + e.w && pr.y + pr.h > e.y && pr.y < e.y + e.h) {
         e.hp -= 1;
-        if (e.hp <= 0) { e.alive = false; score += e.points; poofBurst(e.x + e.w / 2, e.y + e.h / 2); }
+        if (e.hp <= 0) { e.alive = false; score += e.points; runScore += e.points; poofBurst(e.x + e.w / 2, e.y + e.h / 2); }
         else { e.hitFlash = 0.3; poofBurst(cx, cy); }
         sparkleBurst(cx, cy); Music.sfxStomp(); addShake(4);
         pr.dead = true; break;
@@ -2882,6 +2885,10 @@ function drawHUD() {
   else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ax, 26); ctx.lineTo(ax + 22, 10); ctx.stroke(); }
   ctx.fillStyle = carabinerAmmo > 0 ? "#cfe8ff" : "#ff7a6a"; ctx.textAlign = "left";
   ctx.fillText("× " + carabinerAmmo, ax + 30, 28);
+  // Enemy/combat score (stomps + knife kills), centred — separate from the carabiner count.
+  ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.font = "bold 20px Segoe UI, Arial";
+  ctx.fillText("Score: " + runScore, VIEW_W / 2, 28);
+  ctx.textAlign = "left";
   // Lives as red hearts, right-aligned, side by side. Beyond 6 show a heart + "×N".
   const HS = 18, HG = 7;                    // heart size + gap between hearts
   if (lives <= 6) {
@@ -2897,8 +2904,12 @@ function drawHUD() {
 
   // Level name + progress toward this level's milestone (thin bar under the band).
   const lvl = currentLevel();
-  const lo = prevTarget(), hi = lvl.target;
-  const prog = Math.max(0, Math.min(1, (score - lo) / (hi - lo)));
+  // Gated levels (L1) count actual carabiners toward the checkpoint, not score
+  // (score also rises from stomps). Other levels keep the cumulative-score bar.
+  const gate = lvl.climbGate;
+  const lo = gate ? 0 : prevTarget(), hi = gate ? gate.carabiners : lvl.target;
+  const count = gate ? carabinersThisLevel : score;
+  const prog = Math.max(0, Math.min(1, (count - lo) / (hi - lo)));
   ctx.fillStyle = "#fff"; ctx.font = "bold 15px Segoe UI, Arial"; ctx.textAlign = "left";
   // "Lv 1 · Zugspitze [flag] — [carabiner] N / 20"  (country name replaced by its flag)
   const pre = "Lv " + lvl.id + " · " + lvl.name + " ";
@@ -2907,7 +2918,7 @@ function drawHUD() {
   if (lvl.country) { const fw = 21, fh = 13; drawFlag(lvl.country, tx + fw / 2, 45, fw, fh); tx += fw + 8; }
   ctx.fillStyle = "#fff"; ctx.fillText("— ", tx, 58); tx += ctx.measureText("— ").width;
   if (imgLoaded.carabiner) { const cw = 11, ch = cw * images.carabiner.naturalHeight / images.carabiner.naturalWidth; ctx.drawImage(images.carabiner, tx, 58 - ch + 1, cw, ch); tx += cw + 5; }
-  ctx.fillText(score + " / " + hi, tx, 58);
+  ctx.fillText(count + " / " + hi, tx, 58);
   const barX = 16, barY = 64, barW = 240, barH = 8;
   ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(barX, barY, barW, barH);
   ctx.fillStyle = "#7fd6ff"; ctx.fillRect(barX, barY, barW * prog, barH);
@@ -3157,7 +3168,7 @@ function drawCutscene() {
    LOOP
    ============================================================= */
 function resetGame() {
-  score = 0; lives = START_LIVES; invulnTimer = 0;
+  score = 0; runScore = 0; lives = START_LIVES; invulnTimer = 0;
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
@@ -3480,27 +3491,28 @@ function drawClimb() {
   ctx.textAlign = "left";
 }
 
-// A pulsing beacon on the ground marking where the summit climb begins.
+// The Level-1 checkpoint: a planted, waving mountain flag (2-frame) where the
+// summit climb begins. Appears once all gear + 20 carabiners are collected.
 function drawSummitMarker() {
   if (!summitReady || inClimb || state !== "playing") return;
   const sx = summitGateX - cameraX;
-  const pulse = 0.5 + 0.5 * Math.abs(Math.sin(performance.now() / 300));
-  if (sx < -40) return;
-  if (sx > VIEW_W) {   // off to the right: edge arrow pointing the way
+  if (sx < -60) return;
+  if (sx > VIEW_W) {   // off to the right: pulsing edge arrow pointing the way
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(performance.now() / 300));
     ctx.fillStyle = "rgba(255,216,77," + (0.6 + 0.4 * pulse) + ")";
     ctx.beginPath(); ctx.moveTo(VIEW_W - 14, 230); ctx.lineTo(VIEW_W - 34, 218); ctx.lineTo(VIEW_W - 34, 242); ctx.closePath(); ctx.fill();
     return;
   }
   const gy = surfaceY(summitGateX);
-  ctx.save();
-  ctx.globalAlpha = 0.16 * pulse; ctx.fillStyle = "#fff"; ctx.fillRect(sx - 16, gy - 320, 32, 320);  // light beam
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "#caa24a"; ctx.fillRect(sx - 2, gy - 92, 4, 92);                                    // pole
-  ctx.fillStyle = "#ffd84d";
-  ctx.beginPath(); ctx.moveTo(sx + 2, gy - 92); ctx.lineTo(sx + 42, gy - 80); ctx.lineTo(sx + 2, gy - 68); ctx.closePath(); ctx.fill();  // flag
-  ctx.restore();
-  ctx.fillStyle = "#fff"; ctx.font = "bold 12px Segoe UI, Arial"; ctx.textAlign = "center";
-  ctx.fillText("SUMMIT", sx, gy - 98); ctx.textAlign = "left";
+  if (imgLoaded.summitFlag) {
+    const img = images.summitFlag, cw = img.naturalWidth / 2, ch = img.naturalHeight;
+    const fh = 104, fw = fh * cw / ch;
+    const fi = Math.floor(performance.now() / 320) % 2;        // 2-frame wave
+    ctx.drawImage(img, fi * cw, 0, cw, ch, sx - fw * 0.097, gy - fh + 3, fw, fh);  // pole (frac 0.097) planted at the checkpoint
+  } else {
+    ctx.fillStyle = "#caa24a"; ctx.fillRect(sx - 2, gy - 92, 4, 92);
+    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.moveTo(sx + 2, gy - 92); ctx.lineTo(sx + 42, gy - 80); ctx.lineTo(sx + 2, gy - 68); ctx.closePath(); ctx.fill();
+  }
 }
 
 function draw() {
