@@ -600,6 +600,40 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   it (no despawn hack); the ground path stays clear. All gated on the `power` flag;
   values are tunable.
 
+### 37. Throwable knife attack (ranged weapon)
+- **Throw system:** press **F** (or the bottom-right touch button) to throw. A
+  3-frame wind-up (`abu_throw.png`) releases a projectile at frame 2
+  (`THROW_RELEASE`), with a cooldown (`THROW_COOLDOWN`) so it can't rapid-fire.
+  Ammo (`carabinerAmmo`, start 5) is spent per throw and shown in the HUD next to
+  the score; throwing is blocked at 0 and while mantling/descending/swinging.
+- **Projectile:** flies horizontally from Abu's hand at `PROJ_SPEED`, spinning
+  (`pr.angle`), and dies on enemy hit (same `hp`/points/poof path as a stomp,
+  STOMP_POINTS=2), on terrain/platform contact, or off-screen.
+- **Wind-up facing bug:** frame 0 of `abu_throw.png` faced left while frames 1–2
+  faced right, so Abu flipped for a split second though the throw went right.
+  Fixed by mirroring frame 0 in the sheet; the draw assumes art faces right and
+  flips for `facing < 0`.
+- **Camping-knife sprite:** the flying projectile (and the HUD ammo icon + touch
+  button) was switched from the carabiner to a **camping knife**
+  (`camping_knife.png`, chroma-keyed off magenta + bbox-cropped, aspect ~1.44,
+  drawn 40px long and tumbling). Ammo is still gained by collecting carabiners.
+
+### 38. Stamina overhaul — "don't make Abu always tired"
+- **Mantling is free** (`POWER_MANTLE` 14 → 0) — the ledge climb is the core Level-1
+  move, so charging per-mantle made the whole climb exhausting.
+- **Move-drain / stand-recover (symmetric):** `POWER_MOVE_RATE` 1.2/s drains only
+  while *exerting* (`|vx|>1`, airborne, mantle/descend/swing/throw) and **recovers
+  at the very same pace while standing still** — so stopping lets Abu catch his
+  breath. Shelters still refill faster (`POWER_REFILL` 45/s).
+- **Rope-less drop** costs a little extra (`POWER_FALL` 22 → 12).
+- **Exhausted threshold** (heavy breathing + slower, `abu_exhausted.png`) lowered
+  **25% → 10%**, and the slow-down softened (`EXHAUST_SPEED_MUL` 0.62 → 0.72), so
+  he's only visibly tired when genuinely low.
+- **Critical meter:** the POWER bar + label now **flash/pulse below 5%** (was the
+  flat red at 25%) — `critical = power < POWER_FLASH(5)`, alpha pulsed off
+  `performance.now()`, red thick border. Verified the drain/recover rates,
+  thresholds, and flash flag numerically in the live preview.
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -638,7 +672,7 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v54`**.
+- Latest deploy: service worker cache **`abushakra-v115`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
