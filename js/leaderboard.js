@@ -54,7 +54,7 @@
     if (!rows.length) { body.appendChild(el("div", "abu-lb-msg", "No runs yet — be the first!")); return; }
     const table = el("table", "abu-lb-table");
     const thead = el("tr");
-    ["#", "Player", "Carabiners", "Gear", "Peaks", "Time"].forEach((h) => thead.appendChild(el("th", null, h)));
+    ["#", "Player", "Carabiners", "Gear", "Score", "Peaks", "Time"].forEach((h) => thead.appendChild(el("th", null, h)));
     table.appendChild(thead);
     const myId = T.run && T.run.playerId;
     rows.forEach((r) => {
@@ -63,6 +63,7 @@
       tr.appendChild(el("td", "abu-lb-name", r.display_name));      // textContent — escaped
       tr.appendChild(el("td", null, String(r.total_carabiners)));
       tr.appendChild(el("td", null, String(r.total_gear)));
+      tr.appendChild(el("td", null, String(r.total_score == null ? 0 : r.total_score)));
       tr.appendChild(el("td", null, String(r.levels_completed)));
       tr.appendChild(el("td", null, fmtTime(r.completion_time_ms)));
       table.appendChild(tr);

@@ -1860,6 +1860,7 @@ function handleEnemies() {
       e.hp -= 1;
       if (e.hp <= 0) {
         e.alive = false; score += e.points; runScore += e.points;
+        if (window.AbuTracking) AbuTracking.trackKill(currentLevel().id, e.points);   // online: enemy kill -> score
         poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
       } else {
         // Survived (tank): flash, small poof, keep going.
@@ -1909,7 +1910,7 @@ function updateProjectiles(dt) {
       if (!e.alive) continue;
       if (pr.x + pr.w > e.x && pr.x < e.x + e.w && pr.y + pr.h > e.y && pr.y < e.y + e.h) {
         e.hp -= 1;
-        if (e.hp <= 0) { e.alive = false; score += e.points; runScore += e.points; poofBurst(e.x + e.w / 2, e.y + e.h / 2); }
+        if (e.hp <= 0) { e.alive = false; score += e.points; runScore += e.points; if (window.AbuTracking) AbuTracking.trackKill(currentLevel().id, e.points); poofBurst(e.x + e.w / 2, e.y + e.h / 2); }
         else { e.hitFlash = 0.3; poofBurst(cx, cy); }
         sparkleBurst(cx, cy); Music.sfxStomp(); addShake(4);
         pr.dead = true; break;

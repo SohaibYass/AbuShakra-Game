@@ -18,14 +18,14 @@ Deno.serve(async (req) => {
       return json({ error: "BAD_INPUT" }, 400, origin);
 
     const { data: run } = await admin.from("runs")
-      .select("id, player_id, status, started_at, total_carabiners, total_gear, levels_completed, completion_time_ms, valid, suspicious_reason")
+      .select("id, player_id, status, started_at, total_carabiners, total_gear, total_score, levels_completed, completion_time_ms, valid, suspicious_reason")
       .eq("id", runId).maybeSingle();
     if (!run || run.player_id !== player.id) return json({ error: "NOT_OWNER" }, 403, origin);
 
     // Idempotent: already finalized -> return what we have.
     if (run.status !== "active") {
       return json({ ok: true, alreadyFinalized: true, totals: {
-        total_carabiners: run.total_carabiners, total_gear: run.total_gear,
+        total_carabiners: run.total_carabiners, total_gear: run.total_gear, total_score: run.total_score,
         levels_completed: run.levels_completed, completion_time_ms: run.completion_time_ms,
         status: run.status,
       } }, 200, origin);
@@ -33,14 +33,17 @@ Deno.serve(async (req) => {
 
     // Authoritative totals from accepted checkpoints.
     const { data: levels } = await admin.from("run_levels")
-      .select("carabiners_collected, shoes_collected, rope_collected, helmet_collected, completed")
+      .select("carabiners_collected, kill_points, shoes_collected, rope_collected, helmet_collected, completed")
       .eq("run_id", runId);
-    let carabiners = 0, gear = 0, completedLevels = 0;
+    let carabiners = 0, gear = 0, killPoints = 0, completedLevels = 0;
     for (const l of levels ?? []) {
       carabiners += l.carabiners_collected ?? 0;
+      killPoints += l.kill_points ?? 0;
       gear += (l.shoes_collected ? 1 : 0) + (l.rope_collected ? 1 : 0) + (l.helmet_collected ? 1 : 0);
       if (l.completed) completedLevels += 1;
     }
+    // Competitive score = carabiners (+1 each) + enemy-kill points. (CARABINER_POINTS = 1.)
+    const totalScore = carabiners + killPoints;
 
     const finishedAt = new Date();
     const wallMs = finishedAt.getTime() - new Date(run.started_at).getTime();
@@ -53,14 +56,15 @@ Deno.serve(async (req) => {
 
     const { error } = await admin.from("runs").update({
       status, finished_at: finishedAt.toISOString(),
-      total_carabiners: carabiners, total_gear: gear, levels_completed: completedLevels,
+      total_carabiners: carabiners, total_gear: gear, total_score: totalScore,
+      levels_completed: completedLevels,
       completion_time_ms: completionTime, valid, suspicious_reason: suspicious,
     }).eq("id", runId).eq("status", "active");   // guard against a concurrent finalize
     if (error) return json({ error: "DB_ERROR", detail: error.message }, 500, origin);
 
     return json({ ok: true, totals: {
-      total_carabiners: carabiners, total_gear: gear, levels_completed: completedLevels,
-      completion_time_ms: completionTime, status, valid,
+      total_carabiners: carabiners, total_gear: gear, total_score: totalScore,
+      levels_completed: completedLevels, completion_time_ms: completionTime, status, valid,
     } }, 200, origin);
   } catch (e) {
     if (e instanceof Response) return e;

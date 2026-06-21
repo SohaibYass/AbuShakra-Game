@@ -14,6 +14,7 @@
     currentLevelStartedAt: null,
     totalCarabiners: 0,
     totalGear: 0,
+    totalScore: 0,           // competitive score = carabiners + enemy-kill points
     perLevel: {},
     submitted: false,
     onlineEligible: false,   // true once a server run exists; false = offline/non-qualifying
@@ -53,7 +54,7 @@
 
   function lvl(n) {
     return onlineRun.perLevel[n] ||
-      (onlineRun.perLevel[n] = { carabiners: 0, shoes: false, rope: false, helmet: false,
+      (onlineRun.perLevel[n] = { carabiners: 0, killPoints: 0, shoes: false, rope: false, helmet: false,
                                  completed: false, ids: {} });
   }
 
@@ -64,7 +65,7 @@
     onlineRun.startedAt = r.startedAt;
     onlineRun.onlineEligible = true;
     onlineRun.submitted = false;
-    onlineRun.totalCarabiners = 0; onlineRun.totalGear = 0; onlineRun.perLevel = {};
+    onlineRun.totalCarabiners = 0; onlineRun.totalGear = 0; onlineRun.totalScore = 0; onlineRun.perLevel = {};
     return r;
   };
   // Mark the start of a level so per-level time can be measured.
@@ -76,7 +77,13 @@
   T.trackCarabiner = function (levelNumber, pickupId) {
     const L = lvl(levelNumber);
     if (pickupId != null) { if (L.ids[pickupId]) return; L.ids[pickupId] = true; }
-    L.carabiners += 1; onlineRun.totalCarabiners += 1;
+    L.carabiners += 1; onlineRun.totalCarabiners += 1; onlineRun.totalScore += 1;   // carabiner = +1 to score
+  };
+  // Enemy stomped/knifed — add its points to the competitive score.
+  T.trackKill = function (levelNumber, points) {
+    const p = Number(points) || 0;
+    if (p <= 0) return;
+    lvl(levelNumber).killPoints += p; onlineRun.totalScore += p;
   };
   // Gear: shoes / rope / helmet — at most once per level per type.
   T.trackGear = function (levelNumber, type) {
@@ -97,7 +104,8 @@
     try {
       await callFn("submit-checkpoint", {
         runId: onlineRun.runId, levelNumber,
-        carabiners: L.carabiners, shoes: L.shoes, rope: L.rope, helmet: L.helmet,
+        carabiners: L.carabiners, killPoints: L.killPoints,
+        shoes: L.shoes, rope: L.rope, helmet: L.helmet,
         completed: !!completed, completionTimeMs: timeMs,
       }, 3);
     } catch (_e) { /* swallow — server is authoritative at finalize */ }

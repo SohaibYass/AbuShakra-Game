@@ -129,6 +129,7 @@ create table if not exists public.runs (
   levels_completed integer not null default 0 check (levels_completed >= 0),
   total_carabiners integer not null default 0 check (total_carabiners >= 0),
   total_gear       integer not null default 0 check (total_gear >= 0),
+  total_score      integer not null default 0 check (total_score >= 0),   -- carabiners + enemy-kill points (competitive comparison)
   completion_time_ms bigint check (completion_time_ms is null or completion_time_ms >= 0),
   game_version     text not null,
   valid            boolean not null default true,
@@ -148,6 +149,7 @@ create table if not exists public.run_levels (
   run_id              uuid not null references public.runs(id) on delete cascade,
   level_number        integer not null check (level_number between 1 and 50),
   carabiners_collected integer not null default 0 check (carabiners_collected >= 0),
+  kill_points         integer not null default 0 check (kill_points >= 0),   -- points from stomped/knifed enemies this level
   shoes_collected     boolean not null default false,
   rope_collected      boolean not null default false,
   helmet_collected    boolean not null default false,
@@ -228,13 +230,15 @@ create policy level_config_read on public.level_config for select using (true);
 -- Ranking: carabiners desc, gear desc, levels desc, completed-before-incomplete,
 --          time asc, finished_at asc.
 -- ============================================================================
-create or replace function public.get_leaderboard(p_limit int default 100)
+drop function if exists public.get_leaderboard(int);
+create function public.get_leaderboard(p_limit int default 100)
 returns table (
   rank             bigint,
   player_id        uuid,          -- the PLAYER's public row id (safe to highlight self); NOT the auth id
   display_name     text,
   total_carabiners integer,
   total_gear       integer,
+  total_score      integer,       -- carabiners + enemy-kill points
   levels_completed integer,
   completion_time_ms bigint,
   status           text
@@ -243,7 +247,7 @@ language sql stable security definer set search_path = public as $$
   with best as (
     -- one best run per player (their highest-ranked finished/abandoned run)
     select distinct on (r.player_id)
-      r.player_id, r.total_carabiners, r.total_gear, r.levels_completed,
+      r.player_id, r.total_carabiners, r.total_gear, r.total_score, r.levels_completed,
       r.completion_time_ms, r.status, r.finished_at
     from public.runs r
     where r.valid = true and r.status in ('completed','game_over','abandoned')
@@ -264,7 +268,7 @@ language sql stable security definer set search_path = public as $$
     ) as rank,
     b.player_id,
     p.display_name,
-    b.total_carabiners, b.total_gear, b.levels_completed,
+    b.total_carabiners, b.total_gear, b.total_score, b.levels_completed,
     case when b.status = 'completed' then b.completion_time_ms else null end as completion_time_ms,
     b.status
   from best b

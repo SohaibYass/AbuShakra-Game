@@ -17,13 +17,14 @@ Deno.serve(async (req) => {
     const runId = String(b.runId ?? "");
     const level = Number(b.levelNumber);
     const carabiners = Number(b.carabiners ?? 0);
+    const killPoints = Number(b.killPoints ?? 0);
     const shoes = !!b.shoes, rope = !!b.rope, helmet = !!b.helmet;
     const completed = !!b.completed;
     const timeMs = b.completionTimeMs == null ? null : Number(b.completionTimeMs);
 
     if (!runId || !Number.isInteger(level) || level < 1 || level > 50)
       return json({ error: "BAD_INPUT" }, 400, origin);
-    if (!Number.isFinite(carabiners) || carabiners < 0)
+    if (!Number.isFinite(carabiners) || carabiners < 0 || !Number.isFinite(killPoints) || killPoints < 0)
       return json({ error: "NEGATIVE" }, 400, origin);
     if (timeMs != null && (!Number.isFinite(timeMs) || timeMs < 0))
       return json({ error: "BAD_TIME" }, 400, origin);
@@ -48,6 +49,7 @@ Deno.serve(async (req) => {
       run_id: runId,
       level_number: level,
       carabiners_collected: carabiners,
+      kill_points: killPoints,
       shoes_collected: shoes,
       rope_collected: rope,
       helmet_collected: helmet,
