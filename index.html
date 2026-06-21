@@ -77,6 +77,19 @@
   }
   #btn-fullscreen:active { transform: scale(0.92); }
 
+  /* Leaderboard button — shown on the cover and win screens. */
+  #btn-leaderboard {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(18px, env(safe-area-inset-bottom));
+    padding: 10px 18px; border-radius: 22px;
+    border: 2px solid rgba(255,255,255,0.5); background: rgba(20,22,34,0.6);
+    color: #ffd84d; font: 700 16px "Segoe UI", Arial; cursor: pointer;
+    z-index: 30; backdrop-filter: blur(6px);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+  }
+  #btn-leaderboard[hidden] { display: none; }
+  #btn-leaderboard:active { transform: translateX(-50%) scale(0.95); }
+
   /* Dev/test shortcuts — jump straight into a level. Only shown on the cover. */
   #test-buttons {
     position: fixed;
@@ -173,6 +186,16 @@
   <div id="btn-jump"  class="btn">JUMP</div>
   <div id="btn-throw" class="btn"><img src="camping_knife.png" alt="throw" /></div>
 </div>
+<button id="btn-leaderboard" hidden>🏆 Leaderboard</button>
+
+<!-- Online registration + leaderboard (Supabase). Loaded before the game script
+     so window.AbuTracking is available. Configure keys in js/supabase-config.js. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/run-tracker.js"></script>
+<script src="js/leaderboard.js"></script>
+<script src="js/player-registration.js"></script>
+
 <script>
 "use strict";
 
@@ -622,7 +645,7 @@ function advanceFromScreen() {
   // Win/Game-over -> back to the cover.
   if (state === "cutscene") { endCutscene(); return; }   // tap to skip the cutscene
   if (state === "start") { state = "instructions"; Music.start(); }
-  else if (state === "instructions") { state = "playing"; }   // press to start
+  else if (state === "instructions") { state = "playing"; if (window.AbuTracking) AbuTracking.levelStart(); }   // press to start
   else if (state === "levelcomplete") { advanceLevel(); }
   else if (state === "won" || state === "gameover") { resetGame(); state = "start"; }
 }
@@ -1674,6 +1697,7 @@ function loseLife() {
   if (lives <= 0) {
     lives = 0; state = "gameover"; Music.stop(); Music.sfxOver();
     recordBest();
+    if (window.AbuTracking) { AbuTracking.submitLevel(currentLevel().id, false); AbuTracking.finalizeRun("game_over"); }
   } else {
     Music.sfxHurt();
   }
@@ -1734,6 +1758,7 @@ function updatePower(dt) {
 function handleCarabiners() {
   for (const c of carabiners) if (!c.collected && aabb(player, c)) {
     c.collected = true; score += CARABINER_POINTS; runScore += CARABINER_POINTS; levelCarabiners += 1; carabinersThisLevel += 1;  // carabiners add to the competitive score; the gate counts carabinersThisLevel separately
+    if (window.AbuTracking) AbuTracking.trackCarabiner(currentLevel().id);   // online run: real pickup only (not ammo/thrown)
     sparkleBurst(c.x + c.w / 2, c.y + c.h / 2);
     Music.sfxCoin();
   }
@@ -1801,6 +1826,7 @@ function handleGear() {
   const pad = 8, box = { x: player.x - pad, y: player.y - pad, w: player.w + 2 * pad, h: player.h + 2 * pad };
   for (const it of gearItems) if (!it.collected && aabb(box, it)) {
     it.collected = true; gearThisLevel[it.id] = true; gearPop[it.id] = 0.45;
+    if (window.AbuTracking) AbuTracking.trackGear(currentLevel().id, it.id);   // online run: once per gear type/level
     sparkleBurst(it.x + it.w / 2, it.y + it.h / 2);
     Music.sfxGear();
     toast = { text: "Found: " + it.label + "!", timer: 1.6 };
@@ -3200,8 +3226,10 @@ function checkLevelProgress() {
   // Gated levels (Level 1) don't auto-advance on score — the summit climb ends them.
   if (currentLevel().climbGate) return;
   if (score < currentLevel().target) return;
+  if (window.AbuTracking) AbuTracking.submitLevel(currentLevel().id, true);   // this level completed
   if (levelIndex >= LEVELS.length - 1) {
     state = "won"; Music.stop(); Music.sfxWin(); recordBest();
+    if (window.AbuTracking) AbuTracking.finalizeRun("completed");
   } else {
     // Show the Mountain Progress dashboard before the next level.
     dashboard = {
@@ -3242,6 +3270,7 @@ function advanceLevel() {
   generateAhead();
   spawnGearForLevel(player.x + 150);   // gear ahead of the player on the new level's path
   state = "playing";
+  if (window.AbuTracking) AbuTracking.levelStart();   // time the new level for the online run
 }
 
 /* =============================================================
@@ -3367,8 +3396,10 @@ function updateClimbCamera() {
 function finishSummitClimb() {
   climb = null; summitReady = false; inClimb = false; climbSteps = [];
   cameraX = 0; cameraY = 0;
+  if (window.AbuTracking) AbuTracking.submitLevel(currentLevel().id, true);   // Level 1 completed via the summit climb
   if (levelIndex >= LEVELS.length - 1) {
     state = "won"; Music.stop(); Music.sfxWin(); recordBest();
+    if (window.AbuTracking) AbuTracking.finalizeRun("completed");
   } else {
     dashboard = { completedLevelIndex: levelIndex, nextLevelIndex: levelIndex + 1,
                   carabiners: levelCarabiners, animTime: 0, animDuration: 1.2 };
@@ -3559,6 +3590,7 @@ function loop(now) {
   if (state === "levelcomplete" && dashboard) dashboard.animTime += dt;   // marker travel anim
   updateEffects(dt);                 // particles + shake decay (always)
   syncTestBtn();                     // show the Test-L2 shortcut only on the cover
+  syncLeaderboardBtn();              // show the Leaderboard button on cover / win
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);
@@ -3572,7 +3604,37 @@ loadImages(() => {
   state = "start";
   lastTime = performance.now();
   requestAnimationFrame(loop);
+  initOnline();   // registration + leaderboard (no-op if Supabase isn't configured)
 });
+
+// Online registration / leaderboard wiring. The game stays fully playable if
+// Supabase is unavailable — the run just won't qualify for the leaderboard.
+let onlineWarned = false;
+function initOnline() {
+  const lbBtn = document.getElementById("btn-leaderboard");
+  if (lbBtn && window.AbuTracking) {
+    const open = (e) => { e.preventDefault(); e.stopPropagation(); AbuTracking.openLeaderboard(); };
+    lbBtn.addEventListener("click", open);
+    lbBtn.addEventListener("touchend", open, { passive: false });
+  }
+  if (!window.AbuTracking) return;
+  // Show the registration modal over the cover; on resolve, the player plays.
+  AbuTracking.begin().then((res) => {
+    if (res && res.online === false && !onlineWarned) {
+      onlineWarned = true;
+      toast = { text: "Offline — this run won't be ranked on the leaderboard", timer: 4 };
+    }
+  }).catch(() => {});
+}
+
+// Show the Leaderboard button only on the cover and win screens.
+let _lbVis = null;
+function syncLeaderboardBtn() {
+  const b = document.getElementById("btn-leaderboard");
+  if (!b) return;
+  const vis = (state === "start" || state === "won");
+  if (vis !== _lbVis) { b.hidden = !vis; _lbVis = vis; }
+}
 
 // Register the service worker for offline play (ignored if unsupported).
 // When a new worker takes over, reload once so the freshly-deployed page
