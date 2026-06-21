@@ -80,6 +80,26 @@
   }
   #btn-mute:active { transform: scale(0.92); }
 
+  /* Fullscreen toggle — top-right, just left of the mute button. */
+  #btn-fullscreen {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    right: calc(max(14px, env(safe-area-inset-right)) + 58px);
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: rgba(20,22,34,0.45);
+    color: #fff; font-size: 24px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  #btn-fullscreen:active { transform: scale(0.92); }
+
   /* Dev/test shortcuts — jump straight into a level. Only shown on the cover. */
   #test-buttons {
     position: fixed;
@@ -161,6 +181,7 @@
 <body>
 <canvas id="game" width="800" height="450"></canvas>
 <button id="btn-mute" aria-label="Toggle music">&#128266;</button>
+<button id="btn-fullscreen" aria-label="Fullscreen">&#9974;</button>
 <!-- iOS-only fullscreen hint: Safari can't hide its bars from web code, so point
      iPhone/iPad users to "Add to Home Screen" (manifest opens it edge-to-edge). -->
 <div id="ios-hint" hidden>
@@ -567,6 +588,38 @@ function goFullscreen() {
     try { const p = screen.orientation.lock("landscape"); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
 }
+
+// Fullscreen toggle button. Android / iPad / desktop have the Fullscreen API,
+// so the button really goes fullscreen (and locks landscape). iPhone Safari has
+// NO element-fullscreen API, so there the button instead surfaces the
+// "Add to Home Screen" install hint — the only way to get fullscreen on iPhone.
+function toggleFullscreen() {
+  const el = document.documentElement;
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) { try { exit.call(document); } catch (e) {} }
+    return;
+  }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (req) {
+    try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    if (screen.orientation && screen.orientation.lock) {
+      try { const p = screen.orientation.lock("landscape"); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
+  } else {
+    // iPhone Safari: no fullscreen API — point the user at Add to Home Screen.
+    const hint = document.getElementById("ios-hint");
+    if (hint) { hint.hidden = false; try { localStorage.removeItem("abushakra_ioshint"); } catch (e) {} }
+  }
+}
+(function setupFullscreenButton() {
+  const btn = document.getElementById("btn-fullscreen");
+  if (!btn) return;
+  const press = (e) => { e.preventDefault(); e.stopPropagation(); toggleFullscreen(); };
+  btn.addEventListener("click", press);
+  btn.addEventListener("touchend", press, { passive: false });
+})();
 
 // iOS Safari can't hide its toolbars from web code, so show a one-time
 // "Add to Home Screen for fullscreen" hint there (not on Android, not once
