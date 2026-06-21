@@ -634,6 +634,59 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
   `performance.now()`, red thick border. Verified the drain/recover rates,
   thresholds, and flash flag numerically in the live preview.
 
+### 39. Camping-knife projectile + HUD cleanup
+- The thrown projectile art swapped carabiner → **camping knife**
+  (`camping_knife.png`, chroma-keyed, spins in flight); the HUD ammo icon and the
+  touch throw button now show the knife too.
+- Knives are a **fixed pool of 6 per level** — collecting carabiners no longer
+  refills them (carabiners are the collectible/gate; the knife is the weapon).
+- HUD trimmed: removed the **"Score:"** and **"Best:"** text from the top band;
+  the country name in the level title is replaced by its **painted flag**
+  (generic across levels); a small **carabiner icon** sits beside the `N / 20`.
+
+### 40. Phone fullscreen + touch-control tweaks
+- On phones the first tap requests **Element.requestFullscreen** (+ landscape
+  lock); a **⛶ toggle button** does the same on Android / iPad / desktop. iPhone
+  Safari has **no element-fullscreen API**, so the button hides itself there —
+  the only iPhone route is Add-to-Home-Screen (manifest is `display:fullscreen`,
+  `orientation:landscape`). An on-screen install hint was added, its dismiss bug
+  fixed (a `#ios-hint{display:flex}` rule overrode the `hidden` attribute), then
+  removed at the user's request.
+- The **▼ down** touch button moved into a **left D-pad** — ◀ ▶ raised to a top
+  row with ▼ centred just below.
+
+### 41. Shelter: bigger flag
+- `shelter.png` swapped for the bigger-AbuShakra-flag cabin (chroma-keyed off
+  magenta + bbox-cropped); same aspect, so it sits on the platform unchanged.
+
+### 42. Level 1 finale — gear-up + playable summit climb
+The big one. Level 1 stops auto-advancing on score; it ends behind a **no-fail
+gate** with a gear-up cinematic and a **playable rope climb**.
+- **Gate:** collect **20 carabiners + all 3 gear** (shoes/rope/helmet) → a pulsing
+  checkpoint appears at the end of the current loop; reaching it starts the
+  finale. `climbGate: {carabiners, gear}` on the L1 `LEVELS` entry;
+  `checkLevelProgress` skips the score-advance for gated levels.
+- **Gear-up:** the 5-frame `abu_gearup.png` (laces shoes → helmet → rope) plays.
+- **Playable rope climb:** a fixed **rope** (tileable `climb_rope_seg.png` drawn
+  along a tuned poly-path, **anchored into the rock** with `climb_anchor.png`)
+  runs up a **rock hill** (`climbhill.png`, magenta keyed) composited over the
+  **same `Zugspitze_Back` scene as Level 1** (matching scale/parallax — an earlier
+  cover-fit zoom looked wrong). Hold **JUMP/▲** to climb hand-over-hand
+  (`abu_ropeclimb.png`, 4 frames), **▼** to descend, no fall. Camera follows;
+  the top finishes Level 1 → Mountain Progress dashboard → Level 2.
+- Dev **▶ END** cover button jumps straight into the finale.
+
+### 43. Flag checkpoint + carabiner-gated HUD + competitive score
+- The checkpoint marker is a **2-frame waving mountain flag** (`abu_flag.png`)
+  planted at the loop end (replaced the procedural beacon).
+- The L1 progress bar counts **actual carabiners (`carabinersThisLevel` / 20)**
+  toward the gate — not score. (Score also rises from stomps, which is why the
+  flag seemed not to appear at "22/20".)
+- New **competitive run score** (centre HUD "Score: N", var `runScore`) =
+  carabiners (+1) + enemy kills (stomp/knife, +2). It's for **comparing players**
+  and is **not** a level-pass condition — only the carabiner+gear gate opens the
+  checkpoint (verified: a high score with too few carabiners does not pass).
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -672,7 +725,7 @@ no libraries, no build step), deployed as an installable PWA to GitHub Pages.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v115`**.
+- Latest deploy: service worker cache **`abushakra-v121`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
