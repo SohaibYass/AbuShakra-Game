@@ -3629,13 +3629,27 @@ function initOnline() {
   }).catch(() => {});
 }
 
-// Show the Leaderboard button only on the cover and win screens.
+// Show the Leaderboard button only on the cover and win screens. On the cover,
+// place it just under the subtitle "تحدي القمم الخمسه" (mapped onto the scaled
+// canvas); on the win screen, keep it bottom-centre.
 let _lbVis = null;
 function syncLeaderboardBtn() {
   const b = document.getElementById("btn-leaderboard");
   if (!b) return;
   const vis = (state === "start" || state === "won");
   if (vis !== _lbVis) { b.hidden = !vis; _lbVis = vis; }
+  if (!vis) return;
+  if (state === "start") {
+    const r = canvas.getBoundingClientRect();              // on-screen canvas rect (scaled)
+    b.style.left = Math.round(r.left + 12) + "px";          // extreme left of the cover
+    b.style.top = Math.round(r.top + r.height * 0.40) + "px";
+    b.style.bottom = "auto";
+    b.style.transform = "none";                            // left-aligned (not centred)
+  } else {
+    b.style.left = "50%"; b.style.top = "auto";
+    b.style.bottom = "max(18px, env(safe-area-inset-bottom))";
+    b.style.transform = "translateX(-50%)";
+  }
 }
 
 // Register the service worker for offline play (ignored if unsupported).
