@@ -489,6 +489,10 @@ function resize() {
   canvas.style.height = Math.floor(VIEW_H * s) + "px";
 }
 window.addEventListener("resize", resize); resize();
+// Re-fit when entering/leaving fullscreen (the viewport size changes).
+["fullscreenchange", "webkitfullscreenchange"].forEach((t) =>
+  document.addEventListener(t, () => setTimeout(resize, 50))
+);
 
 /* =============================================================
    INPUT
@@ -515,6 +519,22 @@ function anyKey(list) { return list.some(k => keys[k]); }
 const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
 if (isTouch) document.body.classList.add("touch");
 
+// On phones, expand to the whole screen on the first tap (must run inside a
+// user gesture). Android browsers honour Element.requestFullscreen; iOS Safari
+// has no element fullscreen, so there it no-ops — use "Add to Home Screen"
+// (the manifest is display:fullscreen / orientation:landscape) for a true
+// full-screen launch. Also best-effort lock to landscape once fullscreen.
+let fsTried = false;
+function goFullscreen() {
+  if (fsTried) return; fsTried = true;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (req) { try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  if (screen.orientation && screen.orientation.lock) {
+    try { const p = screen.orientation.lock("landscape"); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  }
+}
+
 /* iOS Safari ignores `user-scalable=no`, so the page can still zoom while
    playing. Block the two culprits: pinch (gesture* events) and double-tap. */
 ["gesturestart", "gesturechange", "gestureend"].forEach((t) =>
@@ -538,7 +558,7 @@ function advanceFromScreen() {
   else if (state === "won" || state === "gameover") { resetGame(); state = "start"; }
 }
 // Start / restart the game from a tap (mirrors the click handler).
-function tapAdvance() { if (state !== "playing") advanceFromScreen(); }
+function tapAdvance() { if (isTouch) goFullscreen(); if (state !== "playing") advanceFromScreen(); }
 canvas.addEventListener("pointerdown", tapAdvance);
 
 // Bind an on-screen button to a virtual key. Multi-touch safe; uses touch
