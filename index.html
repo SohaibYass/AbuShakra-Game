@@ -237,6 +237,8 @@ const ASSETS = {
   abuMantle:  "abu_mantle.png?v=1", // 2-frame ledge mantle (hang -> pull up), Level 1
   descendAnchor: "descend_anchor.png?v=1", // eye-bolt fixture at a platform edge
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
+  enemyEagle:    "enemy_eagle_walk.png?v=1", // Level 3 golden eagle: 3 equal frames (wings raised / level / lowered), faces left
+  eagleNest:     "eagle_nest_eggs.png?v=1",  // Level 3 gear nest with eggs (sits on a platform; gear drawn in front)
   shelter:    "shelter.png?v=5",    // wooden cabin (bigger flag + smoke), on Level 1's 3rd platform
   abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
   abuExhausted: "abu_exhausted.png?v=1", // 3-frame panting/hunch when stamina is low
@@ -316,7 +318,7 @@ const MATTERHORN_SURF = [312.0, 312.0, 312.0, 312.0, 312.0, 311.6, 311.6, 311.6,
 // Grande_Front.png alpha. Platforms 1 & 2 reach from the ground; platform 3
 // (higher) is reached by hopping up from platform 2.
 const GRANDE_TILE_W = 675;
-const GRANDE_PLATFORMS = [{x0:17,x1:176,top:154}, {x0:279,x1:409,top:169}, {x0:498,x1:634,top:123}];
+const GRANDE_PLATFORMS = [{x0:17,x1:176,top:154,shelter:true}, {x0:279,x1:409,top:169}, {x0:498,x1:634,top:123}];   // platform 1 doubles as the stamina shelter (cabin every 5th loop)
 const GRANDE_SURF = [297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 298.8, 298.8, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 300.1, 301.0, 302.8, 302.8, 303.2, 304.1, 304.1, 305.0, 306.7, 306.7, 307.2, 307.2, 307.6, 308.1, 308.1, 313.3, 313.8, 315.1, 315.5, 315.5, 316.4, 316.8, 317.3, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 318.6, 318.2, 317.7, 317.3, 316.8, 316.8, 316.8, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.0, 316.0, 316.0, 316.0, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 314.6, 314.6, 314.2, 313.8, 313.3, 312.9, 312.5, 312.0, 312.0, 311.6, 309.8, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 307.6, 307.6, 307.2, 306.7, 306.7, 306.3, 306.3, 306.3, 306.3, 304.1, 302.8, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3];
 // Level 2 now uses two parallax layers (Grossglockner_Back + transparent
 // Grossglockner_Front2), tile width 675; ground heightmap + 2 floating platforms
@@ -356,6 +358,21 @@ const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before
 const ICICLE_MIN = 1.1, ICICLE_MAX = 2.3;  // s between icicle drops (before difficulty scaling)
 const ICICLE_WARN = 0.8;                    // s of ground-marker telegraph before it falls
 const ICICLE_W = 12, ICICLE_H = 30;         // icicle size (px)
+// Eagle territory (Level 3): the sheet is 3 equal 724px frames (wings raised /
+// level / lowered). The eagle draws large (full wingspan) but its hitbox is the
+// small torso/talon box (ENEMY_TYPES.eagle), so spread wings don't cause unfair hits.
+const EAGLE_VIS_W = 130;            // drawn sprite cell width (square)
+const EAGLE_VIS_DY = 4;             // body-anchor nudge inside the cell
+const EAGLE_PATROL_SPEED = 112;     // px/s horizontal patrol
+const EAGLE_PATROL_H_MIN = 84, EAGLE_PATROL_H_MAX = 140;   // patrol height above terrain
+const EAGLE_WARN_MIN = 0.66, EAGLE_WARN_MAX = 0.9;         // telegraph time (>=0.65s, fair)
+const EAGLE_DIVE_MIN = 0.5, EAGLE_DIVE_MAX = 0.72;
+const EAGLE_DIVE_SPEED = 385;
+const EAGLE_RECOVER_MIN = 0.9, EAGLE_RECOVER_MAX = 1.3;
+const EAGLE_STUN_MIN = 0.85, EAGLE_STUN_MAX = 1.15;
+const EAGLE_ATTACK_CD_MIN = 1.8, EAGLE_ATTACK_CD_MAX = 3.2;  // patrol time before an attack
+const EAGLE_MAX = 2;                // at most 2 eagles on screen
+const EAGLE_TERRITORY_PAD = 70;     // patrol inset from the tile edges
 // Rope swing (Level 4): a pendulum you grab, pump, and launch off.
 const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
 const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
@@ -427,15 +444,18 @@ const LEVELS = [
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
-    // Gyrfalcons: an all-aerial gauntlet — frame-based flap, no ground enemies.
-    enemyMix: ["flyer", "flyer", "flyer", "flyer"],
-    enemySprite: "enemyGyr",
-    enemySize: { flyer: { w: 52, h: 40 } },
-    enemyFrames: { key: "enemyGyr", count: 4, fps: 8, aspect: 426 / 562, anchor: "center", scale: 1.5 },
+    // EAGLE TERRITORY: golden eagles patrol nest zones and dive at Abu with a
+    // telegraphed shadow. Eagles are spawned by the territory system (not the
+    // generic timer); gear sits in nests on the floating platforms.
+    enemyMix: ["eagle"], eagleTerritory: true,
+    enemySprite: "enemyEagle",
+    enemySize: { eagle: { w: 54, h: 38 } },
+    enemyFrames: { key: "enemyEagle", count: 3, fps: 7, aspect: 1 },
     // Two parallax layers (far Dolomites towers + transparent foreground) with 3 floating platforms.
-    // Clips are on the GROUND only (not the platforms) so collecting means braving the falcons.
     terrain: "natural", bgMode: "parallax", surf: GRANDE_SURF, tileW: GRANDE_TILE_W, platforms: GRANDE_PLATFORMS,
-    groundClipsOnly: true,
+    groundClipsOnly: true, sparseClips: true,   // scarce carabiners (one per loop, like Level 1)
+    jumpMul: 0.86, ledgeGrab: true, power: true,   // match Level 1: deliberate hops + mantle + stamina/shelter
+    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },   // gate -> checkpoint flag -> Level 4
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
   { id: 4, name: "Matterhorn", country: "Switzerland", bg: "bgMatterhornBack", fg: "fgMatterhorn", target: 80,
     enemySpeedMul: 2.0,  spawnMul: 0.5,
@@ -516,7 +536,8 @@ const ENEMY_TYPES = {
   walker: { w: ENEMY_W, h: ENEMY_H, speed: 1.0,  hp: 1, points: STOMP_POINTS, color: "#c0392b", air: false },
   hopper: { w: 42,      h: 42,      speed: 1.15, hp: 1, points: STOMP_POINTS, color: "#27ae60", air: false },
   flyer:  { w: 46,      h: 34,      speed: 1.30, hp: 1, points: STOMP_POINTS, color: "#8e44ad", air: true  },
-  tank:   { w: 72,      h: 72,      speed: 0.55, hp: 2, points: STOMP_POINTS, color: "#7f8c8d", air: false }
+  tank:   { w: 72,      h: 72,      speed: 0.55, hp: 2, points: STOMP_POINTS, color: "#7f8c8d", air: false },
+  eagle:  { w: 54,      h: 38,      speed: 0,    hp: 1, points: STOMP_POINTS, color: "#6b4f2a", air: true  }   // Level 3: territorial diver; w/h are the TORSO hitbox (wings draw larger)
 };
 
 /* =============================================================
@@ -766,6 +787,9 @@ const Music = (() => {
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
+    sfxEagleCry()  { if (!sfxReady()) return; const t = actx.currentTime; blip(1450, t, 0.05, "sawtooth", 0.28); blip(1950, t + 0.05, 0.07, "sawtooth", 0.24); blip(1250, t + 0.13, 0.06, "sawtooth", 0.2); },  // screech
+    sfxEagleDive() { if (!sfxReady()) return; slide(620, 170, actx.currentTime, 0.32, "sawtooth", 0.24); },   // fast wind swoosh
+    sfxEagleHit()  { if (!sfxReady()) return; slide(220, 70, actx.currentTime, 0.14, "triangle", 0.4); },      // feather/impact
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -880,6 +904,9 @@ let power = 100;       // Level 1 stamina (drains climbing/falling, refills in a
 let playerSheltered = false;  // is Abu currently inside a shelter?
 let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
 let icicleTimer = 0; // countdown to the next icicle drop
+let eagleTerritories = [];  // Level 3 nest territories (one per tile near the camera)
+let eagleNests = [];        // Level 3 gear nests (3, distributed every 5th tile; persist after pickup)
+let eagleTipShown = false;  // one-time "watch its shadow" hint
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
 let windT = 0;       // wind phase clock
@@ -1318,10 +1345,169 @@ function spawnGuardSnake(cx, top, ledgeW) {
     frames: { key: "enemySnakeRedWalk", count: 2, fps: 6 } });
 }
 
+/* ============================================================================
+   LEVEL 3 — EAGLE TERRITORY: golden eagles patrol nest zones and dive at Abu
+   with a telegraphed shadow. Eagles live in the `enemies` array (e.eagle) so
+   they reuse stomp / projectile / contact damage; the territory system spawns
+   them (one per tile, max 2) instead of the generic timer.
+   ============================================================================ */
+function clearEagleTerritories() {
+  eagleTerritories = []; eagleNests = [];
+  if (typeof enemies !== "undefined" && enemies) enemies = enemies.filter(e => !e.eagle);
+  eagleTipShown = false;
+}
+// The surface (ground or a platform top) directly beneath the locked target.
+function findShadowSurfaceY(worldX, targetY) {
+  let y = surfaceY(worldX);
+  for (const p of platforms) {
+    if (worldX >= p.x && worldX <= p.x + p.w && p.y < y && p.y >= (targetY != null ? targetY - 12 : -1e9)) y = p.y;
+  }
+  return y;
+}
+// Deterministic nest territories: one per tile near the camera, recycled behind.
+function updateEagleTerritories(dt) {
+  const lvl = currentLevel(), tw = lvl.tileW;
+  const a = Math.floor((cameraX - 100) / tw), b = Math.floor((cameraX + VIEW_W + 300) / tw);
+  for (let t = a; t <= b; t++) {
+    if (t < 0 || eagleTerritories.some(z => z.tile === t)) continue;
+    eagleTerritories.push({ tile: t, cx: t * tw + tw / 2, x0: t * tw + EAGLE_TERRITORY_PAD, x1: (t + 1) * tw - EAGLE_TERRITORY_PAD });
+  }
+  eagleTerritories = eagleTerritories.filter(z => z.x1 > cameraX - 500);
+  const liveEagles = () => enemies.filter(e => e.eagle && e.alive).length;
+  for (const z of eagleTerritories) {
+    const onScreen = z.x1 > cameraX - 40 && z.x0 < cameraX + VIEW_W + 140;
+    if (!onScreen) continue;
+    const taken = enemies.some(e => e.eagle && e.alive && e.tile === z.tile);
+    if (!taken && liveEagles() < EAGLE_MAX) spawnTerritoryEagle(z);
+  }
+}
+// One patrolling eagle for a territory, started AWAY from Abu, in patrol (never dive).
+function spawnTerritoryEagle(z) {
+  const W = ENEMY_TYPES.eagle.w, H = ENEMY_TYPES.eagle.h;
+  const groundY = surfaceY(z.cx);
+  const patrolY = groundY - rand(EAGLE_PATROL_H_MIN, EAGLE_PATROL_H_MAX) - H;
+  const pcx = player.x + player.w / 2;
+  const startCx = (pcx < z.cx) ? z.x1 - 50 : z.x0 + 50;   // far side from Abu (never spawn beside him)
+  enemies.push({
+    eagle: true, type: "eagle", tile: z.tile, tcx: z.cx, x0: z.x0, x1: z.x1,
+    x: startCx - W / 2, y: patrolY, w: W, h: H, alive: true, hp: 1, points: STOMP_POINTS, color: ENEMY_TYPES.eagle.color, air: true,
+    state: "patrol", stateTimer: 0, patrolY, dir: (pcx < z.cx ? -1 : 1),
+    targetX: 0, targetY: 0, warnY: 0, warnDur: 0, shadowX: 0,
+    attackCd: rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX), phase: Math.random() * 6.28, frameTime: Math.random() * 2, hitFlash: 0
+  });
+}
+function beginEagleWarning(e) {
+  e.state = "warning"; e.warnDur = rand(EAGLE_WARN_MIN, EAGLE_WARN_MAX); e.stateTimer = e.warnDur; e.warnY = e.y;
+  e.targetX = player.x + player.w / 2;          // LOCK the target now — no homing after this
+  e.targetY = player.y + player.h / 2;
+  e.shadowX = e.x + e.w / 2;
+  Music.sfxEagleCry();
+  if (!eagleTipShown) { eagleTipShown = true; toast = { text: "EAGLE ATTACK! Watch its shadow and move before it dives.", timer: 3.4 }; }
+}
+function updateEagle(e, dt) {
+  e.frameTime += dt;
+  if (e.hitFlash > 0) e.hitFlash -= dt;
+  if (e.state === "patrol") {
+    e.phase += dt * 2.2;
+    e.x += e.dir * EAGLE_PATROL_SPEED * dt;
+    e.y = e.patrolY + Math.sin(e.phase) * 10;
+    if (e.x < e.x0) { e.x = e.x0; e.dir = 1; }
+    else if (e.x + e.w > e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
+    e.attackCd -= dt;
+    const pcx = player.x + player.w / 2, sxp = e.x - cameraX;
+    const abuNear = pcx > e.x0 - 130 && pcx < e.x1 + 130;
+    if (e.attackCd <= 0 && abuNear && sxp > -40 && sxp < VIEW_W + 40 && state === "playing") beginEagleWarning(e);
+  } else if (e.state === "warning") {
+    e.stateTimer -= dt; e.phase += dt * 1.4;
+    e.y = e.warnY + Math.sin(e.phase) * 4;
+    e.x += Math.sin(e.phase * 0.7) * 10 * dt;                 // tiny hover circle
+    e.shadowX += (e.targetX - e.shadowX) * Math.min(1, 6 * dt);   // shadow slides to the locked target
+    if (e.stateTimer <= 0) {
+      e.state = "dive"; e.stateTimer = rand(EAGLE_DIVE_MIN, EAGLE_DIVE_MAX); e.shadowX = e.targetX;
+      Music.sfxEagleDive();
+    }
+  } else if (e.state === "dive") {
+    e.stateTimer -= dt;
+    const cxv = e.x + e.w / 2, cyv = e.y + e.h / 2;
+    const dx = e.targetX - cxv, dy = e.targetY - cyv, dist = Math.hypot(dx, dy) || 1;
+    e.x += (dx / dist) * EAGLE_DIVE_SPEED * dt;
+    e.y += (dy / dist) * EAGLE_DIVE_SPEED * dt;
+    const floor = surfaceY(e.x + e.w / 2);
+    if (e.y + e.h > floor - 2 || e.stateTimer <= 0 || dist < 12) {
+      if (e.y + e.h > floor - 2) e.y = floor - e.h - 2;
+      e.state = "recover"; e.stateTimer = rand(EAGLE_RECOVER_MIN, EAGLE_RECOVER_MAX);
+    }
+  } else if (e.state === "recover") {
+    e.stateTimer -= dt; e.phase += dt * 3;
+    e.y += (e.patrolY - e.y) * Math.min(1, 4 * dt);
+    const cxv = e.x + e.w / 2;
+    if (cxv < e.x0) e.x += 70 * dt; else if (cxv > e.x1) e.x -= 70 * dt;
+    if (e.stateTimer <= 0 && Math.abs(e.y - e.patrolY) < 12) {
+      e.state = "patrol"; e.attackCd = rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX);
+      e.dir = (e.x + e.w / 2 < e.tcx) ? 1 : -1;
+    }
+  } else if (e.state === "stunned") {
+    e.stateTimer -= dt;
+    if (e.stateTimer <= 0) { e.state = "recover"; e.stateTimer = rand(EAGLE_RECOVER_MIN, EAGLE_RECOVER_MAX); }
+  }
+}
+function eagleFrameIndex(e) {
+  if (e.state === "dive") return 1;          // wings-level glide
+  if (e.state === "stunned") return 2;
+  const fps = (e.state === "warning") ? 4 : 7, seq = [0, 1, 2, 1];
+  return seq[Math.floor(e.frameTime * fps) % 4];
+}
+function drawEagleShadow(e) {
+  if (e.state !== "warning" && e.state !== "dive") return;
+  const shx = (e.state === "dive") ? e.targetX : e.shadowX;
+  const sx = shx - cameraX;
+  if (sx < -70 || sx > VIEW_W + 70) return;
+  const gy = findShadowSurfaceY(shx, e.targetY);
+  const g = (e.state === "warning") ? (1 - Math.max(0, e.stateTimer) / (e.warnDur || 1)) : 1;
+  const w = 46 + 24 * g, h = 11 + 6 * g, alpha = 0.16 + 0.24 * g;
+  ctx.fillStyle = "rgba(18,22,28," + alpha.toFixed(3) + ")";
+  ctx.beginPath(); ctx.ellipse(sx, gy - h * 0.4, w / 2, h / 2, 0, 0, 6.2832); ctx.fill();
+}
+function drawEagle(e) {
+  if (!imgLoaded.enemyEagle) {
+    const sx = e.x - cameraX; ctx.fillStyle = e.color; ctx.fillRect(sx, e.y, e.w, e.h); return;
+  }
+  const img = images.enemyEagle, cw = img.naturalWidth / 3;
+  const cx = e.x + e.w / 2, sx = cx - cameraX, cy = e.y + e.h / 2;
+  if (sx < -100 || sx > VIEW_W + 100) return;
+  const dw = EAGLE_VIS_W, dh = dw, dy = cy - dh / 2 + EAGLE_VIS_DY, fi = eagleFrameIndex(e);
+  const movingRight = (e.state === "dive") ? (e.targetX > cx) : (e.dir > 0);
+  ctx.save();
+  if (e.hitFlash > 0) ctx.globalAlpha = 0.55;
+  if (movingRight) { ctx.translate(sx, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, -dw / 2, dy, dw, dh); }
+  else ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, sx - dw / 2, dy, dw, dh);   // faces left by default
+  ctx.restore();
+}
+function drawEagleShadows() { if (!currentLevel().eagleTerritory) return; for (const e of enemies) if (e.eagle) drawEagleShadow(e); }
+// Nest-with-eggs sprite at the 3 distributed gear nests (drawn behind the gear;
+// persists after the gear is collected). Sits on the platform top.
+const NEST_VIS_W = 90;
+function drawEagleNests() {
+  if (!currentLevel().eagleTerritory) return;
+  const img = imgLoaded.eagleNest ? images.eagleNest : null;
+  const ar = img ? img.naturalHeight / img.naturalWidth : 0.44;
+  for (const n of eagleNests) {
+    const cx = n.cx - cameraX;
+    if (cx < -90 || cx > VIEW_W + 90) continue;
+    if (img) {
+      const dw = NEST_VIS_W, dh = dw * ar;
+      ctx.drawImage(img, cx - dw / 2, n.top - dh + 10, dw, dh);   // base sits ~on the platform top
+    } else {
+      ctx.fillStyle = "#6e5436"; ctx.beginPath(); ctx.ellipse(cx, n.top - 2, 33, 9, 0, 0, 6.2832); ctx.fill();
+    }
+  }
+}
+
 function updateEnemies(dt) {
   const d = difficulty();
   const natural = currentLevel().terrain === "natural";
   for (const e of enemies) {
+    if (e.eagle) { updateEagle(e, dt); continue; }   // Level 3 territorial eagle state machine
     if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
       e.x += e.dir * GUARD_SPEED * d * dt;
       if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
@@ -1381,7 +1567,8 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && (e.guard || e.x + e.w > cameraX - 200));
+  enemies = enemies.filter(e => e.alive && (e.guard || (e.eagle ? e.x + e.w > cameraX - 450 : e.x + e.w > cameraX - 200)));
+  if (currentLevel().eagleTerritory) { if (ENEMIES_ENABLED) updateEagleTerritories(dt); return; }   // eagles spawn via territories, not the timer
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -1857,6 +2044,24 @@ function spawnGearForLevel(base = 0) {
     });
     return;
   }
+  if (lvl.eagleTerritory) {
+    // Level 3: the 3 gear are DISTRIBUTED across the level — one nest every 5th tile,
+    // each on a platform (shoes lowest, helmet mid, rope on the highest/farthest). The
+    // nest is recorded separately so it stays visible after the gear is collected.
+    eagleNests = [];
+    const tw = lvl.tileW, startTile = Math.floor(base / tw);
+    const gearTileStep = 5, firstGearTile = 4;
+    GEAR.forEach((g, i) => {
+      if (gearThisLevel[g.id]) return;
+      const t = startTile + firstGearTile + i * gearTileStep;       // tiles 4, 9, 14 from entry
+      const bx = lvl.platforms[i % lvl.platforms.length];           // a different platform per gear
+      const cx = t * tw + (bx.x0 + bx.x1) / 2, top = bx.top, w = gearW(g);
+      eagleNests.push({ cx, top });
+      gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: top - g.h, w, h: g.h, t: Math.random() * 6.28 });
+    });
+    toast = { text: "EAGLE TERRITORY — recover the gear from the nests. Watch the shadows!", timer: 3.8 };
+    return;
+  }
   GEAR.forEach((g, i) => {
     if (gearThisLevel[g.id]) return;
     const w = gearW(g), cx = base + GEAR_SPAWN_X[i];
@@ -1902,7 +2107,7 @@ function handleEnemies() {
       if (e.hp <= 0) {
         e.alive = false; score += e.points; runScore += e.points;
         if (window.AbuTracking) AbuTracking.trackKill(currentLevel().id, e.points);   // online: enemy kill -> score
-        poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
+        poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp(); if (e.eagle) Music.sfxEagleHit();
       } else {
         // Survived (tank): flash, small poof, keep going.
         e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
@@ -2208,6 +2413,7 @@ function drawIcicles() {
 
 // Called whenever a new level starts (test button, fresh game, or advance).
 function enterLevelEffects() {
+  clearEagleTerritories();
   crashPlats = []; windT = 0; windCurrent = 0;
   icicles = []; icicleTimer = rand(ICICLE_MIN, ICICLE_MAX);
   ropes = []; descentRopes = []; shelters = [];
@@ -2604,6 +2810,7 @@ function drawEnemyAnim(e, dx, dy, dw, dh) {
 
 function drawEnemies() {
   for (const e of enemies) {
+    if (e.eagle) { drawEagle(e); continue; }             // Level 3 golden eagle (own renderer)
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
     if (e.guard) {                                       // red ledge-patrol snake (2-frame walk)
@@ -3390,10 +3597,28 @@ function checkClimbGate() {
     let gx = (Math.floor(player.x / tw) + 1) * tw;   // end of the current loop
     if (gx - player.x < 360) gx += tw;               // give him room to walk to it
     summitGateX = gx;
-    toast = { text: "All gear ready — reach the summit!", timer: 2.6 };
+    toast = { text: lvl.climbGate.flagOnly ? "All gear collected — reach the checkpoint flag!" : "All gear ready — reach the summit!", timer: 2.6 };
   }
   if (summitReady && player.onGround && player.x + player.w / 2 >= summitGateX) {
-    startSummitClimb();
+    if (lvl.climbGate.flagOnly) finishGateFlag();   // no climb art -> the flag itself finishes the level
+    else startSummitClimb();
+  }
+}
+
+// Reaching the checkpoint flag completes the level straight to the dashboard
+// (the carabiner+gear gate, minus a rope-climb finale — used where there's no
+// summit-climb art, e.g. Level 3).
+function finishGateFlag() {
+  summitReady = false; summitGateX = 0;
+  if (window.AbuTracking) AbuTracking.submitLevel(currentLevel().id, true);
+  if (levelIndex >= LEVELS.length - 1) {
+    state = "won"; Music.stop(); Music.sfxWin(); recordBest();
+    if (window.AbuTracking) AbuTracking.finalizeRun("completed");
+  } else {
+    dashboard = { completedLevelIndex: levelIndex, nextLevelIndex: levelIndex + 1,
+                  carabiners: levelCarabiners, animTime: 0, animDuration: 1.2 };
+    lives += LEVEL_BONUS_LIVES;
+    state = "levelcomplete"; Music.sfxLevel();
   }
 }
 
@@ -3619,6 +3844,8 @@ function draw() {
   drawCrashPlatforms();    // breaking ice ledges (Level 5)
   drawRopes();             // climbable ropes (Level 4)
   drawDescentRopes();      // platform-edge descent ropes (Level 1)
+  drawEagleNests();        // Level 3 nests on the platforms (behind the gear)
+  drawEagleShadows();      // Level 3 eagle dive-warning shadows (on the terrain)
   drawCarabiners();
   drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
   drawGear();              // collectible shoes / rope / helmet on the path
