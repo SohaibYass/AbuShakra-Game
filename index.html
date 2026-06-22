@@ -358,6 +358,8 @@ const ICE_STOP_GRIP = 1.0;   // even lazier when keys released -> long slide to 
 const WIND_BASE     = -64;   // px/s steady backward push
 const WIND_GUST     = 128;   // px/s gust amplitude (occasionally flips to a forward shove)
 const SNOW_COUNT    = 110;   // snowstorm flake count (capped so mobile stays smooth)
+const RAIN_COUNT    = 150;   // Level 2 rain streak count (thin lines, cheap on mobile)
+const RAIN_DRIFT    = -85;   // px/s sideways drift -> wind-blown slant
 const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before it breaks
 const ICICLE_MIN = 1.1, ICICLE_MAX = 2.3;  // s between icicle drops (before difficulty scaling)
 const ICICLE_WARN = 0.8;                    // s of ground-marker telegraph before it falls
@@ -455,7 +457,7 @@ const LEVELS = [
     // reaching the checkpoint flag finishes the level (no rope-climb finale, which
     // would need Grossglockner summit art). Carabiner count is separate from Score.
     climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },
-    rockfalls: true, gearSpawnX: [500, 1250, 2050],   // continuous-rockfall gear zones (Grossglockner only)
+    rockfalls: true, rain: true, gearSpawnX: [500, 1250, 2050],   // continuous-rockfall gear zones + rain (Grossglockner only)
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
@@ -2184,9 +2186,14 @@ function drawIceLakes() {
 
 function initWeather() {
   weather = [];
-  if (!currentLevel().snowstorm) return;
-  for (let i = 0; i < SNOW_COUNT; i++)
-    weather.push({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, z: rand(0.4, 1.5), sway: Math.random() * 6.28 });
+  const lvl = currentLevel();
+  if (lvl.snowstorm) {
+    for (let i = 0; i < SNOW_COUNT; i++)
+      weather.push({ x: Math.random() * VIEW_W, y: Math.random() * VIEW_H, z: rand(0.4, 1.5), sway: Math.random() * 6.28 });
+  } else if (lvl.rain) {
+    for (let i = 0; i < RAIN_COUNT; i++)
+      weather.push({ x: Math.random() * (VIEW_W + 60) - 30, y: Math.random() * VIEW_H, z: rand(0.5, 1.4) });
+  }
 }
 
 function updateWeather(dt) {
@@ -2195,23 +2202,44 @@ function updateWeather(dt) {
     windT += dt;
     windCurrent = WIND_BASE + Math.sin(windT * 0.6) * WIND_GUST + Math.sin(windT * 1.7) * (WIND_GUST * 0.35);
   } else windCurrent = 0;
-  if (!lvl.snowstorm) return;
-  for (const f of weather) {
-    f.sway += dt * 2;
-    f.x += (windCurrent * 0.7 * f.z + Math.sin(f.sway) * 14 - 26 * f.z) * dt;
-    f.y += (90 + 70 * f.z) * dt;
-    if (f.y > VIEW_H + 4) { f.y = -4; f.x = Math.random() * (VIEW_W + 40) - 20; }
-    if (f.x < -10) f.x += VIEW_W + 20;
-    else if (f.x > VIEW_W + 10) f.x -= VIEW_W + 20;
+  if (lvl.snowstorm) {
+    for (const f of weather) {
+      f.sway += dt * 2;
+      f.x += (windCurrent * 0.7 * f.z + Math.sin(f.sway) * 14 - 26 * f.z) * dt;
+      f.y += (90 + 70 * f.z) * dt;
+      if (f.y > VIEW_H + 4) { f.y = -4; f.x = Math.random() * (VIEW_W + 40) - 20; }
+      if (f.x < -10) f.x += VIEW_W + 20;
+      else if (f.x > VIEW_W + 10) f.x -= VIEW_W + 20;
+    }
+  } else if (lvl.rain) {
+    for (const f of weather) {
+      f.y += (680 + 520 * f.z) * dt;              // fast vertical fall, faster when nearer
+      f.x += (RAIN_DRIFT * f.z) * dt;             // slight wind-blown slant
+      if (f.y > VIEW_H + 8) { f.y = -12; f.x = Math.random() * (VIEW_W + 60) - 30; }
+      if (f.x < -30) f.x += VIEW_W + 60;
+      else if (f.x > VIEW_W + 30) f.x -= VIEW_W + 60;
+    }
   }
 }
 
 function drawWeather() {
-  if (!currentLevel().snowstorm) return;
-  ctx.fillStyle = "rgba(255,255,255,0.10)";     // faint whiteout fog
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  for (const f of weather) { const s = Math.max(1, Math.round(f.z * 2)); ctx.fillRect(f.x | 0, f.y | 0, s, s); }
+  const lvl = currentLevel();
+  if (lvl.snowstorm) {
+    ctx.fillStyle = "rgba(255,255,255,0.10)";     // faint whiteout fog
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    for (const f of weather) { const s = Math.max(1, Math.round(f.z * 2)); ctx.fillRect(f.x | 0, f.y | 0, s, s); }
+  } else if (lvl.rain) {
+    ctx.fillStyle = "rgba(44,60,86,0.12)";        // cool, overcast darkening for a rainy mood
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.strokeStyle = "rgba(178,198,220,0.55)"; ctx.lineCap = "round";
+    for (const f of weather) {
+      const len = 9 + 13 * f.z;
+      ctx.lineWidth = f.z > 1 ? 1.7 : 1;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x + 1.8 * f.z, f.y - len); ctx.stroke();   // streak trails up-back along motion
+    }
+    ctx.lineWidth = 1;
+  }
 }
 
 // Falling icicles (Level 5): a ground marker telegraphs the impact spot, then a
