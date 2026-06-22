@@ -178,7 +178,8 @@
   <button class="test-btn" data-level="2" aria-label="Test Level 3">&#9654; L3</button>
   <button class="test-btn" data-level="3" aria-label="Test Level 4">&#9654; L4</button>
   <button class="test-btn" data-level="4" aria-label="Test Level 5">&#9654; L5</button>
-  <button class="test-btn" data-action="summit" aria-label="Test summit climb">&#9654; END</button>
+  <button class="test-btn" data-action="summit" aria-label="Test Level 1 summit climb">&#9654; END</button>
+  <button class="test-btn" data-action="summit2" aria-label="Test Level 2 summit climb">&#9654; END2</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -228,6 +229,7 @@ const ASSETS = {
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
   climbAnchor:  "climb_anchor.png?v=1",   // piton + carabiner anchor at the rope's top
   climbHill:  "climbhill.png?v=2",   // Level 1 finale: the keyed rock hill (over the Zugspitze sky)
+  grossglocknerClimbWall: "grossglockner_climbwall.png?v=1",   // Level 2 finale: keyed climb wall (over the Grossglockner sky)
   upperPlat:  "upper_platform.png?v=1", // Level 1 high ledge above the shelter (holds the shoes)
   rope:       "rope.png?v=1",      // braided swing rope (Level 4); drawn stretched/rotated
   ropeRock:   "rope_rock.png?v=1", // snow-capped anchor rock the rope hangs from
@@ -453,10 +455,10 @@ const LEVELS = [
     // Two parallax layers (far mountains + transparent foreground) with 2 painted platforms.
     terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS,
     jumpMul: 0.90, ledgeGrab: true, descend: true, power: true,   // deliberate hops + mantle + descent ropes + stamina/shelters
-    // Same pass-gate as Level 1 — collect 20 carabiners + all 3 gear — but flagOnly:
-    // reaching the checkpoint flag finishes the level (no rope-climb finale, which
-    // would need Grossglockner summit art). Carabiner count is separate from Score.
-    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },
+    // Same finale as Level 1: collect 20 carabiners + all 3 gear -> checkpoint flag
+    // -> gear-up -> playable rope climb up the Grossglockner wall (to the peak anchor).
+    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"] },
+    climbWall: "grossglocknerClimbWall", climbRopeExt: [{x:868,y:175},{x:879,y:118}],
     rockfalls: true, rain: true, gearSpawnX: [500, 1250, 2050],   // continuous-rockfall gear zones + rain (Grossglockner only)
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
@@ -866,13 +868,14 @@ const testBtns = document.getElementById("test-buttons");
 testBtns.querySelectorAll(".test-btn").forEach((b) =>
   b.addEventListener("click", (e) => {
     e.preventDefault();
-    if (b.dataset.action === "summit") { testSummitClimb(); return; }
+    if (b.dataset.action === "summit") { testSummitClimb(0); return; }
+    if (b.dataset.action === "summit2") { testSummitClimb(1); return; }
     startAtLevel(+b.dataset.level);
   }));
-// Dev: load Level 1 as if all gear + 20 carabiners were collected, then jump
-// straight into the summit-climb finale.
-function testSummitClimb() {
-  startAtLevel(0);
+// Dev: load a level as if all gear + 20 carabiners were collected, then jump
+// straight into its summit-climb finale (Level 1 hill, or Level 2 Grossglockner wall).
+function testSummitClimb(levelIdx) {
+  startAtLevel(levelIdx || 0);
   carabinersThisLevel = 20;
   gearThisLevel = { shoes: true, rope: true, helmet: true };
   startSummitClimb();
@@ -3579,24 +3582,25 @@ const GEARUP_TIME   = 3.2;   // seconds for the 5-frame gear-up intro
 const CLIMB_W = 1080, CLIMB_H = 720, CLIMB_FLOOR_Y = 706;
 // Fixed rope up the hill (base -> summit), tracing the painted staircase. Abu
 // holds it and climbs hand-over-hand (hold Up/Jump to ascend, Down to descend).
-const CLIMB_ROPE_PTS = [
+const CLIMB_ROPE_BASE = [
   { x: 70,  y: 666 }, { x: 175, y: 578 }, { x: 315, y: 502 },
   { x: 455, y: 426 }, { x: 600, y: 352 }, { x: 730, y: 314 }, { x: 826, y: 280 },
 ];
+let CLIMB_ROPE_PTS = CLIMB_ROPE_BASE.slice();   // ACTIVE climb path (per-level; some levels extend to the peak)
 const CLIMB_ROPE_SPEED = 155;   // px/s along the rope
 let CLIMB_DEBUG = false;        // draw the rope path nodes while tuning
 const CLIMB_ROPE_FRAMES = 4;    // frames in the (optional) abu_ropeclimb sheet
-// Precompute segment lengths + total, and a point-at-fraction helper.
-const CLIMB_SEG = [];
-const CLIMB_TOTAL = (function () {
-  let tot = 0;
+// Segment lengths + total for the ACTIVE path (recomputed when the path changes).
+let CLIMB_SEG = [], CLIMB_TOTAL = 0;
+function recomputeClimbRope() {
+  CLIMB_SEG = []; CLIMB_TOTAL = 0;
   for (let i = 1; i < CLIMB_ROPE_PTS.length; i++) {
     const a = CLIMB_ROPE_PTS[i - 1], b = CLIMB_ROPE_PTS[i];
     const d = Math.hypot(b.x - a.x, b.y - a.y);
-    CLIMB_SEG.push(d); tot += d;
+    CLIMB_SEG.push(d); CLIMB_TOTAL += d;
   }
-  return tot;
-})();
+}
+recomputeClimbRope();
 function climbRopeAt(f) {
   let d = Math.max(0, Math.min(1, f)) * CLIMB_TOTAL;
   for (let i = 0; i < CLIMB_SEG.length; i++) {
@@ -3653,6 +3657,10 @@ function finishGateFlag() {
 
 // Phase 1: the scripted gear-up intro (on the climbhill backdrop).
 function startSummitClimb() {
+  // Per-level rope path: a level may extend the climb up to its summit peak anchor.
+  const ext = currentLevel().climbRopeExt;
+  CLIMB_ROPE_PTS = ext ? CLIMB_ROPE_BASE.concat(ext) : CLIMB_ROPE_BASE.slice();
+  recomputeClimbRope();
   state = "climbing";
   climb = { phase: "gearup", t: 0, frame: 0 };
   player.vx = 0; player.vy = 0;
@@ -3760,8 +3768,9 @@ const CLIMB_ROPE_W = 4;    // on-path rope thickness (px)
 // screen height, slow horizontal parallax, mirror-tiled, vertically pinned to the
 // camera. Call inside a translate(0, -cameraY) context (so y:cameraY -> screen 0).
 function drawClimbSky() {
-  if (!imgLoaded.bgZugBack) { ctx.fillStyle = "#87b5e8"; ctx.fillRect(0, cameraY, VIEW_W, VIEW_H); return; }
-  const bg = images.bgZugBack, bw = bg.naturalWidth * (VIEW_H / bg.naturalHeight);
+  const bgKey = currentLevel().bg || "bgZugBack";   // the level's own far-mountain sky
+  if (!imgLoaded[bgKey]) { ctx.fillStyle = "#87b5e8"; ctx.fillRect(0, cameraY, VIEW_W, VIEW_H); return; }
+  const bg = images[bgKey], bw = bg.naturalWidth * (VIEW_H / bg.naturalHeight);
   const scroll = cameraX * 0.4, first = Math.floor(scroll / bw), bleed = 1;
   for (let i = first; ; i++) {
     const x = i * bw - scroll;
@@ -3776,14 +3785,15 @@ function drawClimbSky() {
 // The keyed rock hill (magenta cut out), drawn 1:1 over the climb world so it
 // scrolls with the camera and lets the Zugspitze sky show through the cut-out.
 function drawClimbHill() {
-  if (imgLoaded.climbHill) ctx.drawImage(images.climbHill, 0, 0, CLIMB_W, CLIMB_H);
+  const key = currentLevel().climbWall || "climbHill";   // per-level climb backdrop art
+  if (imgLoaded[key]) ctx.drawImage(images[key], 0, 0, CLIMB_W, CLIMB_H);
 }
-// The fixed rope, drawn in climb-world coordinates (call inside a -camera translate).
-function drawClimbRopeWorld() {
+// Draw the braided rope along a list of climb-world points.
+function drawRopeAlong(pts) {
   if (imgLoaded.climbRopeSeg) {
-    const img = images.climbRopeSeg, sc = CLIMB_ROPE_W / img.naturalWidth, tileH = img.naturalHeight * sc;
-    for (let i = 1; i < CLIMB_ROPE_PTS.length; i++) {
-      const a = CLIMB_ROPE_PTS[i - 1], b = CLIMB_ROPE_PTS[i];
+    const img = images.climbRopeSeg, tileH = img.naturalHeight * (CLIMB_ROPE_W / img.naturalWidth);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
       const len = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
       ctx.save();
       ctx.translate(a.x, a.y); ctx.rotate(ang - Math.PI / 2);   // image +Y runs a -> b
@@ -3797,24 +3807,24 @@ function drawClimbRopeWorld() {
     }
   } else {
     ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
-    const lay = (color, w) => {
-      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
-      for (let i = 0; i < CLIMB_ROPE_PTS.length; i++) { const p = CLIMB_ROPE_PTS[i]; i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
-      ctx.stroke();
-    };
+    const lay = (color, w) => { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) { const p = pts[i]; i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); } ctx.stroke(); };
     lay("#4f3620", 7); lay("#9c6b3a", 4); lay("#caa24a", 1.5);
     ctx.restore();
   }
-  // Anchor (piton + carabiner) fixing the rope at the top.
-  const top = CLIMB_ROPE_PTS[CLIMB_ROPE_PTS.length - 1];
+}
+// Piton + carabiner anchor fixing the rope at point `top`.
+function drawClimbAnchorAt(top) {
   if (imgLoaded.climbAnchor) {
     const img = images.climbAnchor, aw = 35, ah = aw * img.naturalHeight / img.naturalWidth;
-    // anchor's rope-loop (frac 0.103, 0.847) sits exactly on the rope's top point
-    // so the rope stays attached; seat it lower by lowering that rope point itself.
-    ctx.drawImage(img, top.x - aw * 0.103, top.y - ah * 0.847, aw, ah);
-  } else {
-    ctx.fillStyle = "#8a8f96"; ctx.beginPath(); ctx.arc(top.x, top.y, 5, 0, 6.28); ctx.fill();
-  }
+    ctx.drawImage(img, top.x - aw * 0.103, top.y - ah * 0.847, aw, ah);   // rope-loop frac (0.103, 0.847) sits on `top`
+  } else { ctx.fillStyle = "#8a8f96"; ctx.beginPath(); ctx.arc(top.x, top.y, 5, 0, 6.28); ctx.fill(); }
+}
+// The fixed rope, drawn in climb-world coordinates (call inside a -camera translate).
+function drawClimbRopeWorld() {
+  drawRopeAlong(CLIMB_ROPE_PTS);
+  drawClimbAnchorAt(CLIMB_ROPE_BASE[CLIMB_ROPE_BASE.length - 1]);   // first anchor (junction)
+  if (CLIMB_ROPE_PTS.length > CLIMB_ROPE_BASE.length) drawClimbAnchorAt(CLIMB_ROPE_PTS[CLIMB_ROPE_PTS.length - 1]);   // peak anchor when extended
   if (CLIMB_DEBUG) { ctx.fillStyle = "#f55"; for (const p of CLIMB_ROPE_PTS) ctx.fillRect(p.x - 3, p.y - 3, 6, 6); }
 }
 
