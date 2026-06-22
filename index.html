@@ -2113,7 +2113,12 @@ function handleEnemies() {
         e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
       }
     }
-    else if (!playerSheltered) loseLife();   // safe inside a shelter
+    else if (!playerSheltered) {
+      // An eagle strike knocks Abu down with the fatal-fall death (abu_fatal_fall:
+      // shock -> crash -> collapsed), then docks a life — instead of a plain flicker.
+      if (e.eagle) { if (invulnTimer <= 0 && !player.dying) { Music.sfxEagleHit(); startDeathSequence(); } }
+      else loseLife();
+    }
   }
   enemies = enemies.filter(e => e.alive);
 }
