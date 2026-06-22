@@ -385,7 +385,13 @@ const THROW_RELEASE    = 0.55; // fraction of THROW_TIME at which the projectile
 const THROW_COOLDOWN   = 0.22; // extra gap after a throw so holding F can't rapid-fire
 const PROJ_SPEED       = 520;  // carabiner flight speed (px/s)
 const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
-const START_CARABINERS = 6;    // knives Abu starts each level with (fixed — collecting carabiners does NOT refill them)
+const START_CARABINERS = 6;    // knives Abu starts levels 2+ holding (Level 1 starts at 0 — collect them off the climb)
+const KNIFE_PICK_W = 34, KNIFE_PICK_H = 20;   // knife-pickup hitbox on the Level-1 climb top ledges
+// Knives Abu holds when a level begins. Level 1 (the knife-climb) starts at 0 — he
+// collects them off the climb top ledges. Within a run knives CARRY OVER between
+// levels (advanceLevel no longer refills), so the spare knife stacks in Level 1
+// stock him up for the later peaks. A direct jump to a later level keeps the baseline.
+function startAmmo() { return currentLevel().upperPlat ? 0 : START_CARABINERS; }
 // Set to false to disable the snakes (handy for testing terrain in isolation).
 const ENEMIES_ENABLED = true;
 
@@ -800,12 +806,12 @@ function startAtLevel(idx) {
   score = prevTarget();              // arrive with the cumulative score of prior levels
   runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
-  platforms = []; carabiners = []; enemies = []; pits = [];
+  platforms = []; carabiners = []; knifeItems = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   summitReady = false; summitGateX = 0; climb = null; inClimb = false; climbSteps = [];   // clear the summit-climb gate
-  carabinerAmmo = START_CARABINERS; projectiles = [];
+  carabinerAmmo = startAmmo(); projectiles = [];
   invulnTimer = INVULN_TIME;
   if (currentLevel().terrain === "natural") {
     player.x = 80;
@@ -898,6 +904,7 @@ cutsceneVideo.addEventListener("ended", () => { if (state === "cutscene") endCut
 cutsceneVideo.addEventListener("error", () => { if (state === "cutscene") endCutscene(); });
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let gearItems = [];   // spawned gear pickups in the world (this level)
+let knifeItems = [];  // knife pickups on the Level-1 climb top ledges (each = +1 throwable knife)
 let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
 let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
 let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
@@ -1059,6 +1066,7 @@ function generateAhead() {
         } else if (lvl.groundClipsOnly) {
           if (lvl.sparseClips) placeSparseGroundClips(tile, tw); // Level 1: one ground clip per loop
           else placeGroundClips(tile, tw);                       // Level 3: 3 ground clips per tile
+          if (lvl.upperPlat) placeUpperKnives(tile, tw);         // Level 1: a knife on each NON-gear climb top ledge
         } else if (lvl.platforms) {
           placePlatformCarabiners(tile, tw, lvl.platforms);     // clips on the ledges
           placeTrackCarabiners(tile, tw, lvl.platforms);        // clips in the ground gaps
@@ -1130,6 +1138,7 @@ function generateAhead() {
   const cutoff = cameraX - 300;
   platforms  = platforms.filter(p => p.x + p.w > cutoff);
   carabiners = carabiners.filter(c => c.x + c.w > cutoff);
+  knifeItems = knifeItems.filter(k => k.x + k.w > cutoff);
   pits       = pits.filter(p => p.x + p.w > cutoff);
   crashPlats = crashPlats.filter(p => p.x + p.w > cutoff);
 }
@@ -1140,6 +1149,25 @@ function placeSparseGroundClips(tile, tw) {
   const x = tile * tw + rand(0.25, 0.75) * tw;
   const bottom = surfaceY(x) - rand(10, 24);
   carabiners.push({ x: x - CARABINER_W / 2, y: bottom - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+}
+
+// Level 1 climb: which CLIMB STACKS (every other tile) hold gear vs. a knife. Stack
+// indices are 0-based (tile/2). Level 1 always starts at tile 0, so gear lands on
+// stacks 1/3/5 (= "2nd / 4th / 6th top ledge"); every other stack's top ledge gets a
+// knife — including the 7th onward, so Abu can keep stocking up for later levels.
+function isGearStack(tile) {
+  if ((((tile % 2) + 2) % 2) !== 0) return false;   // climb stacks are on even tiles only
+  const s = tile / 2;                               // 0-based climb-stack index
+  return s === 1 || s === 3 || s === 5;             // stacks 2 / 4 / 6 hold the three gear
+}
+// A knife pickup on the TOP ledge of every NON-gear climb stack (one per loop).
+function placeUpperKnives(tile, tw) {
+  if ((((tile % 2) + 2) % 2) !== 0) return;         // even (climb) tiles only
+  if (isGearStack(tile)) return;                    // gear stacks hold gear, not a knife
+  const L = UPPER_PLAT.ledges.find(l => l.shoes) || UPPER_PLAT.ledges[UPPER_PLAT.ledges.length - 1];
+  const cx = tile * tw + L.cxOff;
+  knifeItems.push({ x: cx - KNIFE_PICK_W / 2, y: L.top - KNIFE_PICK_H - 6,
+    w: KNIFE_PICK_W, h: KNIFE_PICK_H, t: Math.random() * 6.28, collected: false });
 }
 
 // Level 5: a single carabiner only now and then (survival over collection).
@@ -1767,6 +1795,17 @@ function handleCarabiners() {
   carabiners = carabiners.filter(c => !c.collected);
 }
 
+// Knife pickups on the Level-1 climb top ledges — each adds one throwable knife
+// (ammo only; NOT a carabiner, so it doesn't count toward the gate or the score).
+function handleKnifeItems() {
+  for (const k of knifeItems) if (!k.collected && aabb(player, k)) {
+    k.collected = true; carabinerAmmo += 1;        // +1 knife in hand (carries over between levels)
+    sparkleBurst(k.x + k.w / 2, k.y + k.h / 2);
+    Music.sfxCoin();
+  }
+  knifeItems = knifeItems.filter(k => !k.collected);
+}
+
 // One shoes/rope/helmet per level, on fixed reachable ground spots along the path.
 const GEAR_SPAWN_X = [480, 1100, 1800];
 // Pick up to 3 floating-platform tops (spread across the next few tiles, skipping
@@ -1790,12 +1829,13 @@ function pickDescentSpot(base) {
   const ahead = descentRopes.filter(r => r.x >= base - 40).sort((a, b) => a.x - b.x);
   return ahead[0] || descentRopes.slice().sort((a, b) => a.x - b.x)[0];
 }
-// Top-ledge spots on 3 successive climb LOOPS (every other tile) at/after `base`.
+// Top-ledge spots for the three gear: climb stacks 2 / 4 / 6 (every OTHER climb loop),
+// so a knife stack sits between each gear stack (stacks 1/3/5/7+ get a knife instead).
 function gearClimbSpots(lvl, base) {
   const tw = lvl.tileW; let t = Math.floor(base / tw);
   if ((((t % 2) + 2) % 2) !== 0) t++;                       // first even (climb) tile at/after base
   const L = UPPER_PLAT.ledges.find(l => l.shoes) || UPPER_PLAT.ledges[UPPER_PLAT.ledges.length - 1];
-  return [0, 1, 2].map(k => ({ cx: (t + k * 2) * tw + L.cxOff, top: L.top }));
+  return [0, 1, 2].map(k => ({ cx: (t + 2 + k * 4) * tw + L.cxOff, top: L.top }));   // stacks 2,4,6
 }
 // Gear placement. On the climb level each gear sits on the TOP ledge of its own loop
 // (shoes loop 1, helmet loop 2, rope loop 3) — Abu climbs the whole stack each time —
@@ -2480,6 +2520,19 @@ function drawPits() {
   }
 }
 
+
+// Knife pickups on the climb top ledges: the camping-knife sprite with a gentle bob.
+function drawKnifeItems() {
+  if (!imgLoaded.knife) return;
+  const img = images.knife, ar = img.naturalHeight / img.naturalWidth;
+  for (const k of knifeItems) {
+    if (k.collected) continue;
+    const sx = k.x - cameraX;
+    if (sx > VIEW_W || sx + k.w < 0) continue;
+    const bob = Math.sin(performance.now() / 300 + k.t) * 3, dw = k.w, dh = dw * ar;
+    ctx.drawImage(img, sx, k.y + (k.h - dh) / 2 + bob, dw, dh);
+  }
+}
 
 function drawCarabiners() {
   for (const c of carabiners) {
@@ -3202,13 +3255,13 @@ function resetGame() {
   levelIndex = 0;
   enemySpawnTimer = rand(ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX);
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
-  platforms = []; carabiners = []; enemies = [];
+  platforms = []; carabiners = []; knifeItems = []; enemies = [];
   pits = []; levelCarabiners = 0; dashboard = null;
   particles = []; shake = 0; newBest = false;
   gearItems = []; gearThisLevel = { shoes: false, rope: false, helmet: false };
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   summitReady = false; summitGateX = 0; climb = null; inClimb = false; climbSteps = [];   // clear the summit-climb gate
-  carabinerAmmo = START_CARABINERS; projectiles = [];
+  carabinerAmmo = startAmmo(); projectiles = [];
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
     player.y = surfaceY(player.x + player.w / 2) - player.h;   // stand on the painted ledge
@@ -3260,7 +3313,7 @@ function advanceLevel() {
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets each level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
   summitReady = false; summitGateX = 0; climb = null; inClimb = false; climbSteps = [];   // clear the summit-climb gate
-  carabinerAmmo = START_CARABINERS; projectiles = [];
+  projectiles = [];   // knives CARRY OVER between levels — no refill here (collected in Level 1)
   invulnTimer = INVULN_TIME;   // brief grace as the new level loads in
   Music.setTrack(currentLevel().music);    // switch to the new level's track (keeps playing)
   // Entering a natural level: drop the player onto the new painted surface so
@@ -3366,7 +3419,7 @@ function updateClimb(dt) {
 function enterClimbPlay() {
   climb = null; inClimb = true; state = "playing";
   climbRopeT = 0;
-  platforms = []; enemies = []; carabiners = []; gearItems = []; projectiles = [];
+  platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; projectiles = [];
   shelters = []; descentRopes = []; ropes = []; crashPlats = []; icicles = []; pits = [];
   const p0 = climbRopeAt(0);                         // attach Abu to the rope base
   player.x = p0.x - player.w / 2; player.y = p0.y - player.h; player.vx = 0; player.vy = 0;
@@ -3425,6 +3478,7 @@ function update(dt) {
   updateProjectiles(dt); // thrown carabiners: fly, hit enemies/terrain
   updateIcicles(dt);
   handleCarabiners();
+  handleKnifeItems();
   handleGear();
   handleHazards();
   handleEnemies();
@@ -3566,6 +3620,7 @@ function draw() {
   drawRopes();             // climbable ropes (Level 4)
   drawDescentRopes();      // platform-edge descent ropes (Level 1)
   drawCarabiners();
+  drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
   drawGear();              // collectible shoes / rope / helmet on the path
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
