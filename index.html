@@ -384,6 +384,14 @@ const EAGLE_PERCH_APPROACH_SPEED = 150;
 const EAGLE_TAKEOFF_TIME = 0.6, EAGLE_TAKEOFF_RISE = 65;
 const EAGLE_PERCH_ALERT_DIST = 150;     // Abu this close -> take off
 const EAGLE_NEST_GUARD_DIST = 180;      // Abu near an uncollected nest gear -> guardian takes off
+// Baby eagles: small low-flying harassers along the ground path (a threat to a fast
+// runner who'd otherwise blow past the high-patrolling territorial eagles).
+const BABY_EAGLE_W = 38, BABY_EAGLE_H = 26;   // small torso hitbox
+const BABY_EAGLE_VIS = 76;                    // drawn size
+const BABY_EAGLE_HEIGHT = 42;                 // height above the terrain (around Abu's head)
+const BABY_EAGLE_SPEED = 150;                 // px/s leftward (scrolls in ahead, meets the runner)
+const BABY_EAGLE_SPAWN_MIN = 2.2, BABY_EAGLE_SPAWN_MAX = 4.0;
+const BABY_EAGLE_MAX = 2;
 // Rope swing (Level 4): a pendulum you grab, pump, and launch off.
 const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
 const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
@@ -919,6 +927,7 @@ let icicleTimer = 0; // countdown to the next icicle drop
 let eagleTerritories = [];  // Level 3 nest territories (one per tile near the camera)
 let eagleNests = [];        // Level 3 gear nests (3, distributed every 5th tile; persist after pickup)
 let eaglePerches = [];      // Level 3 perch points (per territory platform); eagles land + watch + take off
+let babyEagleTimer = 0;     // Level 3 countdown to the next low ground-path baby eagle
 let eagleTipShown = false;  // one-time "watch its shadow" hint
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
@@ -1366,8 +1375,35 @@ function spawnGuardSnake(cx, top, ledgeW) {
    ============================================================================ */
 function clearEagleTerritories() {
   eagleTerritories = []; eagleNests = []; eaglePerches = [];
-  if (typeof enemies !== "undefined" && enemies) enemies = enemies.filter(e => !e.eagle);
-  eagleTipShown = false;
+  if (typeof enemies !== "undefined" && enemies) enemies = enemies.filter(e => !e.eagle && !e.baby);
+  eagleTipShown = false; babyEagleTimer = rand(BABY_EAGLE_SPAWN_MIN, BABY_EAGLE_SPAWN_MAX);
+}
+// Low ground-path baby eagle: flies in from ahead at head height and harasses Abu
+// (forces a fast runner to jump or throw). A regular enemy: stomp/throw to kill.
+function spawnBabyEagle() {
+  const W = BABY_EAGLE_W, H = BABY_EAGLE_H, x = cameraX + VIEW_W + rand(40, 160);
+  const y = surfaceY(x + W / 2) - BABY_EAGLE_HEIGHT - H;
+  enemies.push({ baby: true, type: "babyeagle", x, y, w: W, h: H, baseY: y, alive: true, hp: 1,
+    points: STOMP_POINTS, color: "#7a5a30", air: true, phase: Math.random() * 6.28, frameTime: Math.random() * 2, hitFlash: 0 });
+}
+function updateBabyEagle(e, dt) {
+  if (e.hitFlash > 0) e.hitFlash -= dt;
+  e.frameTime += dt; e.phase += dt * 6;
+  e.x -= BABY_EAGLE_SPEED * dt;                                  // fly left toward the runner
+  const target = surfaceY(e.x + e.w / 2) - BABY_EAGLE_HEIGHT - e.h;
+  e.baseY += (target - e.baseY) * Math.min(1, 3 * dt);          // hug the undulating terrain height
+  e.y = e.baseY + Math.sin(e.phase) * 6;                        // bob
+}
+function drawBabyEagle(e) {
+  const sx = e.x - cameraX;
+  if (sx < -80 || sx > VIEW_W + 80) return;
+  if (!imgLoaded.enemyEagle) { ctx.fillStyle = e.color; ctx.fillRect(sx, e.y, e.w, e.h); return; }
+  const img = images.enemyEagle, cw = img.naturalWidth / 3;
+  const cy = e.y + e.h / 2, dw = BABY_EAGLE_VIS, dh = dw, dy = cy - dh / 2 + 2;
+  const seq = [0, 1, 2, 1], fi = seq[Math.floor(e.frameTime * 9) % 4];   // quick flap
+  ctx.save(); if (e.hitFlash > 0) ctx.globalAlpha = 0.55;
+  ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, (e.x + e.w / 2 - cameraX) - dw / 2, dy, dw, dh);  // faces left (flying left)
+  ctx.restore();
 }
 // The surface (ground or a platform top) directly beneath the locked target.
 function findShadowSurfaceY(worldX, targetY) {
@@ -1404,6 +1440,12 @@ function updateEagleTerritories(dt) {
     if (!onScreen) continue;
     const taken = enemies.some(e => e.eagle && e.alive && e.tile === z.tile);
     if (!taken && liveEagles() < EAGLE_MAX) spawnTerritoryEagle(z);
+  }
+  // Low ground-path baby eagles (keep the fast runner honest).
+  babyEagleTimer -= dt;
+  if (babyEagleTimer <= 0) {
+    babyEagleTimer = rand(BABY_EAGLE_SPAWN_MIN, BABY_EAGLE_SPAWN_MAX);
+    if (enemies.filter(e => e.baby && e.alive).length < BABY_EAGLE_MAX) spawnBabyEagle();
   }
 }
 // One patrolling eagle for a territory, started AWAY from Abu, in patrol (never dive).
@@ -1614,6 +1656,7 @@ function updateEnemies(dt) {
   const natural = currentLevel().terrain === "natural";
   for (const e of enemies) {
     if (e.eagle) { updateEagle(e, dt); continue; }   // Level 3 territorial eagle state machine
+    if (e.baby)  { updateBabyEagle(e, dt); continue; }  // Level 3 low ground-path harasser
     if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
       e.x += e.dir * GUARD_SPEED * d * dt;
       if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
@@ -2922,6 +2965,7 @@ function drawEnemyAnim(e, dx, dy, dw, dh) {
 function drawEnemies() {
   for (const e of enemies) {
     if (e.eagle) { drawEagle(e); continue; }             // Level 3 golden eagle (own renderer)
+    if (e.baby)  { drawBabyEagle(e); continue; }         // Level 3 low ground-path harasser
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
     if (e.guard) {                                       // red ledge-patrol snake (2-frame walk)
