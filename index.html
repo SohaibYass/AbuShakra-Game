@@ -318,7 +318,10 @@ const MATTERHORN_SURF = [312.0, 312.0, 312.0, 312.0, 312.0, 311.6, 311.6, 311.6,
 // Grande_Front.png alpha. Platforms 1 & 2 reach from the ground; platform 3
 // (higher) is reached by hopping up from platform 2.
 const GRANDE_TILE_W = 675;
-const GRANDE_PLATFORMS = [{x0:17,x1:176,top:154,shelter:true}, {x0:279,x1:409,top:169}, {x0:498,x1:634,top:123}];   // platform 1 doubles as the stamina shelter (cabin every 5th loop)
+// Collision boxes aligned to the grass lines painted into fgGrande (the art is squished
+// 1536x1024 -> 676x450 per tile, so these are measured in screen/world coords). Platform 1
+// doubles as the stamina shelter (cabin every 5th loop).
+const GRANDE_PLATFORMS = [{x0:43,x1:173,top:151,shelter:true}, {x0:286,x1:406,top:167}, {x0:521,x1:619,top:116}];
 const GRANDE_SURF = [297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 298.8, 298.8, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.3, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 299.7, 300.1, 301.0, 302.8, 302.8, 303.2, 304.1, 304.1, 305.0, 306.7, 306.7, 307.2, 307.2, 307.6, 308.1, 308.1, 313.3, 313.8, 315.1, 315.5, 315.5, 316.4, 316.8, 317.3, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 318.6, 318.2, 317.7, 317.3, 316.8, 316.8, 316.8, 316.4, 316.4, 316.4, 316.4, 316.4, 316.4, 316.0, 316.0, 316.0, 316.0, 316.0, 315.5, 315.5, 315.5, 315.5, 315.5, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 314.6, 314.6, 314.2, 313.8, 313.3, 312.9, 312.5, 312.0, 312.0, 311.6, 309.8, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 308.1, 307.6, 307.6, 307.2, 306.7, 306.7, 306.3, 306.3, 306.3, 306.3, 304.1, 302.8, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3, 302.3];
 // Level 2 now uses two parallax layers (Grossglockner_Back + transparent
 // Grossglockner_Front2), tile width 675; ground heightmap + 2 floating platforms
@@ -373,6 +376,14 @@ const EAGLE_STUN_MIN = 0.85, EAGLE_STUN_MAX = 1.15;
 const EAGLE_ATTACK_CD_MIN = 1.8, EAGLE_ATTACK_CD_MAX = 3.2;  // patrol time before an attack
 const EAGLE_MAX = 2;                // at most 2 eagles on screen
 const EAGLE_TERRITORY_PAD = 70;     // patrol inset from the tile edges
+// Eagle perches: an eagle sometimes lands on a ledge, watches Abu, then takes off.
+const EAGLE_PERCH_WAIT_MIN = 2.5, EAGLE_PERCH_WAIT_MAX = 5.0;   // patrol time before a perch roll
+const EAGLE_PERCH_CHANCE = 0.30;                                // chance to perch when the roll fires
+const EAGLE_PERCH_TIME_MIN = 1.4, EAGLE_PERCH_TIME_MAX = 3.0;   // time spent perched
+const EAGLE_PERCH_APPROACH_SPEED = 150;
+const EAGLE_TAKEOFF_TIME = 0.6, EAGLE_TAKEOFF_RISE = 65;
+const EAGLE_PERCH_ALERT_DIST = 150;     // Abu this close -> take off
+const EAGLE_NEST_GUARD_DIST = 180;      // Abu near an uncollected nest gear -> guardian takes off
 // Rope swing (Level 4): a pendulum you grab, pump, and launch off.
 const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
 const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
@@ -790,6 +801,7 @@ const Music = (() => {
     sfxEagleCry()  { if (!sfxReady()) return; const t = actx.currentTime; blip(1450, t, 0.05, "sawtooth", 0.28); blip(1950, t + 0.05, 0.07, "sawtooth", 0.24); blip(1250, t + 0.13, 0.06, "sawtooth", 0.2); },  // screech
     sfxEagleDive() { if (!sfxReady()) return; slide(620, 170, actx.currentTime, 0.32, "sawtooth", 0.24); },   // fast wind swoosh
     sfxEagleHit()  { if (!sfxReady()) return; slide(220, 70, actx.currentTime, 0.14, "triangle", 0.4); },      // feather/impact
+    sfxEagleTakeoff() { if (!sfxReady()) return; const t = actx.currentTime; slide(170, 90, t, 0.11, "triangle", 0.2); slide(150, 80, t + 0.1, 0.11, "triangle", 0.17); },  // two wing beats
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -906,6 +918,7 @@ let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
 let icicleTimer = 0; // countdown to the next icicle drop
 let eagleTerritories = [];  // Level 3 nest territories (one per tile near the camera)
 let eagleNests = [];        // Level 3 gear nests (3, distributed every 5th tile; persist after pickup)
+let eaglePerches = [];      // Level 3 perch points (per territory platform); eagles land + watch + take off
 let eagleTipShown = false;  // one-time "watch its shadow" hint
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
@@ -1352,7 +1365,7 @@ function spawnGuardSnake(cx, top, ledgeW) {
    them (one per tile, max 2) instead of the generic timer.
    ============================================================================ */
 function clearEagleTerritories() {
-  eagleTerritories = []; eagleNests = [];
+  eagleTerritories = []; eagleNests = []; eaglePerches = [];
   if (typeof enemies !== "undefined" && enemies) enemies = enemies.filter(e => !e.eagle);
   eagleTipShown = false;
 }
@@ -1371,8 +1384,20 @@ function updateEagleTerritories(dt) {
   for (let t = a; t <= b; t++) {
     if (t < 0 || eagleTerritories.some(z => z.tile === t)) continue;
     eagleTerritories.push({ tile: t, cx: t * tw + tw / 2, x0: t * tw + EAGLE_TERRITORY_PAD, x1: (t + 1) * tw - EAGLE_TERRITORY_PAD });
+    // one perch per platform top in this tile (offset clear of any gear nest)
+    for (const bx of (lvl.platforms || [])) {
+      const pcx = t * tw + (bx.x0 + bx.x1) / 2;
+      const nest = eagleNests.find(n => Math.abs(n.cx - pcx) < 90 && Math.abs(n.top - bx.top) < 2);
+      eaglePerches.push({ x: nest ? pcx - 52 : pcx, y: bx.top, tile: t, occupied: false, nearNest: !!nest });
+    }
   }
   eagleTerritories = eagleTerritories.filter(z => z.x1 > cameraX - 500);
+  eaglePerches = eaglePerches.filter(p => p.x > cameraX - 500);
+  // Reconcile reservations: a perch is occupied iff a live eagle still holds it.
+  for (const p of eaglePerches) p.occupied = false;
+  for (const e of enemies) if (e.eagle && e.alive && e.perchObj) {
+    if (eaglePerches.indexOf(e.perchObj) >= 0) e.perchObj.occupied = true; else e.perchObj = null;
+  }
   const liveEagles = () => enemies.filter(e => e.eagle && e.alive).length;
   for (const z of eagleTerritories) {
     const onScreen = z.x1 > cameraX - 40 && z.x0 < cameraX + VIEW_W + 140;
@@ -1393,7 +1418,8 @@ function spawnTerritoryEagle(z) {
     x: startCx - W / 2, y: patrolY, w: W, h: H, alive: true, hp: 1, points: STOMP_POINTS, color: ENEMY_TYPES.eagle.color, air: true,
     state: "patrol", stateTimer: 0, patrolY, dir: (pcx < z.cx ? -1 : 1),
     targetX: 0, targetY: 0, warnY: 0, warnDur: 0, shadowX: 0,
-    attackCd: rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX), phase: Math.random() * 6.28, frameTime: Math.random() * 2, hitFlash: 0
+    attackCd: rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX), phase: Math.random() * 6.28, frameTime: Math.random() * 2, hitFlash: 0,
+    perchTimer: rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX), perchObj: null, perchX: null, perchY: null, takeoffStartY: 0, takeoffCd: 0, faceTimer: 0
   });
 }
 function beginEagleWarning(e) {
@@ -1403,6 +1429,44 @@ function beginEagleWarning(e) {
   e.shadowX = e.x + e.w / 2;
   Music.sfxEagleCry();
   if (!eagleTipShown) { eagleTipShown = true; toast = { text: "EAGLE ATTACK! Watch its shadow and move before it dives.", timer: 3.4 }; }
+}
+// ---- Perch helpers ----
+function findPerchForEagle(e) {
+  let best = null, bestScore = -1e9;
+  for (const p of eaglePerches) {
+    if (p.tile !== e.tile || p.occupied) continue;
+    if (p.x < cameraX - 30 || p.x > cameraX + VIEW_W + 60) continue;        // must be on/near screen
+    const s = (p.nearNest ? 30 : 0) - Math.abs(p.x - (e.x + e.w / 2)) * 0.02;  // prefer nest-side & nearer
+    if (s > bestScore) { bestScore = s; best = p; }
+  }
+  return best;
+}
+function reservePerch(e, p) { p.occupied = true; e.perchObj = p; e.perchX = p.x; e.perchY = p.y; }
+function releasePerch(e) { if (e.perchObj) e.perchObj.occupied = false; e.perchObj = null; }
+function canEaglePerch(e) {
+  if (e.takeoffCd > 0 || aabb(player, e)) return false;
+  if (enemies.some(o => o.eagle && o.alive && (o.state === "warning" || o.state === "dive"))) return false;  // not while a dive is telegraphing
+  return true;
+}
+// Guardian: Abu near an uncollected gear within reach -> the perched eagle takes off.
+function nestGuardAlert(e) {
+  const pcx = player.x + player.w / 2, ecx = e.x + e.w / 2;
+  for (const it of gearItems) {
+    if (it.collected) continue;
+    const gcx = it.x + it.w / 2;
+    if (Math.abs(gcx - pcx) < EAGLE_NEST_GUARD_DIST && Math.abs(gcx - ecx) < 360) return true;
+  }
+  return false;
+}
+function eagleFeathers(x, y) {
+  spawnParticles(x, y, 5, { angMin: -Math.PI, angMax: 0, spdMin: 30, spdMax: 120,
+    grav: 240, lifeMin: 0.4, lifeMax: 0.85, sizeMin: 2, sizeMax: 4,
+    colors: ["#e8e0d0", "#cdbfa0", "#b8a888", "#fff8ec"] });
+}
+function beginEagleTakeoff(e) {
+  e.state = "takeoff"; e.stateTimer = EAGLE_TAKEOFF_TIME; e.takeoffStartY = e.y; e.frameTime = 0;
+  eagleFeathers(e.x + e.w / 2, (e.perchY != null ? e.perchY : e.y + e.h));
+  Music.sfxEagleTakeoff();
 }
 function updateEagle(e, dt) {
   e.frameTime += dt;
@@ -1414,9 +1478,47 @@ function updateEagle(e, dt) {
     if (e.x < e.x0) { e.x = e.x0; e.dir = 1; }
     else if (e.x + e.w > e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
     e.attackCd -= dt;
+    if (e.takeoffCd > 0) e.takeoffCd -= dt;
     const pcx = player.x + player.w / 2, sxp = e.x - cameraX;
     const abuNear = pcx > e.x0 - 130 && pcx < e.x1 + 130;
-    if (e.attackCd <= 0 && abuNear && sxp > -40 && sxp < VIEW_W + 40 && state === "playing") beginEagleWarning(e);
+    if (e.attackCd <= 0 && abuNear && sxp > -40 && sxp < VIEW_W + 40 && state === "playing") {
+      beginEagleWarning(e);                     // warning always wins
+    } else {
+      e.perchTimer -= dt;                       // otherwise occasionally land on a perch
+      if (e.perchTimer <= 0) {
+        e.perchTimer = rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX);
+        if (canEaglePerch(e) && Math.random() < EAGLE_PERCH_CHANCE) {
+          const p = findPerchForEagle(e);
+          if (p) { reservePerch(e, p); e.state = "approachPerch"; e.dir = (p.x < e.x + e.w / 2) ? -1 : 1; }
+        }
+      }
+    }
+  } else if (e.state === "approachPerch") {
+    e.frameTime += dt;
+    const cxv = e.x + e.w / 2, cyv = e.y + e.h / 2;
+    const dx = e.perchX - cxv, dy = (e.perchY - e.h / 2) - cyv, dist = Math.hypot(dx, dy) || 1;
+    const sp = Math.min(EAGLE_PERCH_APPROACH_SPEED, dist * 2.6 + 20);   // ease in near the perch
+    e.x += (dx / dist) * sp * dt; e.y += (dy / dist) * sp * dt;
+    e.dir = (e.perchX < cxv) ? -1 : 1;
+    if (dist < 7) { e.x = e.perchX - e.w / 2; e.y = e.perchY - e.h; e.state = "perched"; e.stateTimer = rand(EAGLE_PERCH_TIME_MIN, EAGLE_PERCH_TIME_MAX); e.faceTimer = 0; }
+  } else if (e.state === "perched") {
+    e.stateTimer -= dt; e.phase += dt * 1.5;
+    const pcx = player.x + player.w / 2, ecx = e.x + e.w / 2;
+    e.faceTimer -= dt;
+    if (e.faceTimer <= 0) { e.dir = (pcx < ecx) ? -1 : 1; e.faceTimer = 0.5; }   // turn only occasionally
+    if (Math.abs(pcx - ecx) < EAGLE_PERCH_ALERT_DIST || nestGuardAlert(e) || e.stateTimer <= 0) beginEagleTakeoff(e);
+  } else if (e.state === "takeoff") {
+    e.stateTimer -= dt; e.frameTime += dt;
+    const prog = 1 - Math.max(0, e.stateTimer) / EAGLE_TAKEOFF_TIME;
+    e.y = e.takeoffStartY - EAGLE_TAKEOFF_RISE * prog;
+    const pcx = player.x + player.w / 2;
+    e.x += ((e.x + e.w / 2 < pcx) ? -1 : 1) * 38 * dt;       // edge away from Abu
+    if (e.stateTimer <= 0) {
+      releasePerch(e);
+      e.state = "recover"; e.stateTimer = rand(0.6, 0.9);
+      e.takeoffCd = 1.2; e.perchTimer = rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX);
+      e.patrolY = surfaceY(e.x + e.w / 2) - rand(EAGLE_PATROL_H_MIN, EAGLE_PATROL_H_MAX) - e.h;
+    }
   } else if (e.state === "warning") {
     e.stateTimer -= dt; e.phase += dt * 1.4;
     e.y = e.warnY + Math.sin(e.phase) * 4;
@@ -1452,9 +1554,11 @@ function updateEagle(e, dt) {
   }
 }
 function eagleFrameIndex(e) {
+  if (e.state === "perched") return 2;        // wings lowered (settled)
+  if (e.state === "takeoff") { const prog = 1 - Math.max(0, e.stateTimer) / EAGLE_TAKEOFF_TIME; return prog < 0.34 ? 2 : (prog < 0.67 ? 1 : 0); }  // lowered -> level -> raised
   if (e.state === "dive") return 1;          // wings-level glide
   if (e.state === "stunned") return 2;
-  const fps = (e.state === "warning") ? 4 : 7, seq = [0, 1, 2, 1];
+  const fps = (e.state === "warning") ? 4 : (e.state === "approachPerch" ? 5 : 7), seq = [0, 1, 2, 1];
   return seq[Math.floor(e.frameTime * fps) % 4];
 }
 function drawEagleShadow(e) {
@@ -1475,7 +1579,9 @@ function drawEagle(e) {
   const img = images.enemyEagle, cw = img.naturalWidth / 3;
   const cx = e.x + e.w / 2, sx = cx - cameraX, cy = e.y + e.h / 2;
   if (sx < -100 || sx > VIEW_W + 100) return;
-  const dw = EAGLE_VIS_W, dh = dw, dy = cy - dh / 2 + EAGLE_VIS_DY, fi = eagleFrameIndex(e);
+  const perched = e.state === "perched";
+  const dw = perched ? EAGLE_VIS_W * 0.84 : EAGLE_VIS_W, dh = dw;   // narrower silhouette when perched
+  const dy = cy - dh / 2 + EAGLE_VIS_DY + (perched ? 12 : 0), fi = eagleFrameIndex(e);   // settle onto the ledge
   const movingRight = (e.state === "dive") ? (e.targetX > cx) : (e.dir > 0);
   ctx.save();
   if (e.hitFlash > 0) ctx.globalAlpha = 0.55;
