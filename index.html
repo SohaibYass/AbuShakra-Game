@@ -237,6 +237,7 @@ const ASSETS = {
   abuMantle:  "abu_mantle.png?v=1", // 2-frame ledge mantle (hang -> pull up), Level 1
   descendAnchor: "descend_anchor.png?v=1", // eye-bolt fixture at a platform edge
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
+  fallingRocks:  "falling_rocks_3frame.png?v=1", // Level 2 rockfall: 3 equal frames (warning / boulder / impact)
   shelter:    "shelter.png?v=5",    // wooden cabin (bigger flag + smoke), on Level 1's 3rd platform
   abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
   abuExhausted: "abu_exhausted.png?v=1", // 3-frame panting/hunch when stamina is low
@@ -361,6 +362,26 @@ const CRASH_FALL_MIN = 0.6, CRASH_FALL_MAX = 1.0;  // s a platform shakes before
 const ICICLE_MIN = 1.1, ICICLE_MAX = 2.3;  // s between icicle drops (before difficulty scaling)
 const ICICLE_WARN = 0.8;                    // s of ground-marker telegraph before it falls
 const ICICLE_W = 12, ICICLE_H = 30;         // icicle size (px)
+// Rockfall (Level 2): continuous telegraphed boulders in zones around each gear.
+// The sheet is 3 equal 724px frames; these source rects crop the keyed content of
+// each frame (warning ring / boulder / impact debris) for clean, anchored draws.
+const ROCK_FRAMES = [
+  { sx: 102,  sy: 97,  sw: 524, sh: 571 },   // 0 — warning: orange cracked ring + pebbles
+  { sx: 888,  sy: 142, sw: 373, sh: 482 },   // 1 — falling boulder
+  { sx: 1479, sy: 358, sw: 565, sh: 334 },   // 2 — impact dust + debris
+];
+const ROCK_WARN_MIN = 0.78, ROCK_WARN_MAX = 1.0;   // telegraph time (>=0.75s, always fair)
+const ROCK_FALL_MIN = 0.42, ROCK_FALL_MAX = 0.62;  // boulder descent time
+const ROCK_IMPACT_MIN = 0.30, ROCK_IMPACT_MAX = 0.45;
+const ROCK_SPAWN_MIN = 1.2, ROCK_SPAWN_MAX = 2.2;  // gap between rocks in a zone
+const ROCK_INTRO_DELAY = 1.0;                       // no rockfalls in the first second of the level
+const ROCK_ZONE_HALF = 200;                         // danger-zone half-width (~400px wide)
+const ROCK_MAX_ACTIVE = 2;                          // at most 2 rocks on screen at once
+const ROCK_WARN_W = 150, ROCK_WARN_FOOT = 6;        // warning-ring draw width + ground overlap
+const ROCK_BOULDER_W = 104;                         // falling-boulder draw width (~110-135 tall)
+const ROCK_IMPACT_W = 158, ROCK_IMPACT_FOOT = 4;    // impact-debris draw width
+const ROCK_HIT_W = 70, ROCK_HIT_H = 92;             // compact boulder hitbox (NOT the 724 cell)
+const ROCK_IMP_HW = 80, ROCK_IMP_H = 56;            // impact danger area (±80px x, 56px above terrain)
 // Rope swing (Level 4): a pendulum you grab, pump, and launch off.
 const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
 const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
@@ -434,6 +455,7 @@ const LEVELS = [
     // reaching the checkpoint flag finishes the level (no rope-climb finale, which
     // would need Grossglockner summit art). Carabiner count is separate from Score.
     climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },
+    rockfalls: true, gearSpawnX: [500, 1250, 2050],   // continuous-rockfall gear zones (Grossglockner only)
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
@@ -776,6 +798,9 @@ const Music = (() => {
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
+    sfxRockWarn()   { if (!sfxReady()) return; const t = actx.currentTime; blip(1180, t, 0.03, "square", 0.16); blip(860, t + 0.06, 0.03, "square", 0.13); },  // quiet pebble ticks
+    sfxRockFall()   { if (!sfxReady()) return; slide(230, 95, actx.currentTime, 0.42, "sawtooth", 0.3); },   // short descending rumble
+    sfxRockImpact() { if (!sfxReady()) return; slide(130, 44, actx.currentTime, 0.2, "sawtooth", 0.6); },    // low impact thud
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -890,6 +915,10 @@ let power = 100;       // Level 1 stamina (drains climbing/falling, refills in a
 let playerSheltered = false;  // is Abu currently inside a shelter?
 let icicles = [];    // Level 5 falling icicles (telegraphed ranged hazard)
 let icicleTimer = 0; // countdown to the next icicle drop
+let rockfalls = [];  // Level 2 active rockfall instances (warning -> falling -> impact)
+let rockZones = [];  // Level 2 danger zones (one per gear), spawn rockfalls while near
+let rockIntroTimer = 0;   // grace period at level start before the first rockfall
+let rockTipShown = false; // one-time "move before the boulder" hint
 let weather = [];    // Level 5 snowstorm flakes (screen-space)
 let windCurrent = 0; // Level 5 wind force (px/s), varies over time
 let windT = 0;       // wind phase clock
@@ -1874,11 +1903,24 @@ function spawnGearForLevel(base = 0) {
     });
     return;
   }
+  const xs = lvl.gearSpawnX || GEAR_SPAWN_X;
   GEAR.forEach((g, i) => {
     if (gearThisLevel[g.id]) return;
-    const w = gearW(g), cx = base + GEAR_SPAWN_X[i];
+    const w = gearW(g), cx = base + xs[i];
     gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: surfaceY(cx) - 8 - g.h, w, h: g.h, t: Math.random() * 6.28 });
   });
+  if (lvl.rockfalls) initRockfallsForLevel(base, xs);   // one danger zone per gear position
+}
+
+// Build the rockfall danger zones (one centred on each gear) and arm the intro grace.
+function initRockfallsForLevel(base, xs) {
+  rockfalls = []; rockZones = []; rockIntroTimer = ROCK_INTRO_DELAY; rockTipShown = false;
+  xs.forEach((dx, i) => {
+    const zc = base + dx;
+    rockZones.push({ id: i, cx: zc, x0: zc - ROCK_ZONE_HALF, x1: zc + ROCK_ZONE_HALF,
+      spawnTimer: rand(ROCK_SPAWN_MIN, ROCK_SPAWN_MAX), lastX: null, dead: false });
+  });
+  toast = { text: "ROCKFALL! Watch the warning marks and collect all gear.", timer: 3.4 };
 }
 // Forgiving pickup: collect the gear, flag it, jingle + sparkle + toast.
 function handleGear() {
@@ -2223,8 +2265,127 @@ function drawIcicles() {
   }
 }
 
+/* ---- Level 2 rockfall hazard: telegraphed boulders, continuous in gear zones ---- */
+function clearRockfalls() { rockfalls = []; rockZones = []; rockIntroTimer = 0; }
+
+// Brown rock-dust burst on impact.
+function rockDust(x, y) {
+  spawnParticles(x, y, 16, { angMin: -Math.PI, angMax: 0, spdMin: 40, spdMax: 210,
+    grav: 760, lifeMin: 0.35, lifeMax: 0.7, sizeMin: 2, sizeMax: 5,
+    colors: ["#8a6f53", "#b9a07e", "#6b5640", "#d8c3a0", "#a98c66"] });
+}
+
+// Pick an impact point in the zone, mostly random but occasionally near the player;
+// never (almost) the same spot twice, and not on a gear item Abu is currently touching.
+function spawnRockfall(z) {
+  const pad = 44;
+  const lo = z.x0 + pad, hi = z.x1 - pad;
+  const pcx = player.x + player.w / 2;
+  let x = (Math.random() < 0.33) ? pcx + rand(-44, 44) : rand(lo, hi);
+  x = Math.max(lo, Math.min(hi, x));
+  if (z.lastX != null && Math.abs(x - z.lastX) < 70)            // avoid back-to-back same spot
+    x = Math.max(lo, Math.min(hi, x + (x >= z.lastX ? 90 : -90)));
+  // Don't begin a warning on a gear item while Abu is standing on it.
+  for (const it of gearItems) {
+    if (it.collected) continue;
+    const gcx = it.x + it.w / 2;
+    if (Math.abs(x - gcx) < 46 && aabb(player, it)) { x = (gcx - z.cx >= 0) ? lo : hi; break; }
+  }
+  z.lastX = x;
+  const groundY = surfaceY(x);
+  rockfalls.push({
+    x, groundY, zoneId: z.id, phase: "warning",
+    timer: rand(ROCK_WARN_MIN, ROCK_WARN_MAX),
+    fallDur: rand(ROCK_FALL_MIN, ROCK_FALL_MAX),
+    fallStartY: groundY - rand(244, 300), impactY: groundY - 26,
+    fallY: groundY - 280, hitPlayer: false,
+  });
+  Music.sfxRockWarn();
+}
+
+// One rock can cost at most one life: hitPlayer latches on first contact; loseLife
+// self-guards on i-frames. Falling -> compact boulder box; impact -> ground danger area.
+function handleRockfallCollision(r) {
+  if (r.hitPlayer) return;
+  let box = null;
+  if (r.phase === "falling") box = { x: r.x - ROCK_HIT_W / 2, y: r.fallY - ROCK_HIT_H / 2, w: ROCK_HIT_W, h: ROCK_HIT_H };
+  else if (r.phase === "impact") box = { x: r.x - ROCK_IMP_HW, y: r.groundY - ROCK_IMP_H, w: ROCK_IMP_HW * 2, h: ROCK_IMP_H };
+  if (box && aabb(player, box)) { r.hitPlayer = true; loseLife(); }
+}
+
+function updateRockfalls(dt) {
+  const lvl = currentLevel();
+  if (!lvl.rockfalls || state !== "playing") return;     // paused outside play
+  if (rockIntroTimer > 0) rockIntroTimer -= dt;
+  const pcx = player.x + player.w / 2;
+  // Spawn from each live, near-camera, near-player zone (one rock per zone, max 2 total).
+  for (const z of rockZones) {
+    if (z.x1 < cameraX - 500) { z.dead = true; }          // far behind -> stop spawning
+    if (z.dead) continue;
+    const onScreen = z.x1 > cameraX - 100 && z.x0 < cameraX + VIEW_W + 220;
+    const near = pcx > z.x0 - 120 && pcx < z.x1 + 120;
+    if (!onScreen || !near) continue;
+    if (!rockTipShown && z.id === 0) { rockTipShown = true; toast = { text: "Move before the boulder reaches the orange mark!", timer: 3.0 }; }
+    z.spawnTimer -= dt;
+    const zoneBusy = rockfalls.some(r => r.zoneId === z.id);
+    if (rockIntroTimer <= 0 && z.spawnTimer <= 0 && rockfalls.length < ROCK_MAX_ACTIVE && !zoneBusy) {
+      spawnRockfall(z);
+      z.spawnTimer = rand(ROCK_SPAWN_MIN, ROCK_SPAWN_MAX);
+    }
+  }
+  // Advance each rock through its phases.
+  for (const r of rockfalls) {
+    r.timer -= dt;
+    if (r.phase === "warning") {
+      if (r.timer <= 0) { r.phase = "falling"; r.timer = r.fallDur; Music.sfxRockFall(); }
+    } else if (r.phase === "falling") {
+      const p = 1 - Math.max(0, r.timer) / r.fallDur;       // ease-in descent to the marked point
+      r.fallY = r.fallStartY + (r.impactY - r.fallStartY) * (p * p);
+      handleRockfallCollision(r);
+      if (r.timer <= 0) { r.phase = "impact"; r.timer = rand(ROCK_IMPACT_MIN, ROCK_IMPACT_MAX); addShake(4); rockDust(r.x, r.groundY); Music.sfxRockImpact(); }
+    } else if (r.phase === "impact") {
+      handleRockfallCollision(r);
+      if (r.timer <= 0) r.done = true;
+    }
+  }
+  rockfalls = rockfalls.filter(r => !r.done && r.x > cameraX - 400 && r.x < cameraX + VIEW_W + 600);
+}
+
+// Warning ring — drawn BEHIND gear/player so the threat reads but doesn't block.
+function drawRockfallWarnings() {
+  if (!currentLevel().rockfalls || !imgLoaded.fallingRocks) return;
+  const img = images.fallingRocks, f = ROCK_FRAMES[0], now = performance.now();
+  for (const r of rockfalls) {
+    if (r.phase !== "warning") continue;
+    const sx = r.x - cameraX;
+    if (sx < -120 || sx > VIEW_W + 120) continue;
+    const dw = ROCK_WARN_W, dh = dw * f.sh / f.sw;
+    ctx.globalAlpha = 0.6 + 0.4 * Math.abs(Math.sin(now / 120));
+    ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, sx - dw / 2, r.groundY - dh + ROCK_WARN_FOOT, dw, dh);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Falling boulder + impact debris — drawn IN FRONT of the player so the threat is clear.
+function drawFallingRocks() {
+  if (!currentLevel().rockfalls || !imgLoaded.fallingRocks) return;
+  const img = images.fallingRocks;
+  for (const r of rockfalls) {
+    const sx = r.x - cameraX;
+    if (sx < -180 || sx > VIEW_W + 180) continue;
+    if (r.phase === "falling") {
+      const f = ROCK_FRAMES[1], dw = ROCK_BOULDER_W, dh = dw * f.sh / f.sw;
+      ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, sx - dw / 2, r.fallY - dh / 2, dw, dh);
+    } else if (r.phase === "impact") {
+      const f = ROCK_FRAMES[2], dw = ROCK_IMPACT_W, dh = dw * f.sh / f.sw;
+      ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, sx - dw / 2, r.groundY - dh + ROCK_IMPACT_FOOT, dw, dh);
+    }
+  }
+}
+
 // Called whenever a new level starts (test button, fresh game, or advance).
 function enterLevelEffects() {
+  clearRockfalls();
   crashPlats = []; windT = 0; windCurrent = 0;
   icicles = []; icicleTimer = rand(ICICLE_MIN, ICICLE_MAX);
   ropes = []; descentRopes = []; shelters = [];
@@ -3236,6 +3397,7 @@ function drawWin() {
 // Start a level's victory cutscene: pause the music, play + draw the video.
 // Falls back to muted (then to skipping) if autoplay is blocked.
 function startCutscene(path) {
+  clearRockfalls();
   cutsceneDone = false;
   if (cutsceneVideo.dataset.path !== path) { cutsceneVideo.src = path; cutsceneVideo.dataset.path = path; }
   try { cutsceneVideo.currentTime = 0; } catch (e) {}
@@ -3455,7 +3617,7 @@ function enterClimbPlay() {
   climb = null; inClimb = true; state = "playing";
   climbRopeT = 0;
   platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; projectiles = [];
-  shelters = []; descentRopes = []; ropes = []; crashPlats = []; icicles = []; pits = [];
+  shelters = []; descentRopes = []; ropes = []; crashPlats = []; icicles = []; pits = []; clearRockfalls();
   const p0 = climbRopeAt(0);                         // attach Abu to the rope base
   player.x = p0.x - player.w / 2; player.y = p0.y - player.h; player.vx = 0; player.vy = 0;
   player.onGround = true; player.onPlatform = false; player.mantle = null; player.descend = null;
@@ -3512,6 +3674,7 @@ function update(dt) {
   updateEnemies(dt);
   updateProjectiles(dt); // thrown carabiners: fly, hit enemies/terrain
   updateIcicles(dt);
+  updateRockfalls(dt);   // Level 2 telegraphed rockfall hazard
   handleCarabiners();
   handleKnifeItems();
   handleGear();
@@ -3654,6 +3817,7 @@ function draw() {
   drawCrashPlatforms();    // breaking ice ledges (Level 5)
   drawRopes();             // climbable ropes (Level 4)
   drawDescentRopes();      // platform-edge descent ropes (Level 1)
+  drawRockfallWarnings();  // Level 2 rockfall warning rings (behind gear/player)
   drawCarabiners();
   drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
   drawGear();              // collectible shoes / rope / helmet on the path
@@ -3661,6 +3825,7 @@ function draw() {
   drawEnemies();
   drawProjectiles();       // thrown carabiners in flight
   drawPlayer();
+  drawFallingRocks();      // Level 2 boulder + impact debris (in front of the player)
   drawIcicles();           // telegraph markers + falling spikes (Level 5)
   drawParticles();
   drawWeather();           // snowstorm flakes + whiteout fog (Level 5), over the world
