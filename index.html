@@ -323,7 +323,12 @@ const GRANDE_SURF = [297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297.0, 297
 // derived from the Grossglockner_Front2.png alpha. Platform 1 is reachable from
 // the ground; platform 2 (higher) is reached by hopping up from platform 1.
 const GLOCK_TILE_W = 675;
-const GLOCK_PLATFORMS = [{x0:288,x1:413,top:180}, {x0:496,x1:633,top:150}];
+// Collision boxes MUST stay aligned with the platforms painted into fgGlock — so the
+// positions are unchanged; we only add behaviour flags. The lower (1st) platform doubles
+// as the shelter (cabin sprite drawn on top, refills stamina every 5th loop); the 2nd
+// platform carries the descent rope off its right edge. jumpMul 0.90 (below) means each
+// must be mantled rather than hopped onto, but they stay reachable.
+const GLOCK_PLATFORMS = [{x0:288,x1:413,top:180,shelter:true}, {x0:496,x1:633,top:150,rope:true,ropeInset:34}];
 const GLOCK_SURF = [311.6, 311.6, 311.6, 311.6, 311.6, 311.1, 311.1, 311.1, 311.1, 311.1, 310.7, 310.7, 310.3, 310.3, 309.8, 309.4, 309.4, 309.4, 309.4, 309.4, 309.4, 309.8, 309.8, 309.8, 310.3, 310.7, 311.6, 312.5, 313.3, 313.8, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 313.3, 312.5, 312.0, 312.0, 312.0, 312.0, 312.0, 312.5, 312.9, 314.2, 314.6, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 315.1, 314.2, 313.8, 313.3, 313.3, 312.0, 312.0, 312.0, 312.0, 312.0, 312.0, 312.5, 312.5, 313.8, 314.2, 316.0, 316.0, 316.4, 316.8, 316.8, 317.7, 317.7, 317.7, 318.2, 318.2, 318.2, 319.0, 319.9, 319.9, 319.9, 319.9, 319.9, 319.9, 320.4, 320.4, 320.4, 321.2, 321.2, 322.6, 324.8, 324.8, 325.6, 326.5, 326.5, 326.5, 326.5, 326.5, 326.5, 326.5, 326.1, 326.1, 325.6, 325.6, 325.6, 325.2, 324.8, 324.3, 324.3, 323.4, 323.0, 323.0, 322.6, 321.7, 320.8, 319.9, 319.5, 319.5, 319.0, 319.0, 319.0, 319.0, 319.0, 319.0, 319.9, 321.2, 322.1, 322.1, 322.1, 322.1, 322.1, 322.1, 322.1, 321.7, 320.8, 320.4, 319.0, 318.6, 318.6, 318.2, 318.2, 318.2, 318.2, 318.2, 318.2, 318.2, 317.7, 317.7, 317.7, 315.1, 315.1, 315.1, 314.6, 314.6, 314.6, 314.6, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 314.2, 314.6, 316.0, 316.8, 317.3, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 317.7, 316.4, 315.1, 313.8, 313.3, 312.5, 312.0, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 311.6, 312.0, 312.0, 312.0, 313.8, 314.2, 314.2, 314.2, 314.6, 314.6, 314.2, 314.2, 314.2, 314.2, 314.2, 313.8, 313.8, 313.8, 313.8, 313.8, 313.8, 315.1, 315.5, 316.8, 316.8, 316.8, 316.8, 317.3, 317.3, 317.3, 317.3, 317.3];
 
 const GRAVITY        = 2000;   // px/s^2
@@ -422,8 +427,9 @@ const LEVELS = [
     enemySize: { walker: { w: 60, h: 37 }, tank: { w: 98, h: 61 } },
     enemyFrames: { key: "enemyBearWalk", count: 4, fps: 7, aspect: 408 / 254 }, // 4-frame walk strip
     enemyWalk: { speed: 7, bob: 2, squash: 0.08, sway: 1 },   // subtle bob layered over frame walk
-    // Two parallax layers (far mountains + transparent foreground) with 2 floating platforms.
+    // Two parallax layers (far mountains + transparent foreground) with 2 painted platforms.
     terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS,
+    jumpMul: 0.90, ledgeGrab: true, descend: true, power: true,   // deliberate hops + mantle + descent ropes + stamina/shelters
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
@@ -1086,7 +1092,7 @@ function generateAhead() {
       if (lvl.platforms) for (let t = a; t <= b; t++) {
         const shelterTile = t > 0 && (((t % 5) + 5) % 5) === 0;   // shelter every 5th loop (tiles 5, 10, 15, … — none at spawn)
         for (const bx of lvl.platforms) {
-          platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, shelter: bx.shelter && shelterTile });
+          platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, ropeInset: bx.ropeInset, shelter: bx.shelter && shelterTile });
         }
       }
       // Upper ledges above the platforms (Level 1) — a stacked climb per shelter tile.
@@ -1108,7 +1114,7 @@ function generateAhead() {
       descentRopes = [];
       if (lvl.descend && lvl.platforms) for (const p of platforms) {
         if (!p.rope) continue;
-        const rx = p.x + p.w - 6;
+        const rx = p.x + p.w - 6 - (p.ropeInset || 0);   // right edge, optionally inset a bit to the left
         descentRopes.push({ x: rx, top: p.y, bottom: surfaceY(rx) - 50 });
       }
       // Shelter safe-zones = the shelter ledges (up on a platform, off the ground path).
