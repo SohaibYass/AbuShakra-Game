@@ -430,6 +430,10 @@ const LEVELS = [
     // Two parallax layers (far mountains + transparent foreground) with 2 painted platforms.
     terrain: "natural", bgMode: "parallax", surf: GLOCK_SURF, tileW: GLOCK_TILE_W, platforms: GLOCK_PLATFORMS,
     jumpMul: 0.90, ledgeGrab: true, descend: true, power: true,   // deliberate hops + mantle + descent ropes + stamina/shelters
+    // Same pass-gate as Level 1 — collect 20 carabiners + all 3 gear — but flagOnly:
+    // reaching the checkpoint flag finishes the level (no rope-climb finale, which
+    // would need Grossglockner summit art). Carabiner count is separate from Score.
+    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },
     music: "level2_energysound-action-risk-countdown-trailer-509281.mp3" },
   { id: 3, name: "Cime Grande", country: "Italy", bg: "bgGrandeBack", fg: "fgGrande", target: 60,
     enemySpeedMul: 1.7,  spawnMul: 0.55,
@@ -931,6 +935,13 @@ let bestScore = (() => {
 })();
 function currentLevel() { return LEVELS[levelIndex]; }
 function prevTarget() { return levelIndex > 0 ? LEVELS[levelIndex - 1].target : 0; }
+// Sum of the carabiner gates of all PRIOR levels, so a gated level's carabiner bar
+// continues cumulatively (Level 1: 0→20, Level 2: 20→40).
+function prevGateCarabiners() {
+  let s = 0;
+  for (let i = 0; i < levelIndex; i++) { const g = LEVELS[i].climbGate; if (g) s += g.carabiners; }
+  return s;
+}
 // Mild within-level ramp (1.0 -> ~1.6) combined with the level's own multiplier.
 function difficulty() {
   return (1 + Math.min(cameraX / 6000, 0.6)) * currentLevel().enemySpeedMul;
@@ -2998,8 +3009,9 @@ function drawHUD() {
   // Gated levels (L1) count actual carabiners toward the checkpoint, not score
   // (score also rises from stomps). Other levels keep the cumulative-score bar.
   const gate = lvl.climbGate;
-  const lo = gate ? 0 : prevTarget(), hi = gate ? gate.carabiners : lvl.target;
-  const count = gate ? carabinersThisLevel : score;
+  const base = gate ? prevGateCarabiners() : 0;   // cumulative carabiner baseline from prior gated levels
+  const lo = gate ? base : prevTarget(), hi = gate ? base + gate.carabiners : lvl.target;
+  const count = gate ? base + carabinersThisLevel : score;
   const prog = Math.max(0, Math.min(1, (count - lo) / (hi - lo)));
   ctx.fillStyle = "#fff"; ctx.font = "bold 15px Segoe UI, Arial"; ctx.textAlign = "left";
   // "Lv 1 · Zugspitze [flag] — [carabiner] N / 20"  (country name replaced by its flag)
@@ -3396,10 +3408,27 @@ function checkClimbGate() {
     let gx = (Math.floor(player.x / tw) + 1) * tw;   // end of the current loop
     if (gx - player.x < 360) gx += tw;               // give him room to walk to it
     summitGateX = gx;
-    toast = { text: "All gear ready — reach the summit!", timer: 2.6 };
+    toast = { text: lvl.climbGate.flagOnly ? "All gear collected — reach the checkpoint flag!" : "All gear ready — reach the summit!", timer: 2.6 };
   }
   if (summitReady && player.onGround && player.x + player.w / 2 >= summitGateX) {
-    startSummitClimb();
+    if (lvl.climbGate.flagOnly) finishGateFlag();   // no climb art -> the flag itself finishes the level
+    else startSummitClimb();
+  }
+}
+
+// Level 2+ gate finish: reaching the checkpoint flag completes the level straight to
+// the dashboard (the carabiner+gear gate, minus Level 1's rope-climb finale).
+function finishGateFlag() {
+  summitReady = false; summitGateX = 0;
+  if (window.AbuTracking) AbuTracking.submitLevel(currentLevel().id, true);
+  if (levelIndex >= LEVELS.length - 1) {
+    state = "won"; Music.stop(); Music.sfxWin(); recordBest();
+    if (window.AbuTracking) AbuTracking.finalizeRun("completed");
+  } else {
+    dashboard = { completedLevelIndex: levelIndex, nextLevelIndex: levelIndex + 1,
+                  carabiners: levelCarabiners, animTime: 0, animDuration: 1.2 };
+    lives += LEVEL_BONUS_LIVES;
+    state = "levelcomplete"; Music.sfxLevel();
   }
 }
 
