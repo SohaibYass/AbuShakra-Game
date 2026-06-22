@@ -2334,14 +2334,20 @@ function spawnRockfall(z) {
   Music.sfxRockWarn();
 }
 
-// One rock can cost at most one life: hitPlayer latches on first contact; loseLife
-// self-guards on i-frames. Falling -> compact boulder box; impact -> ground danger area.
+// Getting crushed plays the SAME fatal-fall death as a lethal Level-1 fall
+// (abu_fatal_fall.png: shock -> crash -> collapsed) via startDeathSequence(), which
+// docks a life at the end. One rock can cost at most one life: hitPlayer latches on
+// first contact; the death sequence + i-frames stop a second trigger.
 function handleRockfallCollision(r) {
-  if (r.hitPlayer) return;
+  if (r.hitPlayer || player.dying) return;
   let box = null;
   if (r.phase === "falling") box = { x: r.x - ROCK_HIT_W / 2, y: r.fallY - ROCK_HIT_H / 2, w: ROCK_HIT_W, h: ROCK_HIT_H };
   else if (r.phase === "impact") box = { x: r.x - ROCK_IMP_HW, y: r.groundY - ROCK_IMP_H, w: ROCK_IMP_HW * 2, h: ROCK_IMP_H };
-  if (box && aabb(player, box)) { r.hitPlayer = true; loseLife(); }
+  if (box && aabb(player, box)) {
+    r.hitPlayer = true;
+    if (invulnTimer > 0) return;          // respect respawn invulnerability
+    startDeathSequence();                 // crushed -> crash/collapse animation, then loseLife()
+  }
 }
 
 // A rockfall gauntlet on the ground just BEFORE each upcoming shelter (added as the
