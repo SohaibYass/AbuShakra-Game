@@ -971,6 +971,9 @@ function prevGateCarabiners() {
   for (let i = 0; i < levelIndex; i++) { const g = LEVELS[i].climbGate; if (g) s += g.carabiners; }
   return s;
 }
+// Which tiles carry a shelter (every 5th loop, none at spawn). Shared by the platform
+// generator and the rockfall zones so the shelter gauntlets always line up.
+function isShelterTile(t) { return t > 0 && (((t % 5) + 5) % 5) === 0; }
 // Mild within-level ramp (1.0 -> ~1.6) combined with the level's own multiplier.
 function difficulty() {
   return (1 + Math.min(cameraX / 6000, 0.6)) * currentLevel().enemySpeedMul;
@@ -1130,7 +1133,7 @@ function generateAhead() {
       // visible tiles each frame (deterministic, repeats every tileW).
       platforms = [];
       if (lvl.platforms) for (let t = a; t <= b; t++) {
-        const shelterTile = t > 0 && (((t % 5) + 5) % 5) === 0;   // shelter every 5th loop (tiles 5, 10, 15, … — none at spawn)
+        const shelterTile = isShelterTile(t);   // shelter every 5th loop (tiles 5, 10, 15, … — none at spawn)
         for (const bx of lvl.platforms) {
           platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, ropeInset: bx.ropeInset, shelter: bx.shelter && shelterTile });
         }
@@ -2313,15 +2316,35 @@ function handleRockfallCollision(r) {
   if (box && aabb(player, box)) { r.hitPlayer = true; loseLife(); }
 }
 
+// A rockfall gauntlet on the ground just BEFORE each upcoming shelter (added as the
+// shelter scrolls into view; shelters repeat, so these are dynamic — unlike the 3
+// fixed gear zones). The zone ends just before the cabin platform so the shelter
+// itself stays a safe rest spot.
+function ensureShelterRockZones(lvl) {
+  const shelterBox = (lvl.platforms || []).find(b => b.shelter);
+  if (!shelterBox) return;
+  const tw = lvl.tileW;
+  const a = Math.floor((cameraX - 200) / tw), b = Math.floor((cameraX + VIEW_W + 600) / tw);
+  for (let t = a; t <= b; t++) {
+    if (!isShelterTile(t)) continue;
+    const id = "sh" + t;
+    if (rockZones.some(z => z.id === id)) continue;
+    const zc = t * tw + shelterBox.x0 - 10 - ROCK_ZONE_HALF;   // gauntlet ends just before the cabin
+    rockZones.push({ id, cx: zc, x0: zc - ROCK_ZONE_HALF, x1: zc + ROCK_ZONE_HALF,
+      spawnTimer: rand(ROCK_SPAWN_MIN, ROCK_SPAWN_MAX), lastX: null, dead: false });
+  }
+}
+
 function updateRockfalls(dt) {
   const lvl = currentLevel();
   if (!lvl.rockfalls || state !== "playing") return;     // paused outside play
   if (rockIntroTimer > 0) rockIntroTimer -= dt;
+  ensureShelterRockZones(lvl);                            // gauntlet before each shelter
+  for (const z of rockZones) if (z.x1 < cameraX - 500) z.dead = true;   // far behind -> retire
+  rockZones = rockZones.filter(z => !z.dead);             // drop spent zones (incl. passed shelter ones)
   const pcx = player.x + player.w / 2;
   // Spawn from each live, near-camera, near-player zone (one rock per zone, max 2 total).
   for (const z of rockZones) {
-    if (z.x1 < cameraX - 500) { z.dead = true; }          // far behind -> stop spawning
-    if (z.dead) continue;
     const onScreen = z.x1 > cameraX - 100 && z.x0 < cameraX + VIEW_W + 220;
     const near = pcx > z.x0 - 120 && pcx < z.x1 + 120;
     if (!onScreen || !near) continue;
