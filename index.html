@@ -479,6 +479,7 @@ const LEVELS = [
     // Same finale as Level 1: collect 20 carabiners + 3 gear -> checkpoint flag ->
     // gear-up -> playable rope climb. Cime Grande art: its own back sky (bg) + climb wall.
     climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"] }, climbWall: "cimeGrandeClimbWall",
+    climbRopeExt: [{x:868,y:170},{x:903,y:74}],   // 2nd rope+anchor: top anchor -> mountain peak (Abu climbs to it)
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
   { id: 4, name: "Matterhorn", country: "Switzerland", bg: "bgMatterhornBack", fg: "fgMatterhorn", target: 80,
     enemySpeedMul: 2.0,  spawnMul: 0.5,
@@ -3709,24 +3710,25 @@ const GEARUP_TIME   = 3.2;   // seconds for the 5-frame gear-up intro
 const CLIMB_W = 1080, CLIMB_H = 720, CLIMB_FLOOR_Y = 706;
 // Fixed rope up the hill (base -> summit), tracing the painted staircase. Abu
 // holds it and climbs hand-over-hand (hold Up/Jump to ascend, Down to descend).
-const CLIMB_ROPE_PTS = [
+const CLIMB_ROPE_BASE = [
   { x: 70,  y: 666 }, { x: 175, y: 578 }, { x: 315, y: 502 },
   { x: 455, y: 426 }, { x: 600, y: 352 }, { x: 730, y: 314 }, { x: 826, y: 280 },
 ];
+let CLIMB_ROPE_PTS = CLIMB_ROPE_BASE.slice();   // ACTIVE climb path (per-level; L3 extends to the peak)
 const CLIMB_ROPE_SPEED = 155;   // px/s along the rope
 let CLIMB_DEBUG = false;        // draw the rope path nodes while tuning
 const CLIMB_ROPE_FRAMES = 4;    // frames in the (optional) abu_ropeclimb sheet
-// Precompute segment lengths + total, and a point-at-fraction helper.
-const CLIMB_SEG = [];
-const CLIMB_TOTAL = (function () {
-  let tot = 0;
+// Segment lengths + total for the ACTIVE path (recomputed when the path changes).
+let CLIMB_SEG = [], CLIMB_TOTAL = 0;
+function recomputeClimbRope() {
+  CLIMB_SEG = []; CLIMB_TOTAL = 0;
   for (let i = 1; i < CLIMB_ROPE_PTS.length; i++) {
     const a = CLIMB_ROPE_PTS[i - 1], b = CLIMB_ROPE_PTS[i];
     const d = Math.hypot(b.x - a.x, b.y - a.y);
-    CLIMB_SEG.push(d); tot += d;
+    CLIMB_SEG.push(d); CLIMB_TOTAL += d;
   }
-  return tot;
-})();
+}
+recomputeClimbRope();
 function climbRopeAt(f) {
   let d = Math.max(0, Math.min(1, f)) * CLIMB_TOTAL;
   for (let i = 0; i < CLIMB_SEG.length; i++) {
@@ -3784,6 +3786,10 @@ function finishGateFlag() {
 
 // Phase 1: the scripted gear-up intro (on the climbhill backdrop).
 function startSummitClimb() {
+  // Per-level rope path: Level 3 extends the climb up to the summit peak anchor.
+  const ext = currentLevel().climbRopeExt;
+  CLIMB_ROPE_PTS = ext ? CLIMB_ROPE_BASE.concat(ext) : CLIMB_ROPE_BASE.slice();
+  recomputeClimbRope();
   state = "climbing";
   climb = { phase: "gearup", t: 0, frame: 0 };
   player.vx = 0; player.vy = 0;
@@ -3910,12 +3916,12 @@ function drawClimbHill() {
   const key = currentLevel().climbWall || "climbHill";   // per-level climb backdrop art
   if (imgLoaded[key]) ctx.drawImage(images[key], 0, 0, CLIMB_W, CLIMB_H);
 }
-// The fixed rope, drawn in climb-world coordinates (call inside a -camera translate).
-function drawClimbRopeWorld() {
+// Draw the braided rope along a list of climb-world points.
+function drawRopeAlong(pts) {
   if (imgLoaded.climbRopeSeg) {
-    const img = images.climbRopeSeg, sc = CLIMB_ROPE_W / img.naturalWidth, tileH = img.naturalHeight * sc;
-    for (let i = 1; i < CLIMB_ROPE_PTS.length; i++) {
-      const a = CLIMB_ROPE_PTS[i - 1], b = CLIMB_ROPE_PTS[i];
+    const img = images.climbRopeSeg, tileH = img.naturalHeight * (CLIMB_ROPE_W / img.naturalWidth);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
       const len = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
       ctx.save();
       ctx.translate(a.x, a.y); ctx.rotate(ang - Math.PI / 2);   // image +Y runs a -> b
@@ -3929,24 +3935,26 @@ function drawClimbRopeWorld() {
     }
   } else {
     ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
-    const lay = (color, w) => {
-      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
-      for (let i = 0; i < CLIMB_ROPE_PTS.length; i++) { const p = CLIMB_ROPE_PTS[i]; i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }
-      ctx.stroke();
-    };
+    const lay = (color, w) => { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) { const p = pts[i]; i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); } ctx.stroke(); };
     lay("#4f3620", 7); lay("#9c6b3a", 4); lay("#caa24a", 1.5);
     ctx.restore();
   }
-  // Anchor (piton + carabiner) fixing the rope at the top.
-  const top = CLIMB_ROPE_PTS[CLIMB_ROPE_PTS.length - 1];
+}
+// Piton + carabiner anchor fixing the rope at point `top`.
+function drawClimbAnchorAt(top) {
   if (imgLoaded.climbAnchor) {
     const img = images.climbAnchor, aw = 35, ah = aw * img.naturalHeight / img.naturalWidth;
-    // anchor's rope-loop (frac 0.103, 0.847) sits exactly on the rope's top point
-    // so the rope stays attached; seat it lower by lowering that rope point itself.
-    ctx.drawImage(img, top.x - aw * 0.103, top.y - ah * 0.847, aw, ah);
-  } else {
-    ctx.fillStyle = "#8a8f96"; ctx.beginPath(); ctx.arc(top.x, top.y, 5, 0, 6.28); ctx.fill();
-  }
+    ctx.drawImage(img, top.x - aw * 0.103, top.y - ah * 0.847, aw, ah);   // rope-loop frac (0.103, 0.847) sits on `top`
+  } else { ctx.fillStyle = "#8a8f96"; ctx.beginPath(); ctx.arc(top.x, top.y, 5, 0, 6.28); ctx.fill(); }
+}
+// The fixed rope, drawn in climb-world coordinates (call inside a -camera translate).
+function drawClimbRopeWorld() {
+  drawRopeAlong(CLIMB_ROPE_PTS);
+  // First anchor at the top of the base rope (the junction).
+  drawClimbAnchorAt(CLIMB_ROPE_BASE[CLIMB_ROPE_BASE.length - 1]);
+  // Second anchor at the very top (mountain peak) when the path is extended (Level 3).
+  if (CLIMB_ROPE_PTS.length > CLIMB_ROPE_BASE.length) drawClimbAnchorAt(CLIMB_ROPE_PTS[CLIMB_ROPE_PTS.length - 1]);
   if (CLIMB_DEBUG) { ctx.fillStyle = "#f55"; for (const p of CLIMB_ROPE_PTS) ctx.fillRect(p.x - 3, p.y - 3, 6, 6); }
 }
 
