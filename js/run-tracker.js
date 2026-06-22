@@ -101,20 +101,26 @@
     const L = lvl(levelNumber);
     L.completed = !!completed;
     const timeMs = onlineRun.currentLevelStartedAt ? Date.now() - onlineRun.currentLevelStartedAt : null;
-    try {
-      await callFn("submit-checkpoint", {
-        runId: onlineRun.runId, levelNumber,
-        carabiners: L.carabiners, killPoints: L.killPoints,
-        shoes: L.shoes, rope: L.rope, helmet: L.helmet,
-        completed: !!completed, completionTimeMs: timeMs,
-      }, 3);
-    } catch (_e) { /* swallow — server is authoritative at finalize */ }
+    // Track the in-flight checkpoint so finalizeRun() can WAIT for it to commit
+    // before the server recomputes totals. Without this, a game-over finalizes
+    // concurrently with its last checkpoint and aggregates 0 (carabiners + score).
+    const p = callFn("submit-checkpoint", {
+      runId: onlineRun.runId, levelNumber,
+      carabiners: L.carabiners, killPoints: L.killPoints,
+      shoes: L.shoes, rope: L.rope, helmet: L.helmet,
+      completed: !!completed, completionTimeMs: timeMs,
+    }, 3);
+    onlineRun._pendingSubmit = p.catch(function () {});   // assigned synchronously, before any await
+    try { await p; } catch (_e) { /* swallow — server is authoritative at finalize */ }
   };
   T.finalizeRun = async function (status, keepalive) {
     if (!onlineRun.onlineEligible || !onlineRun.runId || onlineRun.submitted) return null;
     onlineRun.submitted = true;
-    try { return await callFn("finalize-run", { runId: onlineRun.runId, status }, 3, keepalive); }
-    catch (_e) { onlineRun.submitted = false; return null; }
+    try {
+      // Make sure the last checkpoint has landed so finalize sees all run_levels.
+      if (onlineRun._pendingSubmit) { try { await onlineRun._pendingSubmit; } catch (_e) {} }
+      return await callFn("finalize-run", { runId: onlineRun.runId, status }, 3, keepalive);
+    } catch (_e) { onlineRun.submitted = false; return null; }
   };
 
   /* ---- page-close fallback (keepalive fetch can still send auth headers) ---- */
