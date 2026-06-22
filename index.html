@@ -1084,9 +1084,9 @@ function generateAhead() {
       // visible tiles each frame (deterministic, repeats every tileW).
       platforms = [];
       if (lvl.platforms) for (let t = a; t <= b; t++) {
-        const evenTile = (((t % 2) + 2) % 2) === 0;   // shelter on every OTHER loop
+        const shelterTile = t > 0 && (((t % 5) + 5) % 5) === 0;   // shelter every 5th loop (tiles 5, 10, 15, … — none at spawn)
         for (const bx of lvl.platforms) {
-          platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, shelter: bx.shelter && evenTile });
+          platforms.push({ x: t * tw + bx.x0, y: bx.top, w: bx.x1 - bx.x0, h: 30, kind: "static", solid: true, rope: bx.rope, shelter: bx.shelter && shelterTile });
         }
       }
       // Upper ledges above the platforms (Level 1) — a stacked climb per shelter tile.
