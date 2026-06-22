@@ -178,7 +178,8 @@
   <button class="test-btn" data-level="2" aria-label="Test Level 3">&#9654; L3</button>
   <button class="test-btn" data-level="3" aria-label="Test Level 4">&#9654; L4</button>
   <button class="test-btn" data-level="4" aria-label="Test Level 5">&#9654; L5</button>
-  <button class="test-btn" data-action="summit" aria-label="Test summit climb">&#9654; END</button>
+  <button class="test-btn" data-action="summit" aria-label="Test Level 1 summit climb">&#9654; END</button>
+  <button class="test-btn" data-action="summit3" aria-label="Test Level 3 summit climb">&#9654; END3</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -228,6 +229,7 @@ const ASSETS = {
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
   climbAnchor:  "climb_anchor.png?v=1",   // piton + carabiner anchor at the rope's top
   climbHill:  "climbhill.png?v=2",   // Level 1 finale: the keyed rock hill (over the Zugspitze sky)
+  cimeGrandeClimbWall: "cime_grande_climbwall_full.png?v=1",   // Level 3 finale: keyed climb wall (over the Grande sky)
   upperPlat:  "upper_platform.png?v=1", // Level 1 high ledge above the shelter (holds the shoes)
   rope:       "rope.png?v=1",      // braided swing rope (Level 4); drawn stretched/rotated
   ropeRock:   "rope_rock.png?v=1", // snow-capped anchor rock the rope hangs from
@@ -474,7 +476,9 @@ const LEVELS = [
     terrain: "natural", bgMode: "parallax", surf: GRANDE_SURF, tileW: GRANDE_TILE_W, platforms: GRANDE_PLATFORMS,
     groundClipsOnly: true, sparseClips: true,   // scarce carabiners (one per loop, like Level 1)
     jumpMul: 0.86, ledgeGrab: true, power: true,   // match Level 1: deliberate hops + mantle + stamina/shelter
-    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], flagOnly: true },   // gate -> checkpoint flag -> Level 4
+    // Same finale as Level 1: collect 20 carabiners + 3 gear -> checkpoint flag ->
+    // gear-up -> playable rope climb. Cime Grande art: its own back sky (bg) + climb wall.
+    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"] }, climbWall: "cimeGrandeClimbWall",
     music: "level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3" },
   { id: 4, name: "Matterhorn", country: "Switzerland", bg: "bgMatterhornBack", fg: "fgMatterhorn", target: 80,
     enemySpeedMul: 2.0,  spawnMul: 0.5,
@@ -873,13 +877,14 @@ const testBtns = document.getElementById("test-buttons");
 testBtns.querySelectorAll(".test-btn").forEach((b) =>
   b.addEventListener("click", (e) => {
     e.preventDefault();
-    if (b.dataset.action === "summit") { testSummitClimb(); return; }
+    if (b.dataset.action === "summit") { testSummitClimb(0); return; }
+    if (b.dataset.action === "summit3") { testSummitClimb(2); return; }
     startAtLevel(+b.dataset.level);
   }));
-// Dev: load Level 1 as if all gear + 20 carabiners were collected, then jump
-// straight into the summit-climb finale.
-function testSummitClimb() {
-  startAtLevel(0);
+// Dev: load a level as if all gear + 20 carabiners were collected, then jump
+// straight into its summit-climb finale (Level 1 hill, or Level 3 Cime Grande wall).
+function testSummitClimb(levelIdx) {
+  startAtLevel(levelIdx || 0);
   carabinersThisLevel = 20;
   gearThisLevel = { shoes: true, rope: true, helmet: true };
   startSummitClimb();
@@ -3885,8 +3890,9 @@ const CLIMB_ROPE_W = 4;    // on-path rope thickness (px)
 // screen height, slow horizontal parallax, mirror-tiled, vertically pinned to the
 // camera. Call inside a translate(0, -cameraY) context (so y:cameraY -> screen 0).
 function drawClimbSky() {
-  if (!imgLoaded.bgZugBack) { ctx.fillStyle = "#87b5e8"; ctx.fillRect(0, cameraY, VIEW_W, VIEW_H); return; }
-  const bg = images.bgZugBack, bw = bg.naturalWidth * (VIEW_H / bg.naturalHeight);
+  const bgKey = currentLevel().bg || "bgZugBack";   // the level's own far-mountain sky
+  if (!imgLoaded[bgKey]) { ctx.fillStyle = "#87b5e8"; ctx.fillRect(0, cameraY, VIEW_W, VIEW_H); return; }
+  const bg = images[bgKey], bw = bg.naturalWidth * (VIEW_H / bg.naturalHeight);
   const scroll = cameraX * 0.4, first = Math.floor(scroll / bw), bleed = 1;
   for (let i = first; ; i++) {
     const x = i * bw - scroll;
@@ -3901,7 +3907,8 @@ function drawClimbSky() {
 // The keyed rock hill (magenta cut out), drawn 1:1 over the climb world so it
 // scrolls with the camera and lets the Zugspitze sky show through the cut-out.
 function drawClimbHill() {
-  if (imgLoaded.climbHill) ctx.drawImage(images.climbHill, 0, 0, CLIMB_W, CLIMB_H);
+  const key = currentLevel().climbWall || "climbHill";   // per-level climb backdrop art
+  if (imgLoaded[key]) ctx.drawImage(images[key], 0, 0, CLIMB_W, CLIMB_H);
 }
 // The fixed rope, drawn in climb-world coordinates (call inside a -camera translate).
 function drawClimbRopeWorld() {
