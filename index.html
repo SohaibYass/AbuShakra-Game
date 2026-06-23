@@ -239,6 +239,7 @@ const ASSETS = {
   descendRope:   "descend_ropeseg.png?v=1", // descent rope (stretched anchor->ground)
   shelter:    "shelter.png?v=5",    // wooden cabin (bigger flag + smoke), on Level 1's 3rd platform
   abuRest:    "abu_rest.png?v=1",    // 2-frame sit & recover (inside a shelter)
+  abuSquat:   "Abu_Stand_To_Deep_Squat_2frames.png?v=1",   // 2-frame stand -> deep squat (hold Down)
   abuExhausted: "abu_exhausted.png?v=1", // 3-frame panting/hunch when stamina is low
   abuFatalFall: "abu_fatal_fall.png?v=1", // 3-frame fatal fall: shock -> crash -> collapsed
   abuThrow:   "abu_throw.png?v=2",   // 3-frame carabiner throw (wind-up -> release -> follow-through)
@@ -433,8 +434,8 @@ const LEVELS = [
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
               { x0: 2788, x1: 2852, top: 122 }],   // small wood bridge between two seq3-start spire tops
-    collapseLedges: [{ x: 145, top: 110 },   // seq 1: floating ledges that crash if Abu lingers >5s
-                     { x: 340, top: 185 }],
+    collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
+                     { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
                 { img: "stepRock3", x: 2012, top: 117 },
@@ -917,6 +918,7 @@ let windT = 0;       // wind phase clock
 let cameraX, worldGenX;
 let cameraY = 0;   // vertical camera pan (Level 1 upper-ledge climb); 0 otherwise
 let camAnchorFeet = 9999;  // feet-Y of the ledge the camera is anchored to (the last grounded ledge)
+let squatHoldT = 0;        // seconds Abu has held Down while standing still (drives the squat pose)
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
 let runScore = 0;        // competitive run score (enemy kills + carabiners) — for comparing players, NOT a level-pass condition
@@ -2051,7 +2053,12 @@ function updateCamera(dt) {
   let targetY = 0;
   if (currentLevel().upperPlat || currentLevel().camLift) {
     if (player.onGround) camAnchorFeet = player.y + player.h;   // remember this ledge's level
-    if (camAnchorFeet < UPPER_CAM_ENGAGE) targetY = Math.max(UPPER_CAM_MIN, Math.min(0, camAnchorFeet - VIEW_H * 0.70));
+    if (camAnchorFeet < UPPER_CAM_ENGAGE) {
+      // Holding Down on a high platform looks DOWN: anchor Abu near the top of the
+      // view so the area below the platform is revealed.
+      const lookDown = player.onGround && anyKey(DOWN_KEYS) && Math.abs(player.vx) < 1;
+      targetY = Math.max(UPPER_CAM_MIN, Math.min(0, camAnchorFeet - VIEW_H * (lookDown ? 0.25 : 0.70)));
+    }
   }
   cameraY += (targetY - cameraY) * Math.min(1, (dt || 0.016) * 7);
   if (Math.abs(cameraY) < 0.5) cameraY = 0;
@@ -2596,7 +2603,7 @@ let collapsers = [];           // runtime state of the current level's collapsin
 
 function initCollapsers() {
   const lvl = currentLevel();
-  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, state: "stable", t: 0 }));
+  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, linger: c.linger || COLLAPSE_LINGER, state: "stable", t: 0 }));
 }
 // Collision box of a collapse ledge's flat top (solid while stable/cracking).
 function collapserBox(c) {
@@ -2609,7 +2616,7 @@ function updateCollapsers(dt) {
       const box = collapserBox(c);
       const riding = player.onGround && player.x + player.w > box.x && player.x < box.x + box.w &&
                      Math.abs((player.y + player.h) - box.y) < 4;
-      if (riding) { c.t += dt; if (c.t >= COLLAPSE_LINGER) { c.state = "cracking"; c.t = 0; } }
+      if (riding) { c.t += dt; if (c.t >= c.linger) { c.state = "cracking"; c.t = 0; } }
       else c.t = Math.max(0, c.t - dt * 0.5);   // recover a little when he steps off
     } else if (c.state === "cracking") {
       c.t += dt; addShake(2);
@@ -2978,6 +2985,20 @@ function drawPlayer() {
     ctx.translate(sx + player.w / 2, player.y + player.h);   // feet planted on the ground
     if (player.facing > 0) ctx.scale(-1, 1);                 // art faces left; flip when facing right
     ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // Deep squat: standing still and holding Down (2-frame stand -> deep squat).
+  if (squatHoldT > 0 && player.onGround && Math.abs(player.vx) < 1 && imgLoaded.abuSquat &&
+      !player.mantle && !player.descend) {
+    const img = images.abuSquat, cw = img.naturalWidth / 2, ch = img.naturalHeight;
+    const fi = squatHoldT > 0.12 ? 1 : 0;       // brief stand frame, then settle into the squat
+    const dh = player.h * 1.16, dw = dh * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h);   // feet on the ground (cell foot baseline ~y800)
+    if (player.facing > 0) ctx.scale(-1, 1);                 // art faces left; flip when facing right
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -(800 / ch) * dh, dw, dh);
     ctx.restore();
     return;
   }
@@ -3665,6 +3686,10 @@ function update(dt) {
   updateWeather(dt);     // set this frame's wind before the player reads it
   updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
+  // Squat: hold Down while standing still on the ground -> deep-squat pose.
+  const squatting = player.onGround && Math.abs(player.vx) < 1 && anyKey(DOWN_KEYS) &&
+                    !player.mantle && !player.descend && !player.swinging && !player.throwing;
+  squatHoldT = squatting ? squatHoldT + dt : 0;
   updateThrow(dt);       // carabiner throw animation + release
   updateCrashPlats(dt);  // count down any platform the player just triggered
   updateCollapsers(dt);  // collapsing ledges: linger timer -> crack -> fall (Level 1)
