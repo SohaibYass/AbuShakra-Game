@@ -249,6 +249,7 @@ const ASSETS = {
   fgZug2:      "Zugspitze_Foreground_2.png?v=1",  // Level 1: clean panorama painting 2
   fgZug3:      "Zugspitze_Foreground_3.png?v=1",  // Level 1: clean panorama painting 3
   woodBridge:  "woodbridge.png?v=1",  // Level 1: plank bridge across the seq1->seq2 gap
+  ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
   bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
   fgGlock:     "Grossglockner_Front2.png?v=2",  // Level 2 parallax: near terrain + platforms (transparent)
   bgGrandeBack: "Grande_Back.png?v=1",      // Level 3 parallax: far Dolomites towers
@@ -422,6 +423,7 @@ const LEVELS = [
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3"],
     fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
+              { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 }],   // wood bridge on the seq2/seq3 mesa tops
     platforms: null,   // TEST: old floating platforms / descent ropes / upper ledges removed to inspect the collision line
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
@@ -2411,18 +2413,27 @@ function drawParallaxScene(lvl) {
   // without changing the collision tile width. Defaults to the collision tileW.
   {
     const list = lvl.fgList || (lvl.fg ? [lvl.fg] : []);
-    const keys = list.filter((k) => imgLoaded[k]);
-    if (keys.length) {
+    if (list.length) {
       const tileW = lvl.fgTileW || lvl.tileW || ZUG_TILE_W;
       // `fgYOffset` nudges the painting DOWN so its terrain meets the screen
       // bottom and the messy bottom edge clips off-screen (no gap / fringe).
-      const oy = lvl.fgYOffset || 0;
+      const oy = lvl.fgYOffset || 0, ov = lvl.fgOverlay || null, n = list.length;
       const first = Math.floor(cameraX / tileW);
       for (let i = first; ; i++) {
         const x = i * tileW - cameraX;
         if (x >= VIEW_W) break;
-        const fg = images[keys[((i % keys.length) + keys.length) % keys.length]];
-        ctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy, tileW + 1, VIEW_H);
+        const key = list[((i % n) + n) % n];
+        if (imgLoaded[key]) {
+          const fg = images[key];
+          ctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy, tileW + 1, VIEW_H);
+        }
+        // optional per-painting overlay (e.g. the anchored rope on seq 2), drawn
+        // at the same dest so it aligns exactly with that painting.
+        const ovKey = ov && ov[key];
+        if (ovKey && imgLoaded[ovKey]) {
+          const im = images[ovKey];
+          ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, oy, tileW + 1, VIEW_H);
+        }
       }
     }
   }
@@ -2521,6 +2532,27 @@ function drawBridges() {
     const dy = br.top - BRIDGE_DECK_TOP * scale;
     if (dx > VIEW_W || dx + dw < 0) continue;
     ctx.drawImage(img, dx, dy, dw, dh);
+  }
+}
+
+// Anchored rope strung between two tops (rope_anchor_hill.png). Each end (x,y)
+// is a spire top; the sprite is scaled + rotated so its two anchor rocks (src x
+// ~95 and ~2065, anchor-base src y ~400) land on those tops.
+const ROPE_AX0 = 95, ROPE_AX1 = 2065, ROPE_AY = 400;
+function drawRopeAnchors() {
+  const lvl = currentLevel();
+  if (!lvl.ropeAnchors || !imgLoaded.ropeAnchorHill) return;
+  const img = images.ropeAnchorHill, span = ROPE_AX1 - ROPE_AX0;
+  for (const r of lvl.ropeAnchors) {
+    const dx0 = r.x0 - cameraX, dy0 = r.y0, dx1 = r.x1 - cameraX, dy1 = r.y1;
+    if (Math.max(dx0, dx1) < 0 || Math.min(dx0, dx1) > VIEW_W) continue;
+    const s = Math.hypot(dx1 - dx0, dy1 - dy0) / span;
+    ctx.save();
+    ctx.translate(dx0, dy0);
+    ctx.rotate(Math.atan2(dy1 - dy0, dx1 - dx0));
+    ctx.scale(s, s);
+    ctx.drawImage(img, -ROPE_AX0, -ROPE_AY);   // anchor-left -> (dx0,dy0); anchor-right -> (dx1,dy1)
+    ctx.restore();
   }
 }
 
@@ -3675,6 +3707,7 @@ function draw() {
   drawBackground();
   drawGround();
   drawBridges();           // wood plank bridge across the seq1->seq2 gap (Level 1)
+  drawRopeAnchors();       // anchored rope between two seq2 spire tops (Level 1)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
