@@ -249,6 +249,10 @@ const ASSETS = {
   fgZug2:      "Zugspitze_Foreground_2.png?v=1",  // Level 1: clean panorama painting 2
   fgZug3:      "Zugspitze_Foreground_3.png?v=1",  // Level 1: clean panorama painting 3
   fgZug4:      "Zugspitze_Foreground_4.png?v=1",  // Level 1: clean panorama painting 4
+  stepRock1: "Zugspitze_Waterfall_Stepping_Rock_1.png?v=1",  // Level 1: floating stepping-rock platforms (seq 2 gap)
+  stepRock3: "Zugspitze_Waterfall_Stepping_Rock_3.png?v=1",
+  stepRock4: "Zugspitze_Waterfall_Stepping_Rock_4.png?v=1",
+  stepRock5: "Zugspitze_Waterfall_Stepping_Rock_5.png?v=1",
   woodBridge:  "woodbridge.png?v=1",  // Level 1: plank bridge across the seq1->seq2 gap
   ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
   bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
@@ -428,9 +432,13 @@ const LEVELS = [
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
               { x0: 2788, x1: 2852, top: 122 }],   // small wood bridge between two seq3-start spire tops
+    stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
+                { img: "stepRock4", x: 2110, top: 25 },
+                { img: "stepRock3", x: 2012, top: 117 },
+                { img: "stepRock1", x: 1910, top: 204 }],
     platforms: null,   // TEST: old floating platforms / descent ropes / upper ledges removed to inspect the collision line
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
-    jumpMul: 0.86, ledgeGrab: true, descend: false, power: true, upperPlat: false, groundClipsOnly: true, sparseClips: true,
+    jumpMul: 0.86, ledgeGrab: true, descend: false, power: true, upperPlat: false, camLift: true, groundClipsOnly: true, sparseClips: true,
     climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"] } },   // finale: collect all -> climb the summit hill
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
@@ -1102,6 +1110,12 @@ function generateAhead() {
       // Floating-platform collision boxes (painted into the fg art): rebuild for the
       // visible tiles each frame (deterministic, repeats every tileW).
       platforms = [];
+      // Floating stepping-rock platforms (top-only landing boxes on the flat tops).
+      if (lvl.stepRocks) for (const r of lvl.stepRocks) {
+        const m = STEP_ROCK_META[r.img]; if (!m) continue;
+        const s = STEP_ROCK_SCALE;
+        platforms.push({ x: r.x - (m.tcx - m.tx0) * s, y: r.top, w: (m.tx1 - m.tx0) * s, h: 28, kind: "static", solid: true });
+      }
       if (lvl.platforms) for (let t = a; t <= b; t++) {
         const shelterTile = t > 0 && (((t % 5) + 5) % 5) === 0;   // shelter every 5th loop (tiles 5, 10, 15, … — none at spawn)
         for (const bx of lvl.platforms) {
@@ -2029,7 +2043,7 @@ function updateCamera(dt) {
   // jump arc — so it pans only when he climbs to a new ledge, and stays put when he
   // just jumps in place on a ledge. The anchor updates only while he's grounded.
   let targetY = 0;
-  if (currentLevel().upperPlat) {
+  if (currentLevel().upperPlat || currentLevel().camLift) {
     if (player.onGround) camAnchorFeet = player.y + player.h;   // remember this ledge's level
     if (camAnchorFeet < UPPER_CAM_ENGAGE) targetY = Math.max(UPPER_CAM_MIN, Math.min(0, camAnchorFeet - VIEW_H * 0.70));
   }
@@ -2535,6 +2549,29 @@ function drawBridges() {
     const dy = br.top - BRIDGE_DECK_TOP * scale;
     if (dx > VIEW_W || dx + dw < 0) continue;
     ctx.drawImage(img, dx, dy, dw, dh);
+  }
+}
+
+// Floating stepping-rock platforms (Zugspitze_Waterfall_Stepping_Rock_*). Each
+// sprite's flat top surface (src row `ty`, centre `tcx`, spanning `tx0..tx1`) is
+// landed on the config's (x, top); drawn at the foreground art scale.
+const STEP_ROCK_SCALE = 0.20;   // floating rocks drawn smaller than the foreground art
+const STEP_ROCK_META = {
+  stepRock1: { ty: 20, tcx: 189, tx0: 89,  tx1: 289 },
+  stepRock3: { ty: 21, tcx: 293, tx0: 122, tx1: 465 },
+  stepRock4: { ty: 21, tcx: 114, tx0: 44,  tx1: 185 },
+  stepRock5: { ty: 20, tcx: 194, tx0: 95,  tx1: 293 },
+};
+function drawStepRocks() {
+  const lvl = currentLevel();
+  if (!lvl.stepRocks) return;
+  const s = STEP_ROCK_SCALE;
+  for (const r of lvl.stepRocks) {
+    const m = STEP_ROCK_META[r.img]; if (!m || !imgLoaded[r.img]) continue;
+    const img = images[r.img];
+    const dx = r.x - m.tcx * s - cameraX, dy = r.top - m.ty * s;
+    if (dx > VIEW_W || dx + img.naturalWidth * s < 0) continue;
+    ctx.drawImage(img, dx, dy, img.naturalWidth * s, img.naturalHeight * s);
   }
 }
 
@@ -3710,6 +3747,7 @@ function draw() {
   drawBackground();
   drawGround();
   drawBridges();           // wood plank bridge across the seq1->seq2 gap (Level 1)
+  drawStepRocks();         // floating stepping-rock platforms across the seq2 gap (Level 1)
   drawRopeAnchors();       // anchored rope between two seq2 spire tops (Level 1)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
