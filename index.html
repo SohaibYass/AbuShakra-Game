@@ -256,6 +256,7 @@ const ASSETS = {
   stepRock5: "Zugspitze_Waterfall_Stepping_Rock_5.png?v=1",
   collapseLedge: "Zugspitze_Collapsing_Rock_Ledge_3frames.png?v=1",  // 3-frame collapsing ledge (seq 1)
   woodBridge:  "woodbridge.png?v=1",  // Level 1: plank bridge across the seq1->seq2 gap
+  ropeBridge:  "Zugspitze_Rope_Bridge.png?v=1",  // Level 1: rope bridge across the seq3->seq4 gap
   ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
   bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
   fgGlock:     "Grossglockner_Front2.png?v=2",  // Level 2 parallax: near terrain + platforms (transparent)
@@ -433,7 +434,8 @@ const LEVELS = [
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
-              { x0: 2788, x1: 2852, top: 122 }],   // small wood bridge between two seq3-start spire tops
+              { x0: 2788, x1: 2852, top: 122 },    // small wood bridge between two seq3-start spire tops
+              { x0: 3985, x1: 4145, top: 108, img: "ropeBridge" }],   // rope bridge across the seq3->seq4 gap
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
@@ -2548,18 +2550,21 @@ function drawUpperPlatforms() {
   }
 }
 
-// Wood plank bridges (Level 1): drawn so the deck-top (src y ~415, deck spans
-// src x ~155..1740) lands on the bridge's walkable `top` across [x0,x1].
-const BRIDGE_DECK_L = 155, BRIDGE_DECK_R = 1740, BRIDGE_DECK_TOP = 450;
+// Bridges (Level 1): the sprite's walkable deck (src x L..R, deck-top src y `top`)
+// is scaled to land on the bridge's `top` across [x0,x1]. Each bridge can pick a
+// sprite via `img` (default the wood plank bridge).
+const BRIDGE_META = {
+  woodBridge: { img: "woodBridge", L: 155, R: 1740, top: 450 },
+  ropeBridge: { img: "ropeBridge", L: 43,  R: 1830, top: 410 },
+};
 function drawBridges() {
   const lvl = currentLevel();
-  if (!lvl.bridges || !imgLoaded.woodBridge) return;
-  const img = images.woodBridge, deckW = BRIDGE_DECK_R - BRIDGE_DECK_L;
+  if (!lvl.bridges) return;
   for (const br of lvl.bridges) {
-    const scale = (br.x1 - br.x0) / deckW;
+    const m = BRIDGE_META[br.img || "woodBridge"]; if (!m || !imgLoaded[m.img]) continue;
+    const img = images[m.img], scale = (br.x1 - br.x0) / (m.R - m.L);
     const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-    const dx = br.x0 - BRIDGE_DECK_L * scale - cameraX;
-    const dy = br.top - BRIDGE_DECK_TOP * scale;
+    const dx = br.x0 - m.L * scale - cameraX, dy = br.top - m.top * scale;
     if (dx > VIEW_W || dx + dw < 0) continue;
     ctx.drawImage(img, dx, dy, dw, dh);
   }
