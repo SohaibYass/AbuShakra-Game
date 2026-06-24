@@ -928,6 +928,70 @@ let cameraX, worldGenX;
 let cameraY = 0;   // vertical camera pan (Level 1 upper-ledge climb); 0 otherwise
 let camAnchorFeet = 9999;  // feet-Y of the ledge the camera is anchored to (the last grounded ledge)
 let squatHoldT = 0;        // seconds Abu has held Down while standing still (drives the squat pose)
+
+// --- DEBUG: click-to-coordinate readout (level-design helper) --------------
+// While DEBUG_CLICK is on, click anywhere during play to print the WORLD
+// position under the cursor (worldX along the 0..5400 panorama, the surface-Y
+// there, and which sequence it is). Use these numbers to place enemies/gear.
+const DEBUG_CLICK = true;
+let _dbgPts = [];   // up to two points: [FROM, TO]; a 3rd click starts a fresh pair
+function _dbgPoint(e) {
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) / r.width  * VIEW_W;
+  const cy = (e.clientY - r.top)  / r.height * VIEW_H;
+  const worldX = Math.round(cameraX + cx);
+  const worldY = Math.round(cameraY + cy);
+  const lvl = currentLevel();
+  const tileW = lvl.fgTileW || lvl.tileW || 1350;
+  const seq = Math.floor(worldX / tileW) + 1;
+  const surfY = Math.round(surfaceY(worldX));
+  return { worldX, worldY, surfY, seq };
+}
+canvas.addEventListener("pointerdown", (e) => {
+  if (!DEBUG_CLICK || state !== "playing") return;
+  if (_dbgPts.length >= 2) _dbgPts = [];   // third click resets and starts a new FROM
+  const p = _dbgPoint(e);
+  _dbgPts.push(p);
+  const label = _dbgPts.length === 1 ? "FROM" : "TO";
+  console.log(`[pos ${label}] worldX=${p.worldX}  worldY=${p.worldY}  surfaceY=${p.surfY}  seq=${p.seq}`);
+  if (_dbgPts.length === 2) {
+    const a = _dbgPts[0], b = _dbgPts[1];
+    console.log(`[span] from x=${Math.min(a.worldX, b.worldX)} to x=${Math.max(a.worldX, b.worldX)}  width=${Math.abs(b.worldX - a.worldX)}`);
+  }
+});
+function _dbgCross(p, color, tag) {
+  const sx = p.worldX - cameraX, sy = p.worldY - cameraY;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(sx - 8, sy); ctx.lineTo(sx + 8, sy);
+  ctx.moveTo(sx, sy - 8); ctx.lineTo(sx, sy + 8); ctx.stroke();
+  ctx.fillStyle = color; ctx.font = "10px monospace"; ctx.textAlign = "left";
+  ctx.fillText(tag, sx + 6, sy - 6);
+}
+function drawDebugClick() {
+  if (!DEBUG_CLICK || !_dbgPts.length) return;
+  ctx.save();
+  const a = _dbgPts[0], b = _dbgPts[1];
+  if (b) {   // connecting line between FROM and TO
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.worldX - cameraX, a.worldY - cameraY);
+    ctx.lineTo(b.worldX - cameraX, b.worldY - cameraY); ctx.stroke();
+  }
+  _dbgCross(a, "#ff3b3b", "FROM");
+  if (b) _dbgCross(b, "#3bd1ff", "TO");
+  // readout panel (top-left, screen space)
+  let txt;
+  if (b) {
+    const x0 = Math.min(a.worldX, b.worldX), x1 = Math.max(a.worldX, b.worldX);
+    txt = `from x:${x0}  to x:${x1}  width:${x1 - x0}  seq:${a.seq}  surfaceY:${a.surfY}`;
+  } else {
+    txt = `FROM  x:${a.worldX}  surfaceY:${a.surfY}  seq:${a.seq}  (clickY:${a.worldY})`;
+  }
+  ctx.font = "12px monospace"; ctx.textAlign = "left";
+  const w = ctx.measureText(txt).width + 16;
+  ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(8, 70, w, 22);
+  ctx.fillStyle = "#7CFFB2"; ctx.fillText(txt, 16, 85);
+  ctx.restore();
+}
 let levelIndex = 0;   // index into LEVELS for the active world
 let levelCarabiners = 0;   // carabiners clipped in the current level (for the dashboard)
 let runScore = 0;        // competitive run score (enemy kills + carabiners) — for comparing players, NOT a level-pass condition
@@ -3944,6 +4008,7 @@ function draw() {
   drawParticles();
   drawWeather();           // snowstorm flakes + whiteout fog (Level 5), over the world
   ctx.restore();           // end vertical-camera pan
+  drawDebugClick();        // DEBUG: click-to-coordinate readout (level-design helper)
   drawHUD();
   if (state === "start") drawStartScreen();
   else if (state === "instructions") drawInstructions();
