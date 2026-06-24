@@ -228,6 +228,8 @@ const ASSETS = {
   abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
   austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
   planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
+  energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
+  abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -414,6 +416,11 @@ const PROJ_SPEED       = 520;  // carabiner flight speed (px/s)
 const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
 const START_CARABINERS = 6;    // knives Abu starts levels 2+ holding (Level 1 starts at 0 — collect them off the climb)
 const KNIFE_PICK_W = 34, KNIFE_PICK_H = 20;   // knife-pickup hitbox on the Level-1 climb top ledges
+const ENERGY_PICK_W = 26, ENERGY_PICK_H = 48; // energy-bottle pickup hitbox
+const ENERGY_REFILL = 50;                     // stamina restored per energy bottle
+const POWERUP_FRAMES = 3;                     // frames in the transformation strip
+const POWERUP_ANIM_TIME = 1.05;               // transformation duration (frozen, plays the 3 frames)
+const POWERUP_TIME = 12;                       // how long Abu stays buffed (muscles walk) after
 // Knives Abu holds when a level begins. Level 1 (the knife-climb) starts at 0 — he
 // collects them off the climb top ledges. Within a run knives CARRY OVER between
 // levels (advanceLevel no longer refills), so the spare knife stacks in Level 1
@@ -475,7 +482,13 @@ const LEVELS = [
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
                  { x: 1910, top: 211 },    // knife on seq2's lowest stepping rock
-                 { x: 2587, top: 94 }],    // knife on the small seq2 wood bridge
+                 { x: 2587, top: 94 },     // knife on the small seq2 wood bridge
+                 { x: 4744, top: 191 }],   // knife on a seq4 ledge
+    // Fixed carabiner pickups on specific spots.
+    carabinerSpots: [{ x: 4365, top: 327 }],   // seq4 ledge
+    // Energy-bottle pickups (each refills stamina).
+    energySpots: [{ x: 4399, top: 372 },       // seq4 lower ledge
+                  { x: 4763, top: 359 }],      // seq4
     shelterSpots: [{ x: 3550, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
@@ -939,7 +952,7 @@ function startAtLevel(idx) {
   score = prevTarget();              // arrive with the cumulative score of prior levels
   runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
-  platforms = []; carabiners = []; knifeItems = []; enemies = []; pits = [];
+  platforms = []; carabiners = []; knifeItems = []; energyItems = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
@@ -1108,6 +1121,7 @@ cutsceneVideo.addEventListener("error", () => { if (state === "cutscene") endCut
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let gearItems = [];   // spawned gear pickups in the world (this level)
 let knifeItems = [];  // knife pickups on the Level-1 climb top ledges (each = +1 throwable knife)
+let energyItems = []; // energy-bottle pickups (each refills stamina)
 let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
 let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
 let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
@@ -1352,6 +1366,7 @@ function generateAhead() {
   platforms  = platforms.filter(p => p.x + p.w > cutoff);
   carabiners = carabiners.filter(c => c.x + c.w > cutoff);
   knifeItems = knifeItems.filter(k => k.x + k.w > cutoff);
+  energyItems = energyItems.filter(e => e.x + e.w > cutoff);
   pits       = pits.filter(p => p.x + p.w > cutoff);
   crashPlats = crashPlats.filter(p => p.x + p.w > cutoff);
 }
@@ -1750,7 +1765,7 @@ function initPlayer() {
              vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
              swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null, descend: null,
-             traverse: null, traverseAnim: 0, ropeCd: 0,
+             traverse: null, traverseAnim: 0, ropeCd: 0, poweredT: 0, powerupAnimT: 0,
              onPlatform: false, exhausted: false, collapsed: false, collapseTimer: 0,
              airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0,
              throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false };
@@ -1959,11 +1974,17 @@ function updatePlayer(dt) {
   if (player.descend) { updateDescend(dt); return; } // climbing down a descent rope
   if (updateTraverse(dt)) return;  // hanging across a horizontal traverse rope (Level 1)
 
+  // Energy-bottle power-up: count the buff timer; freeze movement during the
+  // brief drink->surge->flex transformation animation.
+  if (player.poweredT > 0) player.poweredT -= dt;
+  if (player.powerupAnimT > 0) player.powerupAnimT -= dt;
+
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
   if (anyKey(RIGHT_KEYS)) move += 1;
   if (move !== 0) player.facing = move;
   if (player.collapsed) move = 0;   // doubled over at 0 stamina — no walking this frame
+  if (player.powerupAnimT > 0) move = 0;   // hold still while transforming
 
   // Movement is normally instant (vx = input). Two exceptions:
   //  - just launched off a rope swing: keep that horizontal momentum in the air
@@ -2233,6 +2254,18 @@ function handleKnifeItems() {
   }
   knifeItems = knifeItems.filter(k => !k.collected);
 }
+// Energy bottles: collect to refill stamina (Level-1 power).
+function handleEnergyItems() {
+  for (const e of energyItems) if (!e.collected && aabb(player, e)) {
+    e.collected = true;
+    power = Math.min(POWER_MAX, power + ENERGY_REFILL);
+    player.powerupAnimT = POWERUP_ANIM_TIME;   // perform the drink -> surge -> flex transformation
+    player.poweredT = POWERUP_TIME;            // then walk buffed for a while
+    sparkleBurst(e.x + e.w / 2, e.y + e.h / 2);
+    Music.sfxGear();
+  }
+  energyItems = energyItems.filter(e => !e.collected);
+}
 
 // One shoes/rope/helmet per level, on fixed reachable ground spots along the path.
 const GEAR_SPAWN_X = [480, 1100, 1800];
@@ -2278,6 +2311,15 @@ function spawnGearForLevel(base = 0) {
       knifeItems.push({ spotKnife: true, x: s.x - KNIFE_PICK_W / 2, y: s.top - KNIFE_PICK_H - 6,
                         w: KNIFE_PICK_W, h: KNIFE_PICK_H, t: Math.random() * 6.28, collected: false });
   }
+  if (lvl.energySpots) {  // energy-bottle stamina pickups
+    energyItems = energyItems.filter(e => !e.spotEnergy);
+    for (const s of lvl.energySpots)
+      energyItems.push({ spotEnergy: true, x: s.x - ENERGY_PICK_W / 2, y: s.top - ENERGY_PICK_H,
+                         w: ENERGY_PICK_W, h: ENERGY_PICK_H, t: Math.random() * 6.28, collected: false });
+  }
+  if (lvl.carabinerSpots)   // fixed carabiner pickups (rest on the surface)
+    for (const s of lvl.carabinerSpots)
+      carabiners.push({ x: s.x - CARABINER_W / 2, y: s.top - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
   const gearW = g => g.h * ((imgLoaded[g.asset] && images[g.asset].naturalHeight) ? images[g.asset].naturalWidth / images[g.asset].naturalHeight : 1);
   if (lvl.gearSpots) {
     // Gear on specific ledges (each red-snake guarded); any unlisted gear on the ground.
@@ -3243,6 +3285,22 @@ function drawKnifeItems() {
   }
 }
 
+function drawEnergyItems() {
+  if (!imgLoaded.energyBottle) { return; }
+  const img = images.energyBottle, ratio = img.naturalWidth / img.naturalHeight;
+  for (const e of energyItems) {
+    if (e.collected) continue;
+    const sx = e.x - cameraX;
+    if (sx > VIEW_W || sx + e.w < 0) continue;
+    const bob = Math.sin(performance.now() / 300 + e.t) * 3;
+    const dh = e.h, dw = dh * ratio;                       // aspect-correct, fit to hitbox height
+    ctx.save();                                            // soft green energy glow
+    ctx.globalAlpha = 0.4; ctx.fillStyle = "#7CFFB2";
+    ctx.beginPath(); ctx.ellipse(sx + e.w / 2, e.y + e.h / 2 + bob, e.w * 0.7, e.h * 0.42, 0, 0, 6.28); ctx.fill();
+    ctx.restore();
+    ctx.drawImage(img, sx + (e.w - dw) / 2, e.y + e.h - dh + bob, dw, dh);
+  }
+}
 function drawCarabiners() {
   for (const c of carabiners) {
     const sx = c.x - cameraX;
@@ -3452,6 +3510,21 @@ function drawEnemies() {
 function drawPlayer() {
   if (invulnTimer > 0 && Math.floor(performance.now() / 80) % 2 === 0) return;
   const sx = player.x - cameraX;
+
+  // Energy-bottle transformation: drink -> energy surge -> flex (3 frames), drawn
+  // a touch larger than Abu since the powered sprite is bulkier. Frozen meanwhile.
+  if (player.powerupAnimT > 0 && imgLoaded.abuPowerup) {
+    const img = images.abuPowerup, cw = img.naturalWidth / POWERUP_FRAMES, ch = img.naturalHeight;
+    const prog = 1 - player.powerupAnimT / POWERUP_ANIM_TIME;       // 0..1 across the strip
+    const fi = Math.min(POWERUP_FRAMES - 1, Math.floor(prog * POWERUP_FRAMES));
+    const dh = player.h * 1.28, dw = dh * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h);
+    if (player.facing > 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
+    ctx.restore();
+    return;
+  }
 
   // Playable summit climb: Abu holds the rope. Use the dedicated hand-over-hand
   // sheet if present (frames cadence by distance climbed); else the geared-up
@@ -4243,6 +4316,7 @@ function update(dt) {
   updateIcicles(dt);
   handleCarabiners();
   handleKnifeItems();
+  handleEnergyItems();
   handleGear();
   handleHazards();
   handleEnemies();
@@ -4394,6 +4468,7 @@ function draw() {
   drawDescentRopes();      // platform-edge descent ropes (Level 1)
   drawCarabiners();
   drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
+  drawEnergyItems();       // energy-bottle stamina pickups (Level 1)
   drawGear();              // collectible shoes / rope / helmet on the path
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
