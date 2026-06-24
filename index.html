@@ -443,6 +443,7 @@ const LEVELS = [
                 { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 }],    // knife on seq2's 2nd stepping rock
+    shelterSpots: [{ x: 3610, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
                 { img: "stepRock3", x: 2012, top: 117 },
@@ -1165,6 +1166,8 @@ function generateAhead() {
         if (!p.shelter) continue;
         shelters.push({ x: p.x, w: p.w, cx: p.x + p.w / 2, top: p.y });
       }
+      if (lvl.power && lvl.shelterSpots) for (const s of lvl.shelterSpots)   // shelters on deterministic spots (seq3 arch)
+        shelters.push({ x: s.x - 45, w: 90, cx: s.x, top: s.top });
     } else {
       // Natural terrain without platforms: scatter sparse ground carabiners.
       while (worldGenX < target) {
