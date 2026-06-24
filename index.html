@@ -260,6 +260,8 @@ const ASSETS = {
   woodBridge:  "woodbridge.png?v=1",  // Level 1: plank bridge across the seq1->seq2 gap
   ropeBridge:  "Zugspitze_Rope_Bridge.png?v=1",  // Level 1: rope bridge across the seq3->seq4 gap
   ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
+  horizontalRope: "Zugspitze_Horizontal_Anchor_Rope.png?v=1",  // Level 1: taut horizontal traverse rope (seq3 gaps)
+  abuClimbsHill:  "abu_climbshill.png?v=1",     // Level 1: 4-frame hand-over-hand traverse (hangs below the rope)
   bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
   fgGlock:     "Grossglockner_Front2.png?v=2",  // Level 2 parallax: near terrain + platforms (transparent)
   bgGrandeBack: "Grande_Back.png?v=1",      // Level 3 parallax: far Dolomites towers
@@ -446,6 +448,8 @@ const LEVELS = [
                    { x0: 2227, x1: 2315, top: 315 },   // seq2 mid ledge
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
+    // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
+    climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5 }],
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -871,6 +875,7 @@ function startAtLevel(idx) {
   generateAhead();
   spawnGearForLevel();               // one shoes/rope/helmet on the main path
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -1495,6 +1500,22 @@ function spawnPatrolSnakes() {
   }
 }
 
+// String a row of carabiners along each horizontal traverse rope (collected
+// hand-over-hand). Count comes from the rope's `carabiners` field; spaced evenly.
+function placeClimbRopeCarabiners() {
+  const lvl = currentLevel();
+  if (!lvl.climbRopes) return;
+  for (const r of lvl.climbRopes) {
+    const n = r.carabiners || 0;
+    if (!n) continue;
+    const span = r.x1 - r.x0;
+    for (let i = 0; i < n; i++) {
+      const cx = r.x0 + span * (i + 1) / (n + 1);     // evenly spaced between the anchors
+      carabiners.push({ x: cx - CARABINER_W / 2, y: r.y - CARABINER_H / 2, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
+    }
+  }
+}
+
 // A flying baby-eagle guard (Level-3-style): hovers around its anchor (ax, ay),
 // bobs, and periodically swoops at a locked-in target near Abu, then climbs back.
 function spawnGuardEagle(ax, ay) {
@@ -1614,6 +1635,7 @@ function initPlayer() {
              vx: 0, vy: 0, slideVx: 0, onGround: true, facing: 1, walkPhase: 0,
              coyoteTimer: 0, jumpBufferTimer: 0, prevJump: false,
              swinging: false, swing: null, launchVx: 0, ropeHold: 0, mantle: null, descend: null,
+             traverse: null, traverseAnim: 0, ropeCd: 0,
              onPlatform: false, exhausted: false, collapsed: false, collapseTimer: 0,
              airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0,
              throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false };
@@ -1687,6 +1709,63 @@ function updateSwing(dt) {
   return false;
 }
 
+// Horizontal traverse rope (Level 1): Abu hangs BELOW a taut rope and shimmies
+// across hand-over-hand (Left/Right). Grab by stepping off the ledge onto it (or
+// pressing Up while it overlaps him); Down/Jump lets go; reaching an anchor steps
+// him onto the ground there. Returns true while he's on the rope.
+const ROPE_TRAVERSE_SPEED = 95;   // px/s hand-over-hand
+const ROPE_GRAB_V = 6;            // hands grip this far above the strand
+function updateTraverse(dt) {
+  const lvl = currentLevel();
+  if (!lvl.climbRopes) return false;
+  if (player.ropeCd > 0) player.ropeCd -= dt;
+  const upHeld = anyKey(JUMP_KEYS), upPressed = upHeld && !player.prevJump;
+  const down = anyKey(DOWN_KEYS), left = anyKey(LEFT_KEYS), right = anyKey(RIGHT_KEYS);
+  const cx = player.x + player.w / 2;
+
+  if (player.traverse) {
+    const r = player.traverse;
+    if (down || upPressed) {                              // let go: down drops, Up hops off
+      player.traverse = null; player.onGround = false;
+      player.vy = upPressed ? -360 : 60; player.ropeCd = 0.35; player.prevJump = upHeld;
+      return false;
+    }
+    let mv = (right ? 1 : 0) - (left ? 1 : 0);
+    if (mv) player.facing = mv;
+    player.x += mv * ROPE_TRAVERSE_SPEED * dt;
+    player.traverseAnim += Math.abs(mv) * dt;
+    player.vx = 0; player.vy = 0; player.onGround = false;
+    player.y = r.y - ROPE_GRAB_V;                         // hands grip the strand; body hangs below
+    if (cx <= r.x0) {                                     // left anchor -> step onto the ledge
+      player.x = r.x0 - player.w / 2; player.y = surfaceY(r.x0) - player.h;
+      player.onGround = true; player.vy = 0; player.traverse = null; player.ropeCd = 0.35; player.prevJump = upHeld;
+      return false;
+    }
+    if (cx >= r.x1) {                                     // right anchor -> drop onto the ground below
+      player.x = r.x1 - player.w / 2; player.traverse = null; player.onGround = false;
+      player.vy = 80; player.ropeCd = 0.35; player.prevJump = upHeld;
+      return false;
+    }
+    if (invulnTimer > 0) invulnTimer -= dt;
+    player.prevJump = upHeld;
+    return true;
+  }
+
+  // Grab: the strand overlaps Abu's reach (raised arms just above his head down
+  // through his body) while he's airborne over the gap, or he presses Up next to it.
+  if (player.ropeCd > 0 || player.mantle || player.descend) return false;
+  for (const r of lvl.climbRopes) {
+    if (cx < r.x0 || cx > r.x1) continue;
+    if (r.y >= player.y - 24 && r.y <= player.y + player.h && (upHeld || player.vy > 20)) {
+      player.traverse = r; player.traverseAnim = 0;
+      player.y = r.y - ROPE_GRAB_V; player.vx = 0; player.vy = 0; player.onGround = false;
+      player.prevJump = upHeld;
+      return true;
+    }
+  }
+  return false;
+}
+
 // Ledge mantle (Level 1): hang from the caught edge, then pull up onto the platform.
 function updateMantle(dt) {
   const m = player.mantle;
@@ -1744,6 +1823,7 @@ function updatePlayer(dt) {
   if (updateSwing(dt)) return;     // on a rope — the pendulum handles movement this frame
   if (player.mantle) { updateMantle(dt); return; }   // climbing a platform edge
   if (player.descend) { updateDescend(dt); return; } // climbing down a descent rope
+  if (updateTraverse(dt)) return;  // hanging across a horizontal traverse rope (Level 1)
 
   let move = 0;
   if (anyKey(LEFT_KEYS)) move -= 1;
@@ -2826,6 +2906,25 @@ function drawCollapsers() {
 // is a spire top; the sprite is scaled + rotated so its two anchor rocks (src x
 // ~95 and ~2065, anchor-base src y ~400) land on those tops.
 const ROPE_AX0 = 95, ROPE_AX1 = 2065, ROPE_AY = 400;
+// Horizontal traverse rope (Zugspitze_Horizontal_Anchor_Rope.png, 2172x724): the
+// rock anchors sit at image-x HROPE_AX0/AX1 and the taut strand runs at image-y
+// HROPE_AY — used to stretch the sprite between a level's climbRopes {x0,x1,y}.
+const HROPE_AX0 = 95, HROPE_AX1 = 2075, HROPE_AY = 368;
+function drawClimbRopes() {
+  const lvl = currentLevel();
+  if (!lvl.climbRopes || !imgLoaded.horizontalRope) return;
+  const img = images.horizontalRope, span = HROPE_AX1 - HROPE_AX0;
+  for (const r of lvl.climbRopes) {
+    const dx0 = r.x0 - cameraX, dx1 = r.x1 - cameraX;
+    if (Math.max(dx0, dx1) < 0 || Math.min(dx0, dx1) > VIEW_W) continue;
+    const s = (r.x1 - r.x0) / span;                  // scale image so anchors land on x0/x1
+    ctx.save();
+    ctx.translate(dx0, r.y);                          // image anchor-left -> (x0, ropeY)
+    ctx.scale(s, s);
+    ctx.drawImage(img, -HROPE_AX0, -HROPE_AY);        // strand (HROPE_AY) sits at world ropeY
+    ctx.restore();
+  }
+}
 function drawRopeAnchors() {
   const lvl = currentLevel();
   if (!lvl.ropeAnchors || !imgLoaded.ropeAnchorHill) return;
@@ -3139,6 +3238,21 @@ function drawPlayer() {
       const bob = moving ? Math.sin(performance.now() / 90) * 2 : 0;
       drawGearedAbu(GEARUP_FRAMES - 1, fx, footY + bob, player.facing);
     }
+    return;
+  }
+
+  // Hand-over-hand across a horizontal traverse rope (Level 1): hang below, the
+  // raised-fist sprite top gripping the strand; frames cadence by distance moved.
+  if (player.traverse && imgLoaded.abuClimbsHill) {
+    const img = images.abuClimbsHill, n = 4, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const moving = Math.abs(anyKey(LEFT_KEYS) ? 1 : 0) || (anyKey(RIGHT_KEYS) ? 1 : 0);
+    const fi = moving ? Math.floor(player.traverseAnim * 8) % n : 0;
+    const H = 104, W = H * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.traverse.y - ROPE_GRAB_V);   // origin at the grip (rope strand)
+    if (player.facing < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -W / 2, -H * (54 / ch), W, H);  // raised fists (sprite y≈54) at the strand
+    ctx.restore();
     return;
   }
 
@@ -3683,6 +3797,7 @@ function resetGame() {
   generateAhead();
   spawnGearForLevel();
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
@@ -4032,6 +4147,7 @@ function draw() {
   drawCollapsers();        // collapsing rock ledges (Level 1)
   drawStepRocks();         // floating stepping-rock platforms across the seq2 gap (Level 1)
   drawRopeAnchors();       // anchored rope between two seq2 spire tops (Level 1)
+  drawClimbRopes();        // horizontal traverse rope across the seq3 gaps (Level 1)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
