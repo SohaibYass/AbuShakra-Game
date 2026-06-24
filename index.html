@@ -753,9 +753,10 @@ bindButton("btn-throw", "KeyF");               // throw a carabiner
 const Music = (() => {
   // Looping background track (per-level mp3; replaces the old synth loop).
   const bgm = new Audio();
-  bgm.loop = true; bgm.volume = 0.5; bgm.preload = "auto";
+  const MUSIC_VOL = 0.5;          // normal background level (ducked down near enemies)
+  bgm.loop = true; bgm.volume = MUSIC_VOL; bgm.preload = "auto";
   let curSrc = null;
-  let actx = null, master = null, enabled = true;
+  let actx = null, master = null, voice = null, enabled = true;
   // Switch the background track. Swaps the source only when it changes; if music
   // is already playing it crossfades straight into the new track, otherwise it
   // just arms it (so the cover stays silent until the first tap calls start()).
@@ -775,6 +776,9 @@ const Music = (() => {
     master = actx.createGain();
     master.gain.value = 0.16;   // overall volume
     master.connect(actx.destination);
+    voice = actx.createGain();  // enemy voices ride a louder bus so they cut over the music
+    voice.gain.value = 0.55;
+    voice.connect(actx.destination);
   }
   // iOS only starts audio from inside a user gesture. Create+resume the
   // context and play one silent sample to "unlock" it for later use.
@@ -797,7 +801,7 @@ const Music = (() => {
     o.start(time); o.stop(time + dur + 0.02);
   }
   // A note whose pitch glides from f0 to f1 — used for sound effects.
-  function slide(f0, f1, time, dur, type, vol) {
+  function slide(f0, f1, time, dur, type, vol, out) {
     if (!actx) return;
     const o = actx.createOscillator(), g = actx.createGain();
     o.type = type;
@@ -806,8 +810,28 @@ const Music = (() => {
     g.gain.setValueAtTime(0.0001, time);
     g.gain.exponentialRampToValueAtTime(vol, time + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
-    o.connect(g); g.connect(master);
+    o.connect(g); g.connect(out || master);
     o.start(time); o.stop(time + dur + 0.02);
+  }
+  // Short burst of band-passed white noise — the basis of the snake hiss.
+  let noiseBuf = null;
+  function noise(time, dur, vol, f0, f1, q, out) {
+    if (!actx) return;
+    if (!noiseBuf) {
+      noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = actx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const bp = actx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = q || 6;
+    bp.frequency.setValueAtTime(f0, time);
+    if (f1) bp.frequency.exponentialRampToValueAtTime(Math.max(1, f1), time + dur);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(vol, time + Math.min(0.12, dur * 0.4));   // gentle swell
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    src.connect(bp); bp.connect(g); g.connect(out || master);
+    src.start(time); src.stop(time + dur + 0.02);
   }
   const sfxReady = () => enabled && !!actx;
   return {
@@ -821,6 +845,26 @@ const Music = (() => {
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
+    // Enemy proximity voices (vol fades with distance, passed in by the caller).
+    // Snake: a sibilant "sssss" — airy high band-pass noise (broad Q) with a faint
+    // lower layer for body, swelling then trailing off.
+    sfxSnake(vol) {
+      if (!sfxReady()) return; const t = actx.currentTime;
+      noise(t, 0.72, vol, 8200, 7000, 2.2, voice);          // airy top sss
+      noise(t + 0.02, 0.66, vol * 0.45, 4600, 4000, 3.5, voice);  // breathy body
+    },
+    // Eagle: an iconic raptor screech — a sharp up-chirp onset into a long,
+    // descending "kee-aaarr" cry, with a raspy band-passed noise layer riding the
+    // tone so it sounds harsh and birdlike rather than a plain sawtooth.
+    sfxEagle(vol) {
+      if (!sfxReady()) return; const t = actx.currentTime;
+      slide(2050, 2850, t, 0.05, "sawtooth", vol * 0.85, voice);        // sharp up-chirp onset
+      slide(2850, 1000, t + 0.05, 0.55, "sawtooth", vol, voice);        // long descending cry
+      noise(t + 0.05, 0.5, vol * 0.5, 3400, 1500, 6, voice);            // raspy raptor texture
+    },
+    // Duck the music as enemies close in: fades fully to ZERO before point-blank
+    // (silent by the time the duck reaches ~0.8), back to normal when they leave.
+    setMusicDuck(level) { const k = Math.max(0, Math.min(1, level)); bgm.volume = MUSIC_VOL * Math.max(0, 1 - 1.25 * k); },
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -880,6 +924,7 @@ function startAtLevel(idx) {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
+  enemyDuck = 0; Music.setMusicDuck(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -1466,6 +1511,9 @@ function spawnEnemy() {
 // A red snake GUARD that patrols a fixed ledge (back and forth, turning at the edges)
 // instead of scrolling in from the right. Stomp it to clear the way to the shoes.
 const GUARD_SPEED = 72;
+const ENEMY_SND_DIST = 230;   // within this many px of Abu, an enemy hisses / screeches
+const ENEMY_DUCK_DIST = 300;  // within this many px, the music ducks toward minimal
+let enemyDuck = 0;            // eased 0..1 music-duck level driven by the nearest enemy
 function spawnGuardSnake(cx, top, ledgeW) {
   const w = 88, h = 19;                               // side-on red snake, 2-frame walk like the green snake
   enemies.push({ guard: true, type: "walker", x: cx - w / 2, y: top - h, w, h,
@@ -1543,6 +1591,24 @@ function spawnGuardEagle(ax, ay) {
 function updateEnemies(dt) {
   const d = difficulty();
   const natural = currentLevel().terrain === "natural";
+  // Proximity voices + music ducking: as the nearest enemy closes in, the music
+  // fades toward minimal and the enemy's hiss / screech swells. A per-enemy
+  // cooldown keeps the voices from buzzing every frame.
+  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
+  let nearest = Infinity;
+  for (const e of enemies) {
+    const dist = Math.hypot((e.x + e.w / 2) - pcx, (e.y + e.h / 2) - pcy);
+    if (dist < nearest) nearest = dist;
+    e.sndCd = (e.sndCd || 0) - dt;
+    if (e.sndCd > 0 || dist > ENEMY_SND_DIST) continue;
+    const vol = (0.85 + 0.6 * enemyDuck) * (1 - dist / ENEMY_SND_DIST);   // louder, swells with the duck
+    if (e.type === "flyer" || e.eagleGuard) { Music.sfxEagle(vol); e.sndCd = rand(1.6, 2.8); }
+    else { Music.sfxSnake(vol); e.sndCd = rand(1.8, 3.2); }
+  }
+  // Ease the duck toward how close the nearest enemy is (fast attack, slower release).
+  const targetDuck = nearest < ENEMY_DUCK_DIST ? 1 - nearest / ENEMY_DUCK_DIST : 0;
+  enemyDuck += (targetDuck - enemyDuck) * Math.min(1, (targetDuck > enemyDuck ? 7 : 3) * dt);
+  Music.setMusicDuck(enemyDuck);
   for (const e of enemies) {
     if (e.eagleGuard) {                              // flying gear guard: hover around anchor + swoop at Abu
       e.phase += dt * 6;
@@ -3812,6 +3878,7 @@ function resetGame() {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
+  enemyDuck = 0; Music.setMusicDuck(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
