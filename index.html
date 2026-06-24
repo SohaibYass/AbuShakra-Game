@@ -449,7 +449,7 @@ const LEVELS = [
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
-    climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5 }],
+    climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -876,6 +876,7 @@ function startAtLevel(idx) {
   spawnGearForLevel();               // one shoes/rope/helmet on the main path
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
+  spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -1514,6 +1515,15 @@ function placeClimbRopeCarabiners() {
       carabiners.push({ x: cx - CARABINER_W / 2, y: r.y - CARABINER_H / 2, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
     }
   }
+}
+
+// A flying eagle guarding a traverse rope (lvl.climbRopes[].guard === "eagle"):
+// hovers over the rope's mid-span and dives at Abu while he's near/on the rope.
+function spawnClimbRopeGuards() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.climbRopes) return;
+  for (const r of lvl.climbRopes)
+    if (r.guard === "eagle") spawnGuardEagle((r.x0 + r.x1) / 2, r.y);
 }
 
 // A flying baby-eagle guard (Level-3-style): hovers around its anchor (ax, ay),
@@ -3798,6 +3808,7 @@ function resetGame() {
   spawnGearForLevel();
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
+  spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
