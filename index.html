@@ -225,6 +225,8 @@ const ASSETS = {
   gearRope:   "gear_rope.png?v=1",   // collectible gear: rope
   gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
   summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
+  abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
+  austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -450,6 +452,14 @@ const LEVELS = [
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
+    // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
+    flags: [{ x: 2631, top: 97 },    // seq2 spire top
+            { x: 2855, top: 130 },   // seq3-start spire top
+            { x: 277,  top: 196 },   // seq1 valley
+            { x: 1200, top: 140 },   // seq1 mesa top (wood-bridge approach)
+            { x: 1417, top: 140 }],  // seq2 mesa top (wood-bridge far side)
+    // "Austria 1km" arrow signpost planted at the level start.
+    signs: [{ x: 43, top: 428 }],
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -2989,6 +2999,32 @@ const ROPE_AX0 = 95, ROPE_AX1 = 2065, ROPE_AY = 400;
 // rock anchors sit at image-x HROPE_AX0/AX1 and the taut strand runs at image-y
 // HROPE_AY — used to stretch the sprite between a level's climbRopes {x0,x1,y}.
 const HROPE_AX0 = 95, HROPE_AX1 = 2075, HROPE_AY = 368;
+// Planted flag-on-a-stick scenery (lvl.flags = [{x, top}]): the source stick foot
+// sits at image (FLAG_FOOT_X, FLAG_FOOT_Y); plant it on the surface at (x, top).
+const FLAG_DRAW_H = 92, FLAG_FOOT_X = 27, FLAG_FOOT_Y = 501;
+function drawFlags() {
+  const lvl = currentLevel();
+  if (!lvl.flags || !imgLoaded.abuFlagStick) return;
+  const img = images.abuFlagStick, s = FLAG_DRAW_H / img.naturalHeight;
+  for (const f of lvl.flags) {
+    const sx = f.x - cameraX;
+    if (sx < -80 || sx > VIEW_W + 80) continue;
+    ctx.drawImage(img, sx - FLAG_FOOT_X * s, f.top - FLAG_FOOT_Y * s, img.naturalWidth * s, img.naturalHeight * s);
+  }
+}
+// Planted signpost scenery (lvl.signs = [{x, top}]): the source post foot sits at
+// image (SIGN_FOOT_X, SIGN_FOOT_Y); plant it on the surface at (x, top).
+const SIGN_DRAW_H = 128, SIGN_FOOT_X = 682, SIGN_FOOT_Y = 917;
+function drawSigns() {
+  const lvl = currentLevel();
+  if (!lvl.signs || !imgLoaded.austriaSign) return;
+  const img = images.austriaSign, s = SIGN_DRAW_H / img.naturalHeight;
+  for (const sg of lvl.signs) {
+    const sx = sg.x - cameraX;
+    if (sx < -160 || sx > VIEW_W + 160) continue;
+    ctx.drawImage(img, sx - SIGN_FOOT_X * s, sg.top - SIGN_FOOT_Y * s, img.naturalWidth * s, img.naturalHeight * s);
+  }
+}
 function drawClimbRopes() {
   const lvl = currentLevel();
   if (!lvl.climbRopes || !imgLoaded.horizontalRope) return;
@@ -4229,6 +4265,8 @@ function draw() {
   drawStepRocks();         // floating stepping-rock platforms across the seq2 gap (Level 1)
   drawRopeAnchors();       // anchored rope between two seq2 spire tops (Level 1)
   drawClimbRopes();        // horizontal traverse rope across the seq3 gaps (Level 1)
+  drawFlags();             // planted rectangular flags-on-a-stick scenery (Level 1)
+  drawSigns();             // "Austria 1km" arrow signpost (Level 1 start)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
