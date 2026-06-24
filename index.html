@@ -414,7 +414,7 @@ const KNIFE_PICK_W = 34, KNIFE_PICK_H = 20;   // knife-pickup hitbox on the Leve
 // stock him up for the later peaks. A direct jump to a later level keeps the baseline.
 function startAmmo() { return currentLevel().upperPlat ? 0 : START_CARABINERS; }
 // Set to false to disable the snakes (handy for testing terrain in isolation).
-const ENEMIES_ENABLED = false;   // TEST: enemies off while inspecting the collision lines
+const ENEMIES_ENABLED = true;   // ground snakes + soaring eagles
 
 /* Three levels on real Dolomites climbing locations. Cumulative score
    milestones: one continuous run, the world swaps as your TOTAL score
@@ -424,10 +424,14 @@ const LEVELS = [
   // collision is the `surf` heightmap (traced from a *_terrain_overlay.png).
   { id: 1, name: "Zugspitze", country: "Germany", bg: "bgZugBack", fg: "fgZug", target: 20,
     enemySpeedMul: 1.0, spawnMul: 1.0,
-    enemyMix: ["walker", "walker", "walker", "walker"],
-    // Level 1 enemies are side-on snakes; the slither is procedural (slice-shear wave).
-    enemyAnim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 },
-    enemySurf: ZUG_SNAKE_SURF,   // snakes stand on their own (lower) line; player keeps ZUG_SURF
+    // Ground snakes on the rock + soaring/diving eagles for the aerial gaps. (snake
+    // listed twice so eagles are ~1-in-3 — present but not constant.)
+    enemyCreatures: [
+      { name: "snake",  type: "walker", size: { w: 96, h: 16 }, anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } },
+      { name: "snake2", type: "walker", size: { w: 96, h: 16 }, anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } },
+      { name: "eagle",  type: "flyer",  size: { w: 44, h: 30 }, dive: true, frames: { key: "enemyBabyEagle", count: 3, fps: 7, anchor: "center", aspect: 1, scale: 2.0 } },
+    ],
+    enemySurf: ZUG_SNAKE_SURF,   // (panorama uses the green-line surface; this is a harmless fallback)
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4"],
