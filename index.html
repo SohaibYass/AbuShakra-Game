@@ -463,6 +463,10 @@ const LEVELS = [
     signs: [{ x: 43, top: 428 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
     planes: [{ x0: 305, x1: 625, y: 110 }],
+    // Animated waterfall overlay on the painted seq4 cascade (top -> splash pool).
+    waterfalls: [{ xTop: 4251, yTop: 302, xBot: 4262, yBot: 448, wTop: 15, wBot: 34 },   // left massif fall
+                  { xTop: 4685, yTop: 343, xBot: 4684, yBot: 470, wTop: 15, wBot: 26 },   // mid-right massif fall
+                  { xTop: 4830, yTop: 331, xBot: 4827, yBot: 470, wTop: 4,  wBot: 12 }],  // right thin fall
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -770,6 +774,7 @@ const Music = (() => {
   bgm.loop = true; bgm.volume = MUSIC_VOL; bgm.preload = "auto";
   let curSrc = null;
   let actx = null, master = null, voice = null, enabled = true;
+  let waterSrc = null, waterGain = null, waterLP = null;   // continuous waterfall-rush ambience
   // Switch the background track. Swaps the source only when it changes; if music
   // is already playing it crossfades straight into the new track, otherwise it
   // just arms it (so the cover stays silent until the first tap calls start()).
@@ -878,6 +883,22 @@ const Music = (() => {
     // Duck the music as enemies close in: fades fully to ZERO before point-blank
     // (silent by the time the duck reaches ~0.8), back to normal when they leave.
     setMusicDuck(level) { const k = Math.max(0, Math.min(1, level)); bgm.volume = MUSIC_VOL * Math.max(0, 1 - 1.25 * k); },
+    // Continuous waterfall rush: band-limited looping noise, gain tracks proximity.
+    setWaterLevel(level) {
+      if (!sfxReady()) return;
+      if (!waterSrc) {
+        if (!noiseBuf) { noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+        waterGain = actx.createGain(); waterGain.gain.value = 0; waterGain.connect(actx.destination);
+        const hp = actx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 380;
+        waterLP = actx.createBiquadFilter(); waterLP.type = "lowpass"; waterLP.frequency.value = 2400;
+        waterSrc = actx.createBufferSource(); waterSrc.buffer = noiseBuf; waterSrc.loop = true;
+        waterSrc.connect(hp); hp.connect(waterLP); waterLP.connect(waterGain);
+        waterSrc.start();
+      }
+      const k = Math.max(0, Math.min(1, level));
+      waterGain.gain.value = k * 0.5;
+      waterLP.frequency.value = 1800 + 1400 * k;   // brighter splash as you get closer
+    },
     setTrack,                                // switch the per-level background track
     start() {
       if (!enabled) return;
@@ -937,7 +958,7 @@ function startAtLevel(idx) {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
-  enemyDuck = 0; Music.setMusicDuck(0);   // start at full music volume
+  enemyDuck = 0; waterDuck = 0; Music.setMusicDuck(0); Music.setWaterLevel(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -1527,6 +1548,8 @@ const GUARD_SPEED = 72;
 const ENEMY_SND_DIST = 230;   // within this many px of Abu, an enemy hisses / screeches
 const ENEMY_DUCK_DIST = 300;  // within this many px, the music ducks toward minimal
 let enemyDuck = 0;            // eased 0..1 music-duck level driven by the nearest enemy
+const WATER_DUCK_DIST = 300;  // within this many px of a waterfall, the rush swells + music ducks
+let waterDuck = 0;            // eased 0..1 proximity to the nearest waterfall
 function spawnGuardSnake(cx, top, ledgeW) {
   const w = 88, h = 19;                               // side-on red snake, 2-frame walk like the green snake
   enemies.push({ guard: true, type: "walker", x: cx - w / 2, y: top - h, w, h,
@@ -1619,9 +1642,9 @@ function updateEnemies(dt) {
     else { Music.sfxSnake(vol); e.sndCd = rand(1.8, 3.2); }
   }
   // Ease the duck toward how close the nearest enemy is (fast attack, slower release).
+  // The music volume is set in update() from the max of the enemy + waterfall ducks.
   const targetDuck = nearest < ENEMY_DUCK_DIST ? 1 - nearest / ENEMY_DUCK_DIST : 0;
   enemyDuck += (targetDuck - enemyDuck) * Math.min(1, (targetDuck > enemyDuck ? 7 : 3) * dt);
-  Music.setMusicDuck(enemyDuck);
   for (const e of enemies) {
     if (e.eagleGuard) {                              // flying gear guard: hover around anchor + swoop at Abu
       e.phase += dt * 6;
@@ -1904,6 +1927,25 @@ function updateDescend(dt) {
   if (invulnTimer > 0) invulnTimer -= dt;
 }
 
+// Waterfall ambience: as Abu nears a flow, the water rush swells and the music
+// ducks. Distance is to the nearest point on each fall's column (top->bottom).
+function updateWaterAmbience(dt) {
+  const lvl = currentLevel();
+  let nearest = Infinity;
+  if (lvl.waterfalls) {
+    const px = player.x + player.w / 2, py = player.y + player.h / 2;
+    for (const wf of lvl.waterfalls) {
+      const cy = Math.max(wf.yTop, Math.min(wf.yBot, py));               // closest height on the fall
+      const f = (wf.yBot - wf.yTop) ? (cy - wf.yTop) / (wf.yBot - wf.yTop) : 0;
+      const cx = wf.xTop + (wf.xBot - wf.xTop) * f;                      // column x at that height
+      const d = Math.hypot(px - cx, py - cy);
+      if (d < nearest) nearest = d;
+    }
+  }
+  const target = nearest < WATER_DUCK_DIST ? 1 - nearest / WATER_DUCK_DIST : 0;
+  waterDuck += (target - waterDuck) * Math.min(1, (target > waterDuck ? 6 : 2.5) * dt);
+  Music.setWaterLevel(waterDuck);
+}
 function updatePlayer(dt) {
   if (player.dying) {              // crashed from a lethal fall — play it out, then dock a life
     player.vx = 0; player.dyingTimer -= dt;
@@ -3015,6 +3057,50 @@ function drawFlags() {
     ctx.drawImage(img, sx - FLAG_FOOT_X * s, f.top - FLAG_FOOT_Y * s, img.naturalWidth * s, img.naturalHeight * s);
   }
 }
+// Animated waterfall overlaid on the painted cascade (lvl.waterfalls = [{xTop,
+// yTop, xBot, yBot, wTop, wBot}]): a translucent body with downward-scrolling
+// foam bands + moving vertical strands + a pulsing splash pool, so the painted
+// water reads as flowing.
+function drawWaterfalls() {
+  const lvl = currentLevel();
+  if (!lvl.waterfalls) return;
+  const t = performance.now() / 1000;
+  for (const wf of lvl.waterfalls) {
+    const H = wf.yBot - wf.yTop;
+    if (wf.xTop - cameraX < -80 || wf.xTop - cameraX > VIEW_W + 80) continue;
+    ctx.save();
+    const STEP = 4;
+    for (let yy = 0; yy <= H; yy += STEP) {
+      const f = yy / H;
+      const cx = (wf.xTop + (wf.xBot - wf.xTop) * f) - cameraX;
+      const wdt = wf.wTop + (wf.wBot - wf.wTop) * f;
+      const y = wf.yTop + yy;
+      ctx.fillStyle = "rgba(212,236,255,0.10)";                 // faint water body
+      ctx.fillRect(cx - wdt / 2, y, wdt, STEP + 1);
+      const band = Math.sin((f * 6 - t * 2.4) * 6.2832);        // bright foam bands scrolling DOWN
+      if (band > 0.5) {
+        ctx.fillStyle = "rgba(246,252,255," + (0.22 * (band - 0.5) / 0.5).toFixed(3) + ")";
+        ctx.fillRect(cx - wdt / 2, y, wdt, STEP + 1);
+      }
+    }
+    // Vertical strands: a few thin streaks with their own downward-scrolling glints.
+    for (let k = -1; k <= 1; k++) {
+      for (let yy = 0; yy <= H; yy += 6) {
+        const f = yy / H;
+        const cx = (wf.xTop + (wf.xBot - wf.xTop) * f) - cameraX + k * (wf.wTop + (wf.wBot - wf.wTop) * f) * 0.3;
+        const g = Math.sin((f * 9 - t * 3.1 + k * 0.7) * 6.2832);
+        if (g > 0.6) { ctx.fillStyle = "rgba(255,255,255," + (0.3 * (g - 0.6) / 0.4).toFixed(3) + ")"; ctx.fillRect(cx - 1, wf.yTop + yy, 2, 5); }
+      }
+    }
+    // Foam cap at the lip + pulsing splash mist at the pool.
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath(); ctx.ellipse(wf.xTop - cameraX, wf.yTop + 2, wf.wTop * 0.75, 3, 0, 0, 6.28); ctx.fill();
+    const puff = 0.5 + 0.5 * Math.sin(t * 3.3);
+    ctx.fillStyle = "rgba(240,250,255," + (0.16 + 0.12 * puff).toFixed(3) + ")";
+    ctx.beginPath(); ctx.ellipse(wf.xBot - cameraX, wf.yBot, wf.wBot * 0.8 * (0.9 + 0.2 * puff), 5 + 2 * puff, 0, 0, 6.28); ctx.fill();
+    ctx.restore();
+  }
+}
 // Plane towing an Abu-flag banner (lvl.planes = [{x0, x1, y}]): roams back and
 // forth over [x0,x1] at altitude y (sine), banner waving (2 frames), art faces
 // LEFT so it flips when heading right. Pure scenery — no collision.
@@ -3941,7 +4027,7 @@ function resetGame() {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
-  enemyDuck = 0; Music.setMusicDuck(0);   // start at full music volume
+  enemyDuck = 0; waterDuck = 0; Music.setMusicDuck(0); Music.setWaterLevel(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
@@ -4151,6 +4237,8 @@ function update(dt) {
   generateAhead();
   updatePower(dt);       // shelter refill + sheltered flag (before enemies read it)
   updateEnemies(dt);
+  updateWaterAmbience(dt);  // waterfall rush + its share of the music duck
+  Music.setMusicDuck(Math.max(enemyDuck, waterDuck));   // music ducks for whichever (enemy/water) is closer
   updateProjectiles(dt); // thrown carabiners: fly, hit enemies/terrain
   updateIcicles(dt);
   handleCarabiners();
@@ -4288,6 +4376,7 @@ function draw() {
   drawBackground();
   drawPlanes();             // banner plane roaming the sky (behind the foreground terrain)
   drawGround();
+  drawWaterfalls();         // animated flowing water on the painted seq4 cascade
   drawBridges();           // wood plank bridge across the seq1->seq2 gap (Level 1)
   drawCollapsers();        // collapsing rock ledges (Level 1)
   drawStepRocks();         // floating stepping-rock platforms across the seq2 gap (Level 1)
