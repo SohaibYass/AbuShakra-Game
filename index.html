@@ -212,6 +212,7 @@ const ASSETS = {
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
+  enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
   enemyBabyEagle: "enemy_baby_eagle_3frame.png?v=1",  // 3-frame flying baby eagle (gear guard)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
@@ -438,6 +439,13 @@ const LEVELS = [
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
               { x0: 2788, x1: 2852, top: 122 },    // small wood bridge between two seq3-start spire tops
               { x0: 3985, x1: 4145, top: 108, img: "ropeBridge" }],   // rope bridge across the seq3->seq4 gap
+    // Green patrol snakes pacing a flat stretch back and forth (from->to world-X, surface top).
+    patrolSnakes: [{ x0: 203,  x1: 343,  top: 407 },   // seq1 valley floor
+                   { x0: 1292, x1: 1366, top: 140 },   // wood bridge (seq1->seq2 mesa tops)
+                   { x0: 1777, x1: 1875, top: 335 },   // seq2 lower ledge
+                   { x0: 2227, x1: 2315, top: 315 },   // seq2 mid ledge
+                   { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
+                   { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -862,6 +870,7 @@ function startAtLevel(idx) {
   initCollapsers();                  // collapsing ledges (Level 1)
   generateAhead();
   spawnGearForLevel();               // one shoes/rope/helmet on the main path
+  spawnPatrolSnakes();               // green patrol snakes (Level 1)
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
   state = "playing";
@@ -1455,6 +1464,36 @@ function spawnGuardSnake(cx, top, ledgeW) {
     alive: true, hp: 1, points: STOMP_POINTS, color: "#d22", phase: Math.random() * 6.28, hitFlash: 0,
     frames: { key: "enemySnakeRedWalk", count: 2, fps: 6 } });
 }
+// Green patrol snakes placed by config (lvl.patrolSnakes = [{x0,x1,top}]). They use
+// the same ledge-patrol behaviour as the red guard, but with the distinct 3-frame
+// sprite and pace the full from->to span the user marked.
+function spawnPatrolSnakes() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.patrolSnakes) return;
+  for (const p of lvl.patrolSnakes) {
+    const w = p.w || 88, h = Math.max(8, Math.round(w / 2.136));   // per-snake width; height locks the 724x339 cell aspect (≈2.14)
+    // Find the contiguous run around the span's centre, walking out until a sharp
+    // step (a CLIFF) — gradual slopes are allowed (the snake walks them smoothly),
+    // but it never paces off an edge where surfaceY jumps and it would "hop".
+    const c0 = (p.x0 + p.x1) / 2, STEP_MAX = 18;
+    let fl = c0, fr = c0;
+    while (fl - 4 >= c0 - 800 && Math.abs(surfaceY(fl - 4) - surfaceY(fl)) <= STEP_MAX) fl -= 4;
+    while (fr + 4 <= c0 + 800 && Math.abs(surfaceY(fr + 4) - surfaceY(fr)) <= STEP_MAX) fr += 4;
+    // Clamp the marked span to that flat run; if it's then narrower than the snake
+    // + a little travel, expand symmetrically but never past the flat run.
+    let x0 = Math.max(p.x0, fl), x1 = Math.min(p.x1, fr);
+    const need = w + 24;
+    if (x1 - x0 < need) {
+      const c = (x0 + x1) / 2;
+      x0 = Math.max(fl, Math.round(c - need / 2));
+      x1 = Math.min(fr, Math.round(c + need / 2));
+    }
+    enemies.push({ guard: true, type: "walker", x: x0, y: p.top - h, w, h,
+      x0, x1, dir: 1, ledgeTop: p.top, followSurf: true, footPad: 4,   // hug the real ground as it paces
+      alive: true, hp: 1, points: STOMP_POINTS, color: "#6a3", phase: Math.random() * 6.28, hitFlash: 0,
+      frames: { key: "enemySnakeDistinct", count: 3, fps: 6 } });
+  }
+}
 
 // A flying baby-eagle guard (Level-3-style): hovers around its anchor (ax, ay),
 // bobs, and periodically swoops at a locked-in target near Abu, then climbs back.
@@ -1498,7 +1537,10 @@ function updateEnemies(dt) {
       e.x += e.dir * GUARD_SPEED * d * dt;
       if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
       else if (e.x + e.w >= e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
-      e.y = e.ledgeTop - e.h; e.phase += dt * 6;
+      // Patrol snakes hug the real ground under their belly (terrain isn't flat);
+      // other guards keep their fixed ledge height.
+      e.y = (e.followSurf ? surfaceY(e.x + e.w / 2) + (e.footPad || 0) : e.ledgeTop) - e.h;
+      e.phase += dt * 6;
       if (e.hitFlash > 0) e.hitFlash -= dt;
       continue;
     }
@@ -3640,6 +3682,7 @@ function resetGame() {
   initCollapsers();                  // collapsing ledges (Level 1) — also needed on the normal start path
   generateAhead();
   spawnGearForLevel();
+  spawnPatrolSnakes();               // green patrol snakes (Level 1)
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
 }
