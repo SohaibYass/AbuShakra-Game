@@ -227,6 +227,7 @@ const ASSETS = {
   summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
   abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
   austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
+  planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -460,6 +461,8 @@ const LEVELS = [
             { x: 1417, top: 140 }],  // seq2 mesa top (wood-bridge far side)
     // "Austria 1km" arrow signpost planted at the level start.
     signs: [{ x: 43, top: 428 }],
+    // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
+    planes: [{ x0: 305, x1: 625, y: 110 }],
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -3012,6 +3015,30 @@ function drawFlags() {
     ctx.drawImage(img, sx - FLAG_FOOT_X * s, f.top - FLAG_FOOT_Y * s, img.naturalWidth * s, img.naturalHeight * s);
   }
 }
+// Plane towing an Abu-flag banner (lvl.planes = [{x0, x1, y}]): roams back and
+// forth over [x0,x1] at altitude y (sine), banner waving (2 frames), art faces
+// LEFT so it flips when heading right. Pure scenery — no collision.
+const PLANE_CONTENT_H = 50, PLANE_CC_X = 747, PLANE_CC_Y = 486;   // content centre in the source cell
+const PLANE_ROAM_SPEED = 0.6, PLANE_FPS = 4;
+function drawPlanes() {
+  const lvl = currentLevel();
+  if (!lvl.planes || !imgLoaded.planeAbu) return;
+  const img = images.planeAbu, n = 2, cw = img.naturalWidth / n, ch = img.naturalHeight;
+  const s = PLANE_CONTENT_H / 273, t = performance.now() / 1000;   // 273 = content height in source
+  const fi = Math.floor(t * PLANE_FPS) % n;
+  for (const p of lvl.planes) {
+    const cx = (p.x0 + p.x1) / 2, amp = (p.x1 - p.x0) / 2, ph = p.phase || 0;
+    const wx = cx + amp * Math.sin(t * PLANE_ROAM_SPEED + ph);
+    const dir = Math.cos(t * PLANE_ROAM_SPEED + ph) >= 0 ? 1 : -1;   // +1 heading right
+    const sx = wx - cameraX, halfW = cw * s;
+    if (sx < -halfW - 40 || sx > VIEW_W + halfW + 40) continue;
+    ctx.save();
+    ctx.translate(sx, p.y);
+    if (dir > 0) ctx.scale(-1, 1);                                  // art faces left; flip heading right
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -PLANE_CC_X * s, -PLANE_CC_Y * s, cw * s, ch * s);
+    ctx.restore();
+  }
+}
 // Planted signpost scenery (lvl.signs = [{x, top}]): the source post foot sits at
 // image (SIGN_FOOT_X, SIGN_FOOT_Y); plant it on the surface at (x, top).
 const SIGN_DRAW_H = 128, SIGN_FOOT_X = 682, SIGN_FOOT_Y = 917;
@@ -4259,6 +4286,7 @@ function draw() {
   ctx.save();
   if (cameraY) ctx.translate(0, -Math.round(cameraY));   // vertical pan (Level 1 upper ledge); no-op elsewhere
   drawBackground();
+  drawPlanes();             // banner plane roaming the sky (behind the foreground terrain)
   drawGround();
   drawBridges();           // wood plank bridge across the seq1->seq2 gap (Level 1)
   drawCollapsers();        // collapsing rock ledges (Level 1)
