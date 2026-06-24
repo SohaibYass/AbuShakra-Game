@@ -426,11 +426,8 @@ const LEVELS = [
     enemySpeedMul: 1.0, spawnMul: 1.0,
     // Ground snakes on the rock + soaring/diving eagles for the aerial gaps. (snake
     // listed twice so eagles are ~1-in-3 — present but not constant.)
-    enemyCreatures: [
-      { name: "snake",  type: "walker", size: { w: 96, h: 16 }, anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } },
-      { name: "snake2", type: "walker", size: { w: 96, h: 16 }, anim: { key: "enemySnake", slither: true, w: 96, h: 16, amp: 3, waves: 2, speed: 5, slices: 24 } },
-      { name: "eagle",  type: "flyer",  size: { w: 44, h: 30 }, dive: true, frames: { key: "enemyBabyEagle", count: 3, fps: 7, anchor: "center", aspect: 1, scale: 2.0 } },
-    ],
+    // Green snakes and eagles disabled — empty list means no roaming enemies spawn.
+    enemyCreatures: [],
     enemySurf: ZUG_SNAKE_SURF,   // (panorama uses the green-line surface; this is a harmless fallback)
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
@@ -447,7 +444,7 @@ const LEVELS = [
                 { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 }],    // knife on seq2's 2nd stepping rock
-    shelterSpots: [{ x: 3610, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
+    shelterSpots: [{ x: 3550, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
                 { img: "stepRock3", x: 2012, top: 117 },
@@ -1359,6 +1356,7 @@ function spawnEnemy() {
   // falcon and wolf. Otherwise fall back to the simple enemyMix of type strings.
   let cr = null, type;
   if (lvl.enemyCreatures) {
+    if (!lvl.enemyCreatures.length) return;   // empty list = no roaming enemies
     cr = lvl.enemyCreatures[(Math.random() * lvl.enemyCreatures.length) | 0];
     type = cr.type;
   } else {
