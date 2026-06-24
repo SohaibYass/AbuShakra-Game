@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v141";
+const CACHE = "abushakra-v142";
 const ASSETS = [
   "./",
   "./index.html",
@@ -122,8 +122,10 @@ self.addEventListener("fetch", (e) => {
     url.pathname.endsWith("index.html");
 
   if (isDoc) {
+    // Bypass the browser HTTP cache so mobile (esp. iOS Safari) can't hand back a
+    // stale page; fall back to the cached copy only when the network is unavailable.
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
