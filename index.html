@@ -212,6 +212,7 @@ const ASSETS = {
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
+  enemyBabyEagle: "enemy_baby_eagle_3frame.png?v=1",  // 3-frame flying baby eagle (gear guard)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
@@ -438,6 +439,10 @@ const LEVELS = [
               { x0: 3985, x1: 4145, top: 108, img: "ropeBridge" }],   // rope bridge across the seq3->seq4 gap
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
+    gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
+                { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
+    knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
+                 { x: 2110, top: 25 }],    // knife on seq2's 2nd stepping rock
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
                 { img: "stepRock3", x: 2012, top: 117 },
@@ -1382,10 +1387,44 @@ function spawnGuardSnake(cx, top, ledgeW) {
     frames: { key: "enemySnakeRedWalk", count: 2, fps: 6 } });
 }
 
+// A flying baby-eagle guard (Level-3-style): hovers around its anchor (ax, ay),
+// bobs, and periodically swoops at a locked-in target near Abu, then climbs back.
+function spawnGuardEagle(ax, ay) {
+  const w = 46, h = 30;   // body collision box (the sprite draws wider via drawEnemies)
+  enemies.push({ eagleGuard: true, type: "flyer", air: true, x: ax - w / 2, y: ay - h, w, h,
+    ax, ay, range: 64, dir: -1, alive: true, hp: 1, points: STOMP_POINTS, color: "#a4763a",
+    phase: Math.random() * 6.28, patrolT: 0, diveState: "cruise", diveCd: rand(1.6, 3.2),
+    diveTimer: 0, diveTx: 0, diveTy: 0, hitFlash: 0,
+    frames: { key: "enemyBabyEagle", count: 3, fps: 7 } });
+}
+
 function updateEnemies(dt) {
   const d = difficulty();
   const natural = currentLevel().terrain === "natural";
   for (const e of enemies) {
+    if (e.eagleGuard) {                              // flying gear guard: hover around anchor + swoop at Abu
+      e.phase += dt * 6;
+      if (e.diveState === "dive") {
+        const dx = e.diveTx - (e.x + e.w / 2), dy = e.diveTy - (e.y + e.h / 2), dist = Math.hypot(dx, dy) || 1;
+        const sp = 300 * d;
+        e.x += (dx / dist) * sp * dt; e.y += (dy / dist) * sp * dt; e.diveTimer -= dt;
+        if (e.diveTimer <= 0 || dist < 14) e.diveState = "recover";
+      } else if (e.diveState === "recover") {        // climb back toward the anchor
+        e.x += ((e.ax - e.w / 2) - e.x) * Math.min(1, 3 * dt);
+        e.y += ((e.ay - e.h) - e.y) * Math.min(1, 3 * dt);
+        if (Math.hypot((e.x + e.w / 2) - e.ax, (e.y + e.h) - e.ay) < 10) { e.diveState = "cruise"; e.diveCd = rand(1.6, 3.0); }
+      } else {                                       // cruise: drift around the anchor + bob
+        e.patrolT += dt;
+        e.x = e.ax - e.w / 2 + Math.sin(e.patrolT * 1.1) * e.range;
+        e.y = (e.ay - e.h) + Math.sin(e.phase) * 8;
+        e.diveCd -= dt;
+        const near = Math.hypot((player.x + player.w / 2) - e.ax, (player.y + player.h / 2) - e.ay) < 280;
+        if (e.diveCd <= 0 && near) { e.diveState = "dive"; e.diveTimer = 1.0; e.diveTx = player.x + player.w / 2; e.diveTy = player.y + player.h / 2; }
+      }
+      e.dir = (player.x + player.w / 2) < (e.x + e.w / 2) ? -1 : 1;   // face Abu
+      if (e.hitFlash > 0) e.hitFlash -= dt;
+      continue;
+    }
     if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
       e.x += e.dir * GUARD_SPEED * d * dt;
       if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
@@ -1445,7 +1484,7 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && (e.guard || e.x + e.w > cameraX - 200));
+  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.x + e.w > cameraX - 200));
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -1906,9 +1945,34 @@ function gearClimbSpots(lvl, base) {
 // and a red snake guards every gear ledge. Other levels drop gear on the ground.
 function spawnGearForLevel(base = 0) {
   gearItems = [];
-  enemies = enemies.filter(e => !e.guard);                  // clear old guards (respawned below)
+  enemies = enemies.filter(e => !e.guard && !e.eagleGuard); // clear old guards (respawned below)
   const lvl = currentLevel();
+  if (lvl.knifeSpots) {   // throwable-knife pickups on specific ledges/rocks
+    knifeItems = knifeItems.filter(k => !k.spotKnife);
+    for (const s of lvl.knifeSpots)
+      knifeItems.push({ spotKnife: true, x: s.x - KNIFE_PICK_W / 2, y: s.top - KNIFE_PICK_H - 6,
+                        w: KNIFE_PICK_W, h: KNIFE_PICK_H, t: Math.random() * 6.28, collected: false });
+  }
   const gearW = g => g.h * ((imgLoaded[g.asset] && images[g.asset].naturalHeight) ? images[g.asset].naturalWidth / images[g.asset].naturalHeight : 1);
+  if (lvl.gearSpots) {
+    // Gear on specific ledges (each red-snake guarded); any unlisted gear on the ground.
+    const placed = {};
+    for (const sp of lvl.gearSpots) {
+      if (gearThisLevel[sp.id]) { placed[sp.id] = true; continue; }
+      const g = GEAR.find(x => x.id === sp.id); if (!g) continue;
+      const w = gearW(g);
+      gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: sp.x - w / 2, y: sp.top - g.h, w, h: g.h, t: Math.random() * 6.28 });
+      if (sp.guard === "eagle") spawnGuardEagle(sp.x, sp.top - 46);   // flying eagle hovers above the rock
+      else if (sp.guard !== false) spawnGuardSnake(sp.x, sp.top, sp.gw || 110);
+      placed[sp.id] = true;
+    }
+    GEAR.forEach((g, i) => {   // remaining gear (e.g. helmet) on the ground so the gate stays completable
+      if (placed[g.id] || gearThisLevel[g.id]) return;
+      const w = gearW(g), cx = base + GEAR_SPAWN_X[i];
+      gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: cx - w / 2, y: surfaceY(cx) - 8 - g.h, w, h: g.h, t: Math.random() * 6.28 });
+    });
+    return;
+  }
   if (lvl.upperPlat) {
     const spots = gearClimbSpots(lvl, base), slot = { shoes: 0, helmet: 1, rope: 2 };
     const gL = UPPER_PLAT.ledges.find(l => l.guard);
@@ -2813,6 +2877,20 @@ function drawEnemies() {
   for (const e of enemies) {
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
+    if (e.eagleGuard) {                                  // flying baby eagle (3-frame flap), drawn wider than its body box
+      const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
+      if (img) {
+        const cw = img.naturalWidth / fr.count, fi = Math.floor(performance.now() / (1000 / fr.fps)) % fr.count;
+        const DH = e.h * 2.6, DW = DH * (cw / img.naturalHeight);   // square cell -> DW≈DH
+        ctx.save();
+        ctx.translate(sx + e.w / 2, e.y + e.h / 2);
+        if (e.dir < 0) ctx.scale(-1, 1);                            // art faces right; flip when facing left
+        if (e.hitFlash > 0) { ctx.globalAlpha = 0.6; }
+        ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, -DW / 2, -DH / 2, DW, DH);
+        ctx.restore();
+      } else { ctx.fillStyle = "#a4763a"; ctx.fillRect(sx, e.y, e.w, e.h); }
+      continue;
+    }
     if (e.guard) {                                       // red ledge-patrol snake (2-frame walk)
       const fr = e.frames, img = images[fr.key];
       ctx.save();
