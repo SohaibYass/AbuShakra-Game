@@ -217,6 +217,8 @@ const ASSETS = {
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
+  enemyEagle: "enemy_eagle_walk.png?v=1",     // golden eagle, 3 frames (wings raised/level/lowered), faces left
+
   enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
   carabiner:  "carabiner.png",    // climbing clip pickup
@@ -476,6 +478,9 @@ const LEVELS = [
     signs: [{ x: 43, top: 428 }],
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 123 }],
+    // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
+    // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
+    perchEagles: [{ x: 5323, range: 150 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
     planes: [{ x0: 305, x1: 625, y: 110 }],
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
@@ -612,8 +617,26 @@ const ENEMY_TYPES = {
   walker: { w: ENEMY_W, h: ENEMY_H, speed: 1.0,  hp: 1, points: STOMP_POINTS, color: "#c0392b", air: false },
   hopper: { w: 42,      h: 42,      speed: 1.15, hp: 1, points: STOMP_POINTS, color: "#27ae60", air: false },
   flyer:  { w: 46,      h: 34,      speed: 1.30, hp: 1, points: STOMP_POINTS, color: "#8e44ad", air: true  },
-  tank:   { w: 72,      h: 72,      speed: 0.55, hp: 2, points: STOMP_POINTS, color: "#7f8c8d", air: false }
+  tank:   { w: 72,      h: 72,      speed: 0.55, hp: 2, points: STOMP_POINTS, color: "#7f8c8d", air: false },
+  eagle:  { w: 54,      h: 38,      speed: 0,    hp: 1, points: STOMP_POINTS, color: "#6b4f2a", air: true  }   // placed perching eagle: w/h are the TORSO hitbox (wings draw larger)
 };
+
+// Placed perching eagle (ported from Level 3's territorial eagle): patrols a small
+// home range, occasionally lands on its perch (the nest peak) to watch Abu and flushes
+// when he's near, and also dive-bombs him with a telegraphed shadow.
+const EAGLE_VIS_W = 130, EAGLE_VIS_DY = 4;        // drawn sprite cell (square) + body-anchor nudge
+const EAGLE_PATROL_SPEED = 112;                   // px/s horizontal patrol
+const EAGLE_PATROL_H_MIN = 84, EAGLE_PATROL_H_MAX = 140;  // patrol height above terrain
+const EAGLE_WARN_MIN = 0.66, EAGLE_WARN_MAX = 0.9;        // dive telegraph (fair, >=0.65s)
+const EAGLE_DIVE_MIN = 0.5, EAGLE_DIVE_MAX = 0.72, EAGLE_DIVE_SPEED = 385;
+const EAGLE_RECOVER_MIN = 0.9, EAGLE_RECOVER_MAX = 1.3;
+const EAGLE_ATTACK_CD_MIN = 1.8, EAGLE_ATTACK_CD_MAX = 3.2;   // patrol time before an attack roll
+const EAGLE_PERCH_WAIT_MIN = 2.5, EAGLE_PERCH_WAIT_MAX = 5.0; // patrol time before a perch roll
+const EAGLE_PERCH_CHANCE = 0.30;                             // chance to perch when the roll fires
+const EAGLE_PERCH_TIME_MIN = 1.4, EAGLE_PERCH_TIME_MAX = 3.0; // time spent perched
+const EAGLE_PERCH_APPROACH_SPEED = 150;
+const EAGLE_TAKEOFF_TIME = 0.6, EAGLE_TAKEOFF_RISE = 65;
+const EAGLE_PERCH_ALERT_DIST = 150;               // Abu this close to a perched eagle -> take off
 
 /* =============================================================
    ASSET LOADING
@@ -888,6 +911,10 @@ const Music = (() => {
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
+    sfxEagleCry()     { if (!sfxReady()) return; const t = actx.currentTime; blip(1450, t, 0.05, "sawtooth", 0.28); blip(1950, t + 0.05, 0.07, "sawtooth", 0.24); blip(1250, t + 0.13, 0.06, "sawtooth", 0.2); },  // screech (dive warning)
+    sfxEagleDive()    { if (!sfxReady()) return; slide(620, 170, actx.currentTime, 0.32, "sawtooth", 0.24); },   // fast wind swoosh
+    sfxEagleHit()     { if (!sfxReady()) return; slide(220, 70, actx.currentTime, 0.14, "triangle", 0.4); },     // feather/impact
+    sfxEagleTakeoff() { if (!sfxReady()) return; const t = actx.currentTime; slide(170, 90, t, 0.11, "triangle", 0.2); slide(150, 80, t + 0.1, 0.11, "triangle", 0.17); },  // two wing beats
     // Enemy proximity voices (vol fades with distance, passed in by the caller).
     // Snake: a sibilant "sssss" — airy high band-pass noise (broad Q) with a faint
     // lower layer for body, swelling then trailing off.
@@ -983,6 +1010,7 @@ function startAtLevel(idx) {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
+  spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
   enemyDuck = 0; waterDuck = 0; Music.setMusicDuck(0); Music.setWaterLevel(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // load this level's track
   Music.start();
@@ -1676,6 +1704,170 @@ function spawnGuardEagle(ax, ay) {
     frames: { key: "enemyBabyEagle", count: 3, fps: 7 } });
 }
 
+/* ===== Placed perching eagle (ported from Level 3's territorial eagle) =====
+   One eagle per lvl.perchEagles entry: patrols a home range around (x), occasionally
+   lands on its perch (the nest peak) to watch Abu and flushes when he comes near, and
+   dive-bombs him with a telegraphed shadow. Stomp/knife to kill; a strike is fatal. */
+function spawnPerchEagles() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.perchEagles) return;
+  const W = ENEMY_TYPES.eagle.w, H = ENEMY_TYPES.eagle.h;
+  for (const g of lvl.perchEagles) {
+    const perchY = surfaceY(g.x);
+    if (perchY >= 5000) continue;                                // need solid ground to perch on
+    const R = g.range || 130, x0 = g.x - R, x1 = g.x + R;
+    const patrolY = Math.max(18, perchY - rand(40, 72) - H);     // just above the peak (clamped on-screen)
+    const pcx = player.x + player.w / 2;
+    const startCx = (pcx < g.x) ? x1 - 40 : x0 + 40;             // start away from Abu
+    enemies.push({
+      eagle: true, type: "eagle", tcx: g.x, x0, x1,
+      x: startCx - W / 2, y: patrolY, w: W, h: H, alive: true, hp: 1, points: STOMP_POINTS,
+      color: ENEMY_TYPES.eagle.color, air: true, homePerch: { x: g.x, y: perchY },
+      state: "patrol", stateTimer: 0, patrolY, dir: (pcx < g.x ? -1 : 1),
+      targetX: 0, targetY: 0, warnY: 0, warnDur: 0, shadowX: 0,
+      attackCd: rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX), phase: Math.random() * 6.28,
+      frameTime: Math.random() * 2, hitFlash: 0,
+      perchTimer: rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX), perchX: null, perchY: null,
+      takeoffStartY: 0, takeoffCd: 0, faceTimer: 0
+    });
+  }
+}
+// The surface (ground or a platform top) directly beneath the locked dive target.
+function findShadowSurfaceY(worldX, targetY) {
+  let y = surfaceY(worldX);
+  for (const p of platforms) {
+    if (worldX >= p.x && worldX <= p.x + p.w && p.y < y && p.y >= (targetY != null ? targetY - 12 : -1e9)) y = p.y;
+  }
+  return y;
+}
+function eagleFeathers(x, y) {
+  spawnParticles(x, y, 5, { angMin: -Math.PI, angMax: 0, spdMin: 30, spdMax: 120,
+    grav: 240, lifeMin: 0.4, lifeMax: 0.85, sizeMin: 2, sizeMax: 4,
+    colors: ["#e8e0d0", "#cdbfa0", "#b8a888", "#fff8ec"] });
+}
+function beginEagleWarning(e) {
+  e.state = "warning"; e.warnDur = rand(EAGLE_WARN_MIN, EAGLE_WARN_MAX); e.stateTimer = e.warnDur; e.warnY = e.y;
+  e.targetX = player.x + player.w / 2;          // LOCK the target now — no homing after this
+  e.targetY = player.y + player.h / 2;
+  e.shadowX = e.x + e.w / 2;
+  Music.sfxEagleCry();
+}
+function beginEagleTakeoff(e) {
+  e.state = "takeoff"; e.stateTimer = EAGLE_TAKEOFF_TIME; e.takeoffStartY = e.y; e.frameTime = 0;
+  eagleFeathers(e.x + e.w / 2, (e.perchY != null ? e.perchY : e.y + e.h));
+  Music.sfxEagleTakeoff();
+}
+function updateEagle(e, dt) {
+  e.frameTime += dt;
+  if (e.hitFlash > 0) e.hitFlash -= dt;
+  if (e.state === "patrol") {
+    e.phase += dt * 2.2;
+    e.x += e.dir * EAGLE_PATROL_SPEED * dt;
+    e.y = e.patrolY + Math.sin(e.phase) * 10;
+    if (e.x < e.x0) { e.x = e.x0; e.dir = 1; }
+    else if (e.x + e.w > e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
+    e.attackCd -= dt;
+    if (e.takeoffCd > 0) e.takeoffCd -= dt;
+    const pcx = player.x + player.w / 2, sxp = e.x - cameraX;
+    const abuNear = pcx > e.x0 - 130 && pcx < e.x1 + 130;
+    if (e.attackCd <= 0 && abuNear && sxp > -40 && sxp < VIEW_W + 40 && state === "playing") {
+      beginEagleWarning(e);                       // an attack always wins over perching
+    } else {
+      e.perchTimer -= dt;
+      if (e.perchTimer <= 0) {
+        e.perchTimer = rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX);
+        if (e.takeoffCd <= 0 && !aabb(player, e) && Math.random() < EAGLE_PERCH_CHANCE) {
+          e.perchX = e.homePerch.x; e.perchY = e.homePerch.y;
+          e.state = "approachPerch"; e.dir = (e.perchX < e.x + e.w / 2) ? -1 : 1;
+        }
+      }
+    }
+  } else if (e.state === "approachPerch") {
+    const cxv = e.x + e.w / 2, cyv = e.y + e.h / 2;
+    const dx = e.perchX - cxv, dy = (e.perchY - e.h / 2) - cyv, dist = Math.hypot(dx, dy) || 1;
+    const sp = Math.min(EAGLE_PERCH_APPROACH_SPEED, dist * 2.6 + 20);   // ease in near the perch
+    e.x += (dx / dist) * sp * dt; e.y += (dy / dist) * sp * dt;
+    e.dir = (e.perchX < cxv) ? -1 : 1;
+    if (dist < 7) { e.x = e.perchX - e.w / 2; e.y = e.perchY - e.h; e.state = "perched"; e.stateTimer = rand(EAGLE_PERCH_TIME_MIN, EAGLE_PERCH_TIME_MAX); e.faceTimer = 0; }
+  } else if (e.state === "perched") {
+    e.stateTimer -= dt; e.phase += dt * 1.5;
+    const pcx = player.x + player.w / 2, ecx = e.x + e.w / 2;
+    e.faceTimer -= dt;
+    if (e.faceTimer <= 0) { e.dir = (pcx < ecx) ? -1 : 1; e.faceTimer = 0.5; }   // turn only occasionally
+    if (Math.abs(pcx - ecx) < EAGLE_PERCH_ALERT_DIST || e.stateTimer <= 0) beginEagleTakeoff(e);
+  } else if (e.state === "takeoff") {
+    e.stateTimer -= dt; e.frameTime += dt;
+    const prog = 1 - Math.max(0, e.stateTimer) / EAGLE_TAKEOFF_TIME;
+    e.y = e.takeoffStartY - EAGLE_TAKEOFF_RISE * prog;
+    const pcx = player.x + player.w / 2;
+    e.x += ((e.x + e.w / 2 < pcx) ? -1 : 1) * 38 * dt;            // edge away from Abu
+    if (e.stateTimer <= 0) {
+      e.state = "recover"; e.stateTimer = rand(0.6, 0.9);
+      e.takeoffCd = 1.2; e.perchTimer = rand(EAGLE_PERCH_WAIT_MIN, EAGLE_PERCH_WAIT_MAX);
+      e.patrolY = Math.max(18, surfaceY(e.x + e.w / 2) - rand(40, 72) - e.h);
+    }
+  } else if (e.state === "warning") {
+    e.stateTimer -= dt; e.phase += dt * 1.4;
+    e.y = e.warnY + Math.sin(e.phase) * 4;
+    e.x += Math.sin(e.phase * 0.7) * 10 * dt;                     // tiny hover circle
+    e.shadowX += (e.targetX - e.shadowX) * Math.min(1, 6 * dt);   // shadow slides to the locked target
+    if (e.stateTimer <= 0) { e.state = "dive"; e.stateTimer = rand(EAGLE_DIVE_MIN, EAGLE_DIVE_MAX); e.shadowX = e.targetX; Music.sfxEagleDive(); }
+  } else if (e.state === "dive") {
+    e.stateTimer -= dt;
+    const cxv = e.x + e.w / 2, cyv = e.y + e.h / 2;
+    const dx = e.targetX - cxv, dy = e.targetY - cyv, dist = Math.hypot(dx, dy) || 1;
+    e.x += (dx / dist) * EAGLE_DIVE_SPEED * dt;
+    e.y += (dy / dist) * EAGLE_DIVE_SPEED * dt;
+    const floor = surfaceY(e.x + e.w / 2);
+    if ((floor < 5000 && e.y + e.h > floor - 2) || e.stateTimer <= 0 || dist < 12) {
+      if (floor < 5000 && e.y + e.h > floor - 2) e.y = floor - e.h - 2;
+      e.state = "recover"; e.stateTimer = rand(EAGLE_RECOVER_MIN, EAGLE_RECOVER_MAX);
+    }
+  } else if (e.state === "recover") {
+    e.stateTimer -= dt; e.phase += dt * 3;
+    e.y += (e.patrolY - e.y) * Math.min(1, 4 * dt);
+    const cxv = e.x + e.w / 2;
+    if (cxv < e.x0) e.x += 70 * dt; else if (cxv > e.x1) e.x -= 70 * dt;
+    if (e.stateTimer <= 0 && Math.abs(e.y - e.patrolY) < 12) {
+      e.state = "patrol"; e.attackCd = rand(EAGLE_ATTACK_CD_MIN, EAGLE_ATTACK_CD_MAX);
+      e.dir = (e.x + e.w / 2 < e.tcx) ? 1 : -1;
+    }
+  }
+}
+function eagleFrameIndex(e) {
+  if (e.state === "perched") return 2;          // wings lowered (settled)
+  if (e.state === "takeoff") { const prog = 1 - Math.max(0, e.stateTimer) / EAGLE_TAKEOFF_TIME; return prog < 0.34 ? 2 : (prog < 0.67 ? 1 : 0); }
+  if (e.state === "dive") return 1;             // wings-level glide
+  const seq = [0, 1, 2, 1], fps = (e.state === "warning") ? 4 : (e.state === "approachPerch" ? 5 : 7);
+  return seq[Math.floor(e.frameTime * fps) % 4];
+}
+function drawEagleShadow(e) {
+  if (e.state !== "warning" && e.state !== "dive") return;
+  const shx = (e.state === "dive") ? e.targetX : e.shadowX, sx = shx - cameraX;
+  if (sx < -70 || sx > VIEW_W + 70) return;
+  const gy = findShadowSurfaceY(shx, e.targetY);
+  if (gy >= 5000) return;
+  const g = (e.state === "warning") ? (1 - Math.max(0, e.stateTimer) / (e.warnDur || 1)) : 1;
+  const w = 46 + 24 * g, h = 11 + 6 * g, alpha = 0.16 + 0.24 * g;
+  ctx.fillStyle = "rgba(18,22,28," + alpha.toFixed(3) + ")";
+  ctx.beginPath(); ctx.ellipse(sx, gy - h * 0.4, w / 2, h / 2, 0, 0, 6.2832); ctx.fill();
+}
+function drawEagle(e) {
+  if (!imgLoaded.enemyEagle) { const sx = e.x - cameraX; ctx.fillStyle = e.color; ctx.fillRect(sx, e.y, e.w, e.h); return; }
+  const img = images.enemyEagle, cw = img.naturalWidth / 3;
+  const cx = e.x + e.w / 2, sx = cx - cameraX, cy = e.y + e.h / 2;
+  if (sx < -100 || sx > VIEW_W + 100) return;
+  const perched = e.state === "perched";
+  const dw = perched ? EAGLE_VIS_W * 0.84 : EAGLE_VIS_W, dh = dw;   // narrower silhouette when perched
+  const dy = cy - dh / 2 + EAGLE_VIS_DY + (perched ? 12 : 0), fi = eagleFrameIndex(e);
+  const movingRight = (e.state === "dive") ? (e.targetX > cx) : (e.dir > 0);
+  ctx.save();
+  if (e.hitFlash > 0) ctx.globalAlpha = 0.55;
+  if (movingRight) { ctx.translate(sx, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, -dw / 2, dy, dw, dh); }
+  else ctx.drawImage(img, fi * cw, 0, cw, img.naturalHeight, sx - dw / 2, dy, dw, dh);   // faces left by default
+  ctx.restore();
+}
+
 function updateEnemies(dt) {
   const d = difficulty();
   const natural = currentLevel().terrain === "natural";
@@ -1698,6 +1890,7 @@ function updateEnemies(dt) {
   const targetDuck = nearest < ENEMY_DUCK_DIST ? 1 - nearest / ENEMY_DUCK_DIST : 0;
   enemyDuck += (targetDuck - enemyDuck) * Math.min(1, (targetDuck > enemyDuck ? 7 : 3) * dt);
   for (const e of enemies) {
+    if (e.eagle) { updateEagle(e, dt); continue; }   // placed perching eagle (own state machine)
     if (e.eagleGuard) {                              // flying gear guard: hover around anchor + swoop at Abu
       e.phase += dt * 6;
       if (e.diveState === "dive") {
@@ -1783,7 +1976,7 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.x + e.w > cameraX - 200));
+  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.eagle || e.x + e.w > cameraX - 200));
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -2386,7 +2579,7 @@ function gearClimbSpots(lvl, base) {
 // and a red snake guards every gear ledge. Other levels drop gear on the ground.
 function spawnGearForLevel(base = 0) {
   gearItems = [];
-  enemies = enemies.filter(e => !e.guard && !e.eagleGuard); // clear old guards (respawned below)
+  enemies = enemies.filter(e => !e.guard && !e.eagleGuard && !e.eagle); // clear old guards (respawned below)
   const lvl = currentLevel();
   if (lvl.knifeSpots) {   // throwable-knife pickups on specific ledges/rocks
     knifeItems = knifeItems.filter(k => !k.spotKnife);
@@ -2480,12 +2673,14 @@ function handleEnemies() {
       if (e.hp <= 0) {
         e.alive = false; score += e.points; runScore += e.points;
         if (window.AbuTracking) AbuTracking.trackKill(currentLevel().id, e.points);   // online: enemy kill -> score
-        poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp();
+        poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(5); Music.sfxStomp(); if (e.eagle) Music.sfxEagleHit();
       } else {
         // Survived (tank): flash, small poof, keep going.
         e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
       }
     }
+    // An eagle strike knocks Abu down with the fatal-fall death; other touches just dock a life.
+    else if (e.eagle) { if (invulnTimer <= 0 && !player.dying && !playerSheltered) { Music.sfxEagleHit(); startDeathSequence(); } }
     else if (!playerSheltered) loseLife();   // safe inside a shelter
   }
   enemies = enemies.filter(e => e.alive);
@@ -3478,6 +3673,7 @@ function drawEnemyAnim(e, dx, dy, dw, dh) {
 function drawEnemies() {
   for (const e of enemies) {
     const sx = e.x - cameraX;
+    if (e.eagle) { drawEagleShadow(e); drawEagle(e); continue; }   // placed eagle (own renderer + wider cull)
     if (sx > VIEW_W || sx + e.w < 0) continue;
     if (e.eagleGuard) {                                  // flying baby eagle (3-frame flap), drawn wider than its body box
       const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
@@ -4212,6 +4408,7 @@ function resetGame() {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
+  spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
   enemyDuck = 0; waterDuck = 0; Music.setMusicDuck(0); Music.setWaterLevel(0);   // start at full music volume
   Music.setTrack(currentLevel().music);   // arm Level 1's track (plays once start() is called)
   state = "playing";
