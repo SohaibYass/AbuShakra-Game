@@ -687,6 +687,20 @@ gate** with a gear-up cinematic and a **playable rope climb**.
   and is **not** a level-pass condition — only the carabiner+gear gate opens the
   checkpoint (verified: a high score with too few carabiners does not pass).
 
+### 44. Level 1 (Zugspitze) overhaul — `Level1_Development` branch
+- A large, incremental rebuild of Level 1 on its own branch (`Level1_Development`,
+  off `26cdf86`), built "not more, not less": a 5-sequence looping foreground
+  **panorama** with collision traced from hand-drawn **green lines**
+  (`ZUG_PANO_SURF1..5`); bridges / floating stepping rocks / collapsing ledges /
+  a hand-over-hand **traverse rope**; **patrol snakes** + **guard eagles** with
+  synthesised **proximity audio + music ducking**; an **energy-drink** HUD
+  consumable (press E → +50 stamina + transformation); **animated seq4
+  waterfalls** with a proximity water-rush that also ducks the music; planted
+  **scenery** (flags, an "Austria 1 km" signpost, a roaming banner plane); and
+  **seq 5's continuous-vs-gapped collision** (continuous green = walk, a break =
+  jump; falling into a gap → life lost + respawn on the last safe footing).
+- **Full detail in [`DEVELOPMENT_LOG_LEVEL1.md`](DEVELOPMENT_LOG_LEVEL1.md).**
+
 ---
 
 ## Service-worker / "didn't update on phone" saga
@@ -725,7 +739,10 @@ gate** with a gear-up cinematic and a **playable rope climb**.
 
 ## Current state
 
-- Latest deploy: service worker cache **`abushakra-v121`**.
+- Active branch **`Level1_Development`** for the Level 1 overhaul (§44) — its
+  full timeline is in **`DEVELOPMENT_LOG_LEVEL1.md`**. Branch SW cache at
+  **`abushakra-v142`** (committed) / **`v143`** with the seq-5 work.
+- Earlier `main` deploy reference: service worker cache **`abushakra-v121`**.
 - Commit history (recent): … → hazards → 10-frame walk animation → Level 1
   natural Zugspitze terrain (heightmap traced from `terrain_overlay.png`) → all
   5 natural peaks: Zugspitze/Grossglockner/Cime Grande/Matterhorn/Mont Blanc
