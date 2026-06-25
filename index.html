@@ -227,6 +227,7 @@ const ASSETS = {
   summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
   abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
   austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
+  eagleNest:    "eagle_nest_eggs.png?v=1",                        // eagle nest with eggs — scenery on a seq4 peak
   planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -473,10 +474,12 @@ const LEVELS = [
             { x: 1417, top: 140 }],  // seq2 mesa top (wood-bridge far side)
     // "Austria 1km" arrow signpost planted at the level start.
     signs: [{ x: 43, top: 428 }],
+    // Eagle nest with eggs — scenery resting on a seq4 peak.
+    nests: [{ x: 5323, top: 123 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
     planes: [{ x0: 305, x1: 625, y: 110 }],
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
-    swingRopes: [{ x: 5923, top: 112, bottom: 480, alt: true }],
+    swingRopes: [{ x: 5923, top: 112, bottom: 340, alt: true }],
     // Animated waterfall overlay on the painted seq4 cascade (top -> splash pool).
     waterfalls: [{ xTop: 4251, yTop: 302, xBot: 4262, yBot: 448, wTop: 15, wBot: 34 },   // left massif fall
                   { xTop: 4685, yTop: 343, xBot: 4684, yBot: 470, wTop: 15, wBot: 26 },   // mid-right massif fall
@@ -3190,6 +3193,18 @@ function drawFlags() {
     ctx.drawImage(img, sx - FLAG_FOOT_X * s, f.top - FLAG_FOOT_Y * s, img.naturalWidth * s, img.naturalHeight * s);
   }
 }
+// Eagle nest scenery (lvl.nests = [{x, top}]): rests bottom-centred on the surface.
+const NEST_DRAW_W = 96;
+function drawNests() {
+  const lvl = currentLevel();
+  if (!lvl.nests || !imgLoaded.eagleNest) return;
+  const img = images.eagleNest, s = NEST_DRAW_W / img.naturalWidth, dh = img.naturalHeight * s;
+  for (const n of lvl.nests) {
+    const sx = n.x - cameraX;
+    if (sx < -NEST_DRAW_W || sx > VIEW_W + NEST_DRAW_W) continue;
+    ctx.drawImage(img, sx - NEST_DRAW_W / 2, n.top - dh, NEST_DRAW_W, dh);
+  }
+}
 // Animated waterfall overlaid on the painted cascade (lvl.waterfalls = [{xTop,
 // yTop, xBot, yBot, wTop, wBot}]): a translucent body with downward-scrolling
 // foam bands + moving vertical strands + a pulsing splash pool, so the painted
@@ -4556,6 +4571,7 @@ function draw() {
   drawClimbRopes();        // horizontal traverse rope across the seq3 gaps (Level 1)
   drawFlags();             // planted rectangular flags-on-a-stick scenery (Level 1)
   drawSigns();             // "Austria 1km" arrow signpost (Level 1 start)
+  drawNests();             // eagle nest with eggs scenery (Level 1 seq4 peak)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
