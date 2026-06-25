@@ -475,10 +475,13 @@ const LEVELS = [
     signs: [{ x: 43, top: 428 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
     planes: [{ x0: 305, x1: 625, y: 110 }],
+    // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
+    swingRopes: [{ x: 5923, top: 112, bottom: 480, alt: true }],
     // Animated waterfall overlay on the painted seq4 cascade (top -> splash pool).
     waterfalls: [{ xTop: 4251, yTop: 302, xBot: 4262, yBot: 448, wTop: 15, wBot: 34 },   // left massif fall
                   { xTop: 4685, yTop: 343, xBot: 4684, yBot: 470, wTop: 15, wBot: 26 },   // mid-right massif fall
-                  { xTop: 4830, yTop: 331, xBot: 4827, yBot: 470, wTop: 4,  wBot: 12 }],  // right thin fall
+                  { xTop: 4830, yTop: 331, xBot: 4827, yBot: 470, wTop: 4,  wBot: 12 },   // right thin fall
+                  { xTop: 6204, yTop: 330, xBot: 6210, yBot: 448, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -1349,6 +1352,10 @@ function generateAhead() {
       if (lvl.ropes) for (let t = a; t <= b; t++) for (const rp of lvl.ropes) {
         ropes.push({ x: t * tw + rp.x, top: rp.top, bottom: rp.bottom, alt: rp.alt });
       }
+      // Absolute-positioned swing ropes (Level 1: cross the seq5 chasm).
+      if (lvl.swingRopes) for (const rp of lvl.swingRopes) {
+        ropes.push({ x: rp.x, top: rp.top, bottom: rp.bottom, alt: rp.alt });
+      }
       // Descent ropes off the RIGHT end of flagged platforms, ending a bit ABOVE the
       // ground (Abu drops the last stretch — the rope never touches the ground).
       descentRopes = [];
@@ -1828,6 +1835,9 @@ function updateSwing(dt) {
       player.ropeHold += dt;
       if (player.ropeHold > ROPE_TAP) s.L = Math.max(SWING_MIN_L, s.L - SWING_CLIMB * dt);
     }
+    // Down: slide DOWN the rope (lengthen, up to the rope's full length). The only
+    // way off the rope is to jump (tap Up/Space) — sliding down never drops him off.
+    if (anyKey(DOWN_KEYS) && s.maxL) s.L = Math.min(s.maxL, s.L + SWING_CLIMB * dt);
     const jumpOff = upReleased && player.ropeHold <= ROPE_TAP;   // released as a quick tap
     // Leave the rope with a jump off (real upward leap + the swing's momentum).
     if (jumpOff) {
@@ -1856,7 +1866,7 @@ function updateSwing(dt) {
       const dx = cx - ax, dy = Math.max(SWING_MIN_L, hy - ay);
       const len = Math.min(L, Math.hypot(dx, dy));
       player.swinging = true;
-      player.swing = { ax, ay, L: len, theta: Math.atan2(dx, dy), omega: player.vx / Math.max(40, len) };
+      player.swing = { ax, ay, L: len, maxL: L, theta: Math.atan2(dx, dy), omega: player.vx / Math.max(40, len) };
       player.onGround = false; player.vy = 0;
       player.ropeHold = 99;   // treat the grab's held jump as a "hold" so releasing it doesn't fire a jump-off
       player.prevJump = upHeld;
@@ -2984,8 +2994,15 @@ function drawRopes() {
     const ax = r.x - cameraX;
     if (ax < -160 || ax > VIEW_W + 160) continue;
     const onThis = sw && sw.ax === r.x && sw.ay === r.top;
-    const ex = onThis ? (player.x + player.w / 2 - cameraX) : ax;
-    const ey = onThis ? player.y : r.bottom;
+    // Always draw the rope at its FULL length along the swing angle (Abu grips a
+    // point partway down it). Drawing only to his hands made the rope visibly
+    // shrink/grow as he grabbed or slid down it — a rubber-band "elastic" look.
+    let ex, ey;
+    if (onThis) {
+      const fullL = sw.maxL || (r.bottom - r.top);
+      ex = ax + Math.sin(sw.theta) * fullL;
+      ey = r.top + Math.cos(sw.theta) * fullL;
+    } else { ex = ax; ey = r.bottom; }
     const len = Math.max(8, Math.hypot(ex - ax, ey - r.top));
     // Per-rope art: the `alt` rope uses the silvery rope + wooden post anchor.
     const ropeKey = (r.alt && imgLoaded.rope2) ? "rope2" : "rope";
