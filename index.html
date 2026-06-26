@@ -179,6 +179,7 @@
   <button class="test-btn" data-seq="3" aria-label="Test sequence 3">&#9654; S3</button>
   <button class="test-btn" data-seq="4" aria-label="Test sequence 4">&#9654; S4</button>
   <button class="test-btn" data-seq="5" aria-label="Test sequence 5">&#9654; S5</button>
+  <button class="test-btn" data-seq="6" aria-label="Test sequence 6">&#9654; S6</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -262,6 +263,7 @@ const ASSETS = {
   fgZug3:      "Zugspitze_Foreground_3.png?v=1",  // Level 1: clean panorama painting 3
   fgZug4:      "Zugspitze_Foreground_4.png?v=1",  // Level 1: clean panorama painting 4
   fgZug5:      "Zugspitze_Foreground_5.png?v=2",  // Level 1: clean panorama painting 5 (green walk, blue death chasm, black jump-obstacles)
+  fgZug6:      "Zugspitze_Foreground_6.png?v=1",  // Level 1: panorama painting 6 (green walk surface)
   stepRock1: "Zugspitze_Waterfall_Stepping_Rock_1.png?v=1",  // Level 1: floating stepping-rock platforms (seq 2 gap)
   stepRock3: "Zugspitze_Waterfall_Stepping_Rock_3.png?v=1",
   stepRock4: "Zugspitze_Waterfall_Stepping_Rock_4.png?v=1",
@@ -310,6 +312,7 @@ const ZUG_PANO_SURF3 = [307.7,305.2,286.5,258.6,254.2,252.3,251.1,237.4,219.4,21
 const ZUG_PANO_SURF4 = [230.6,230.6,230.6,230.0,226.2,186.5,180.9,178.4,168.4,118.7,92.6,92.6,93.2,103.8,119.3,115.6,76.5,67.7,65.3,64.6,64.6,69.0,111.3,133.6,139.8,140.5,142.3,161.0,164.7,166.6,167.2,173.4,175.9,176.5,178.4,180.2,182.7,184.6,185.8,188.3,193.9,207.0,210.1,211.3,212.6,214.4,226.9,229.4,230.6,231.8,231.8,232.5,232.5,233.1,234.3,235.6,236.2,239.3,242.4,293.4,292.7,292.7,292.7,292.7,292.7,292.7,292.7,293.4,339.4,339.4,339.4,339.4,339.4,339.4,340.0,303.3,303.3,302.1,300.8,296.5,292.1,290.3,289.0,288.4,288.4,289.0,289.0,289.6,290.3,290.3,290.9,292.7,294.0,295.2,297.7,299.6,299.6,276.6,272.9,272.2,272.2,272.9,272.2,272.9,271.0,269.8,269.1,270.4,270.4,270.4,256.7,256.7,255.5,254.2,253.0,252.3,251.7,251.1,250.5,249.9,248.6,247.4,245.5,243.0,240.5,238.1,235.6,231.8,229.4,228.7,228.7,230.0,230.0,162.8,161.0,160.4,160.4,160.4,160.4,161.0,160.4,160.4,160.4,160.4,159.7,160.4,241.2,241.2,321.3,322.0,322.0,322.0,322.0,299.0,299.0,299.0,299.0,297.7,298.3,298.3,299.0,299.0,298.3,298.3,145.4,144.8,143.6,143.0,141.7,140.5,139.8,139.2,138.0,137.4,136.7,135.5,135.5,200.8,199.5,198.9,198.3,198.3,197.7,196.4,262.3,262.3,261.7,261.0,261.0,383.5,383.5,257.3,256.7,256.1,255.5,254.8,254.8,254.8,254.2,254.2,253.6,253.6,253.6,237.4,253.6,253.6,253.0,253.6,254.8,255.5,256.1,256.1,226.2,256.1,256.1,254.8,254.8,328.2,327.6,328.8,328.8,307.7,307.7,306.4,304.6,304.6,304.6,304.6,303.9,164.1,162.8,162.2,162.2,162.2,161.0,159.7,156.6,103.2,88.3,81.4,77.7,77.1,79.6,199.5,199.5,198.9,198.9,198.3,200.1,274.7,272.9,272.2,217.5,89.5,85.8,85.8,85.2,85.2,84.5,83.9,83.3,83.3,83.9,209.5,210.7,210.7,210.7,210.7,210.7,210.7,210.7];
 // gaps in the green line are marked 9999 (no ground -> Abu must jump them)
 const ZUG_PANO_SURF5 = [257.1,257.1,256.5,256.5,256.5,257.1,252.7,253.3,255.8,258.3,258.3,258.3,258.3,258.3,258.3,258.3,259.0,259.6,259.6,260.2,260.2,260.2,260.8,261.5,261.5,261.5,262.7,263.4,263.4,263.4,264.0,265.9,265.2,265.9,265.2,265.2,265.9,267.1,268.4,268.4,267.7,266.5,265.9,265.2,265.2,265.9,264.6,264.0,262.7,260.8,260.2,259.6,259.6,259.6,260.2,261.5,262.7,262.7,262.7,262.1,261.5,259.6,257.7,257.1,256.5,256.5,256.5,256.5,256.5,255.2,254.6,254.6,254.6,254.6,254.6,255.8,257.1,258.3,259.6,260.2,260.2,260.2,259.6,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,283.4,282.8,281.5,279.7,274.6,271.5,266.5,265.9,255.2,248.3,241.4,237.6,235.1,235.1,234.5,233.9,233.9,233.3,232.6,232.0,232.0,232.6,232.6,237.0,250.8,250.8,250.2,249.6,238.3,236.4,236.4,235.8,235.8,236.4,237.0,237.6,237.6,237.6,237.6,237.6,238.3,242.7,257.7,261.5,264.6,271.5,271.5,272.1,272.8,274.0,275.3,276.5,276.5,277.1,278.4,277.8,277.1,277.1,277.1,277.1,277.1,272.1,268.4,267.1,267.1,267.7,273.4,278.4,279.7,279.7,280.3,279.7,278.4,277.8,277.8,277.8,278.4,277.8,280.9,299.1,300.3,303.5,310.4,309.8,309.8,309.8,310.4,300.3,291.6,271.5,262.1,257.1,256.5,255.2,253.9,253.3,252.1,250.2,237.0,229.5,227.0,224.5,223.9,223.2,222.0,219.5,211.3,204.4,201.3,200.7,200.0,198.8,174.9,170.6,168.7,167.4,157.4,154.9,154.2,144.8,137.9,136.7,135.4,134.8,134.2,133.6,132.9,131.7,130.4,129.2,128.5,127.9,127.3,126.7,126.7,9999.0];
+const ZUG_PANO_SURF6 = [275.3,275.3,275.3,275.3,276.0,277.8,278.5,279.1,279.7,280.3,277.2,276.0,274.1,273.5,272.9,272.9,271.0,269.1,267.9,267.3,266.0,262.9,261.0,259.8,258.6,257.3,257.3,256.7,256.1,254.2,251.7,250.5,249.9,248.6,246.8,246.1,246.1,221.9,220.0,215.7,205.1,183.4,165.3,162.8,159.7,156.6,154.8,152.3,149.8,147.9,145.4,144.8,144.2,143.0,141.7,140.5,139.2,138.0,136.7,135.5,134.9,134.3,134.3,134.3,135.5,136.7,138.0,139.2,139.8,140.5,142.3,145.4,149.8,151.7,151.7,152.3,152.9,154.1,156.6,158.5,161.0,162.8,165.3,167.2,169.7,170.9,172.2,173.4,174.7,175.9,178.4,179.0,179.6,181.5,182.7,185.2,186.5,187.7,188.3,187.7,186.5,186.5,185.8,185.2,185.2,185.2,185.8,187.7,187.7,188.3,189.0,189.0,190.2,190.2,190.2,190.2,189.0,188.3,187.7,187.7,187.7,187.1,185.8,185.2,185.8,185.8,185.2,184.6,184.6,185.2,186.5,188.3,189.0,189.6,189.6,190.2,190.2,190.2,190.2,190.2,189.6,189.6,188.3,188.3,188.3,189.0,189.6,191.4,192.1,192.1,191.4,191.4,191.4,191.4,191.4,193.9,194.5,195.2,195.8,195.2,195.2,194.5,193.3,192.1,191.4,191.4,192.7,192.7,192.7,193.3,193.9,194.5,194.5,194.5,194.5,197.0,197.7,197.0,197.0,196.4,195.8,195.8,196.4,197.7,197.0,197.7,197.0,196.4,196.4,196.4,195.8,193.9,193.3,192.7,191.4,190.8,190.2,190.2,190.2,191.4,192.7,194.5,196.4,325.7,323.2,318.9,317.6,315.7,314.5,313.9,313.9,313.3,313.3,313.3,313.3,313.3,312.6,312.6,312.6,312.6,312.6,312.0,312.0,311.4,310.8,309.5,308.9,307.7,307.7,305.2,297.1,288.4,274.1,264.2,261.7,259.8,259.2,257.3,255.5,251.7,241.8,210.7,211.9,212.6,212.6,212.6,212.6,211.9,208.8,189.6,189.0,189.0,189.0,189.0,189.6,186.5,155.4,154.1,154.1,154.8,154.8,154.8,154.1,152.9,152.9,152.3,152.3,151.7,151.0,150.4,150.4];
 // `rope:true` hangs a descent rope off that platform's end (not every platform has one).
 const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true,shelter:true}];
 // A high floating ledge up-LEFT, above the regular platforms (drawn from
@@ -452,9 +455,9 @@ const LEVELS = [
     enemySurf: ZUG_SNAKE_SURF,   // (panorama uses the green-line surface; this is a harmless fallback)
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
-    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5"],
-    fgYAdjust: { fgZug5: 48 },   // per-sequence vertical nudge (art + collision) for seq5's ground level
-    fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5 },   // each sequence's collision follows its own green line
+    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5", "fgZug6"],
+    fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5
+    fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
@@ -478,19 +481,22 @@ const LEVELS = [
     // "Austria 1km" arrow signpost planted at the level start.
     signs: [{ x: 43, top: 428 }],
     // Eagle nest with eggs — scenery resting on a seq4 peak.
-    nests: [{ x: 5323, top: 123 }],
+    nests: [{ x: 5323, top: 139 }],
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
     planes: [{ x0: 305, x1: 625, y: 110 }],
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
-    swingRopes: [{ x: 5923, top: 112, bottom: 340, alt: true }],
+    swingRopes: [{ x: 5923, top: 128, bottom: 356, alt: true }],
+    // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
+    // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
+    caveFloor: { x0: 7035, x1: 7775, surf: [352.1,352.7,353.3,354.0,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,355.8,355.8,357.7,357.1,358.3,357.7,358.3,358.9,357.1,358.9,360.8,360.8,360.2,359.6,358.3,360.2,360.2,360.2,357.7,357.1,357.1,358.9,358.9,360.2,362.7,361.4,360.2,362.0,363.3,362.7,362.7,361.4,362.7,362.7,362.7,362.0,362.0,358.3,350.9] },
     // Animated waterfall overlay on the painted seq4 cascade (top -> splash pool).
-    waterfalls: [{ xTop: 4251, yTop: 302, xBot: 4262, yBot: 448, wTop: 15, wBot: 34 },   // left massif fall
-                  { xTop: 4685, yTop: 343, xBot: 4684, yBot: 470, wTop: 15, wBot: 26 },   // mid-right massif fall
-                  { xTop: 4830, yTop: 331, xBot: 4827, yBot: 470, wTop: 4,  wBot: 12 },   // right thin fall
-                  { xTop: 6204, yTop: 330, xBot: 6210, yBot: 448, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
+    waterfalls: [{ xTop: 4251, yTop: 318, xBot: 4262, yBot: 464, wTop: 15, wBot: 34 },   // left massif fall
+                  { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
+                  { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
+                  { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -500,12 +506,12 @@ const LEVELS = [
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
                  { x: 1910, top: 211 },    // knife on seq2's lowest stepping rock
                  { x: 2587, top: 94 },     // knife on the small seq2 wood bridge
-                 { x: 4744, top: 191 }],   // knife on a seq4 ledge
+                 { x: 4744, top: 207 }],   // knife on a seq4 ledge
     // Fixed carabiner pickups on specific spots.
-    carabinerSpots: [{ x: 4365, top: 327 }],   // seq4 ledge
+    carabinerSpots: [{ x: 4365, top: 343 }],   // seq4 ledge
     // Energy-bottle pickups (each refills stamina).
-    energySpots: [{ x: 4399, top: 372 },       // seq4 lower ledge
-                  { x: 4763, top: 359 }],      // seq4
+    energySpots: [{ x: 4399, top: 388 },       // seq4 lower ledge
+                  { x: 4763, top: 375 }],      // seq4
     shelterSpots: [{ x: 3550, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
@@ -1541,6 +1547,39 @@ function surfaceY(worldX) {
   return sampleSurf(surf, tileW, local);
 }
 
+// Cave LOWER terrain layer (seq6): surfaceY is the arch top (Abu walks over it);
+// this is the cave floor UNDER the arch. Returns world-Y, or null where there's no
+// cave (the panorama loops, so it recurs every fgList*fgTileW). Player-only — enemies
+// and items keep using surfaceY.
+function caveFloorY(worldX) {
+  const lvl = currentLevel();
+  const cf = lvl.caveFloor;
+  if (!cf) return null;
+  const period = (lvl.fgList ? lvl.fgList.length : 1) * (lvl.fgTileW || 1350);
+  let rel = (((worldX - cf.x0) % period) + period) % period;   // 0 at the cave's left edge
+  const span = cf.x1 - cf.x0;
+  if (rel < 0 || rel > span) return null;
+  const t = rel / span * (cf.surf.length - 1), i = Math.floor(t), f = t - i;
+  const a = cf.surf[i], b = cf.surf[Math.min(cf.surf.length - 1, i + 1)];
+  const adj = (lvl.fgYAdjust && lvl.fgYAdjust.fgZug6) || 0;   // follow seq6's vertical nudge
+  return a + (b - a) * f + adj;
+}
+// The terrain the PLAYER walks: the cave's lower floor when player.inCave (his feet
+// are down in the cave), else the normal surface (arch / ground). Pure — inCave is
+// updated once per frame in updatePlayer (updateCaveLayer).
+function pSurf(worldX) {
+  if (player.inCave) { const cf = caveFloorY(worldX); if (cf != null) return cf; }
+  return surfaceY(worldX);
+}
+// Decide which layer Abu is on (called once per frame when grounded): the cave floor
+// if his feet are nearer it than the arch above, else the normal surface.
+function updateCaveLayer() {
+  const cx = player.x + player.w / 2, cf = caveFloorY(cx);
+  if (cf == null) { player.inCave = false; return; }
+  const feet = player.y + player.h;
+  player.inCave = Math.abs(feet - cf) <= Math.abs(feet - surfaceY(cx)) + 2;
+}
+
 // Ground level for ENEMIES. If the level has a dedicated `enemySurf` (e.g. the
 // Level 1 snake line), enemies stand on that; otherwise they share surfaceY.
 function enemyFloorY(worldX) {
@@ -2286,6 +2325,8 @@ function updatePlayer(dt) {
 
   player.vy += GRAVITY * dt;
 
+  updateCaveLayer();   // pick the cave lower-floor vs the arch/ground for this frame
+
   const natural = currentLevel().terrain === "natural";
 
   // --- Horizontal move ---
@@ -2307,7 +2348,7 @@ function updatePlayer(dt) {
   }
   // Natural terrain: auto-step small ledges, but a tall ledge is a wall to jump.
   if (natural && player.onGround && player.vx !== 0 && !obstacleBlocked) {
-    const gs = surfaceY(nx + player.w / 2);
+    const gs = pSurf(nx + player.w / 2);
     const rise = (player.y + player.h) - gs;     // >0: surface is above the feet
     if (rise > TERR_STEP_UP) {
       nx = player.x;                              // too tall — blocked, must jump
@@ -2356,7 +2397,7 @@ function updatePlayer(dt) {
     // Land on the ground: a terrace top on natural terrain, else the flat ground
     // (solid everywhere except over a lava pit).
     if (!player.onGround) {
-      const gs = inClimb ? CLIMB_FLOOR_Y : (natural ? surfaceY(player.x + player.w / 2) : GROUND_Y);
+      const gs = inClimb ? CLIMB_FLOOR_Y : (natural ? pSurf(player.x + player.w / 2) : GROUND_Y);
       const solid = inClimb ? true : (natural ? true : groundSolidAt(player.x + player.w / 2));
       if (newBottom >= gs && solid) {
         player.y = gs - player.h; player.vy = 0; player.onGround = true;
