@@ -218,6 +218,7 @@ const ASSETS = {
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
   enemyEagle: "enemy_eagle_walk.png?v=1",     // golden eagle, 3 frames (wings raised/level/lowered), faces left
+  eagleLanding: "guardian_eagle_landing_2frame.png?v=1", // 2-frame perched/landed pose (used while sitting on the cliff)
 
   enemyWolf:  "enemy_wolf_walk.png?v=1",  // 4-frame alpine-wolf walk strip (Level 4)
   platform:   "platform.png",     // generated stone tile
@@ -624,7 +625,7 @@ const ENEMY_TYPES = {
 // Placed perching eagle (ported from Level 3's territorial eagle): patrols a small
 // home range, occasionally lands on its perch (the nest peak) to watch Abu and flushes
 // when he's near, and also dive-bombs him with a telegraphed shadow.
-const EAGLE_VIS_W = 130, EAGLE_VIS_DY = 4;        // drawn sprite cell (square) + body-anchor nudge
+const EAGLE_VIS_W = 110, EAGLE_VIS_DY = 4;        // drawn sprite cell (square) + body-anchor nudge
 const EAGLE_PATROL_SPEED = 112;                   // px/s horizontal patrol
 const EAGLE_PATROL_H_MIN = 84, EAGLE_PATROL_H_MAX = 140;  // patrol height above terrain
 const EAGLE_WARN_MIN = 0.66, EAGLE_WARN_MAX = 0.9;        // dive telegraph (fair, >=0.65s)
@@ -1853,13 +1854,18 @@ function drawEagleShadow(e) {
   ctx.beginPath(); ctx.ellipse(sx, gy - h * 0.4, w / 2, h / 2, 0, 0, 6.2832); ctx.fill();
 }
 function drawEagle(e) {
-  if (!imgLoaded.enemyEagle) { const sx = e.x - cameraX; ctx.fillStyle = e.color; ctx.fillRect(sx, e.y, e.w, e.h); return; }
-  const img = images.enemyEagle, cw = img.naturalWidth / 3;
   const cx = e.x + e.w / 2, sx = cx - cameraX, cy = e.y + e.h / 2;
   if (sx < -100 || sx > VIEW_W + 100) return;
   const perched = e.state === "perched";
+  // While perched on the cliff, use the dedicated 2-frame landed pose; otherwise the
+  // 3-frame flying strip.
+  const useLanding = perched && imgLoaded.eagleLanding;
+  const key = useLanding ? "eagleLanding" : "enemyEagle";
+  if (!imgLoaded[key]) { ctx.fillStyle = e.color; ctx.fillRect(sx - e.w / 2, e.y, e.w, e.h); return; }
+  const img = images[key], frameCount = useLanding ? 2 : 3, cw = img.naturalWidth / frameCount;
   const dw = perched ? EAGLE_VIS_W * 0.84 : EAGLE_VIS_W, dh = dw;   // narrower silhouette when perched
-  const dy = cy - dh / 2 + EAGLE_VIS_DY + (perched ? 12 : 0), fi = eagleFrameIndex(e);
+  const dy = cy - dh / 2 + EAGLE_VIS_DY + (perched ? 12 : 0);
+  const fi = useLanding ? (Math.floor(e.frameTime * 1.5) % 2) : eagleFrameIndex(e);   // perched: slow settle toggle
   const movingRight = (e.state === "dive") ? (e.targetX > cx) : (e.dir > 0);
   ctx.save();
   if (e.hitFlash > 0) ctx.globalAlpha = 0.55;
