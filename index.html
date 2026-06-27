@@ -233,6 +233,7 @@ const ASSETS = {
   austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
   eagleNest:    "eagle_nest_eggs.png?v=1",                        // eagle nest with eggs — scenery on a seq4 peak
   snowyPine:    "level1_snowy_pine_tree.png?v=1",                 // snowy pine tree — scenery
+  snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
   planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -484,7 +485,8 @@ const LEVELS = [
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 139 }],
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
-    trees: [{ x: 5376, foot: 415, scale: 0.15 }],
+    trees: [{ x: 5376, foot: 415, scale: 0.15 },
+            { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
@@ -3454,9 +3456,11 @@ function drawNests() {
 // at (x, foot), scaled to `scale` of native size.
 function drawTrees() {
   const lvl = currentLevel();
-  if (!lvl.trees || !imgLoaded.snowyPine) return;
-  const img = images.snowyPine;
+  if (!lvl.trees) return;
   for (const tr of lvl.trees) {
+    const key = tr.img || "snowyPine";
+    if (!imgLoaded[key]) continue;
+    const img = images[key];
     const dw = img.naturalWidth * (tr.scale || 1), dh = img.naturalHeight * (tr.scale || 1);
     const sx = tr.x - cameraX;
     if (sx < -dw || sx > VIEW_W + dw) continue;
