@@ -494,6 +494,11 @@ const LEVELS = [
     planes: [{ x0: 305, x1: 625, y: 110 }],
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
     swingRopes: [{ x: 5923, top: 128, bottom: 356, alt: true }],
+    // Rectangular cuts through the foreground (the painting isn't drawn, so the far
+    // Zugspitze background shows through). `surf` = collision height inside the cut:
+    // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
+    fgHoles: [{ x0: 6505, x1: 6746, surf: 406 },      // seq5: flat floor (y406) opened to the vista
+              { x0: 6749, x1: 6932, surf: 9999 }],    // seq5/6 seam: bottomless hole (collapsing foothold inside)
     // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
     // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
     caveFloor: { x0: 7035, x1: 7775, surf: [352.1,352.7,353.3,354.0,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,355.8,355.8,357.7,357.1,358.3,357.7,358.3,358.9,357.1,358.9,360.8,360.8,360.2,359.6,358.3,360.2,360.2,360.2,357.7,357.1,357.1,358.9,358.9,360.2,362.7,361.4,360.2,362.0,363.3,362.7,362.7,361.4,362.7,362.7,362.7,362.0,362.0,358.3,350.9] },
@@ -503,7 +508,8 @@ const LEVELS = [
                   { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
-                     { x: 340, top: 185, linger: 2 }],  // 2nd ledge: crashes after only 2s
+                     { x: 340, top: 185, linger: 2 },   // 2nd ledge: crashes after only 2s
+                     { x: 6848, top: 146, linger: 2 }], // seq6: a collapsing foothold in the foreground hole (cracks after 2s)
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
                 { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
@@ -1532,6 +1538,8 @@ function surfaceY(worldX) {
   const lvl = currentLevel();
   if (lvl.bridges) for (const br of lvl.bridges)   // walk flat across a bridge deck
     if (worldX >= br.x0 && worldX <= br.x1) return br.top;
+  if (lvl.fgHoles) for (const h of lvl.fgHoles)    // a cut through the foreground: collision = h.surf (9999/omit = bottomless hole, else a flat floor)
+    if (worldX >= h.x0 && worldX <= h.x1) return h.surf != null ? h.surf : SURF_GAP;
   const fg = fgSurfaceY(worldX);
   if (fg !== null) return fg;   // panorama painting with a green-line height map
   if (lvl.tiles) {
@@ -3212,6 +3220,35 @@ function drawParallaxScene(lvl) {
       // bottom and the messy bottom edge clips off-screen (no gap / fringe).
       const oy = lvl.fgYOffset || 0, ov = lvl.fgOverlay || null, n = list.length;
       const yadj = lvl.fgYAdjust || null;
+      // Holes cut through the foreground (Level 1): clip them OUT so the painting
+      // isn't drawn there and the far Zugspitze background shows through.
+      let holeClip = false;
+      if (lvl.fgHoles && lvl.fgHoles.length) {
+        // Merge the cut x-ranges into non-overlapping segments first: adjacent cuts
+        // become ONE opening so the even-odd clip leaves no thin foreground sliver
+        // between them (overlapping rects would flip back to "drawn" under evenodd).
+        const segs = [];
+        for (const h of lvl.fgHoles) {
+          const a = h.x0 - cameraX, b = h.x1 - cameraX;
+          if (b < 0 || a > VIEW_W) continue;
+          segs.push([a, b]);
+        }
+        if (segs.length) {
+          segs.sort((p, q) => p[0] - q[0]);
+          const merged = [];
+          for (const s of segs) {
+            const last = merged[merged.length - 1];
+            if (last && s[0] <= last[1] + 4) last[1] = Math.max(last[1], s[1]);   // join touching/near cuts
+            else merged.push([s[0], s[1]]);
+          }
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, -600, VIEW_W, VIEW_H + 1200);             // everything...
+          for (const m of merged) ctx.rect(m[0], -600, m[1] - m[0], VIEW_H + 1200);   // ...minus the openings
+          ctx.clip("evenodd");
+          holeClip = true;
+        }
+      }
       const first = Math.floor(cameraX / tileW);
       for (let i = first; ; i++) {
         const x = i * tileW - cameraX;
@@ -3232,6 +3269,7 @@ function drawParallaxScene(lvl) {
           ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, oy, tileW + 1, VIEW_H);
         }
       }
+      if (holeClip) ctx.restore();   // end the hole clip
     }
   }
 }
