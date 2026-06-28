@@ -482,6 +482,9 @@ const LEVELS = [
             { x: 1417, top: 140 }],  // seq2 mesa top (wood-bridge far side)
     // "Austria 1km" arrow signpost planted at the level start.
     signs: [{ x: 86, top: 419 }],
+    // Steep zones: inside [x0,x1] Abu must JUMP to climb even slight inclines (a tiny
+    // auto-step-up limit instead of the default 20). Uphill only; downhill unchanged.
+    steepZones: [{ x0: 0, x1: 1350, stepUp: 3 }],   // seq1 (first loop)
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 139 }],
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
@@ -508,8 +511,8 @@ const LEVELS = [
                   { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
                   { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
-    collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
-                     { x: 340, top: 185, linger: 2 },   // 2nd ledge: crashes after only 2s
+    collapseLedges: [{ x: 145, top: 110, linger: 1 },   // seq 1: 1st ledge, crashes after 1s
+                     { x: 340, top: 185, linger: 1 },   // seq 1: 2nd ledge, crashes after 1s
                      { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
                      { x: 6619, top: 289, linger: 1 }], // seq5: collapsing foothold in the void (cracks after 1s)
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -2365,7 +2368,12 @@ function updatePlayer(dt) {
   if (natural && player.onGround && player.vx !== 0 && !obstacleBlocked) {
     const gs = pSurf(nx + player.w / 2);
     const rise = (player.y + player.h) - gs;     // >0: surface is above the feet
-    if (rise > TERR_STEP_UP) {
+    // Per-zone climb strictness: inside a steepZone, even a slight rise blocks
+    // walking so Abu must jump (uphill only). Elsewhere the default 20px step.
+    let stepUp = TERR_STEP_UP;
+    const sz = currentLevel().steepZones;
+    if (sz) { const pcx = nx + player.w / 2; for (const z of sz) if (pcx >= z.x0 && pcx <= z.x1) { stepUp = z.stepUp; break; } }
+    if (rise > stepUp) {
       nx = player.x;                              // too tall — blocked, must jump
     } else if (rise > -TERR_STEP_DOWN) {
       player.y = gs - player.h;                   // step up / down a small ledge
