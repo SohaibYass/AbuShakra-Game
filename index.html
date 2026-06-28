@@ -213,6 +213,7 @@ const ASSETS = {
   enemy:      "enemy.png",              // static fallback
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
+  cobraAttack:  "cobra_attack.png?v=1",               // 5-frame reared striking cobra (placed enemy)
   enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
   enemyBabyEagle: "enemy_baby_eagle_3frame.png?v=1",  // 3-frame flying baby eagle (gear guard)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
@@ -473,6 +474,8 @@ const LEVELS = [
                    { x0: 2227, x1: 2315, top: 315 },   // seq2 mid ledge
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
+    // Placed striking cobras (stationary): sway idle, rear & strike + hiss when Abu nears.
+    cobras: [{ x: 1045, top: 314 }],   // seq1
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
@@ -955,6 +958,14 @@ const Music = (() => {
       slide(2850, 1000, t + 0.05, 0.55, "sawtooth", vol, voice);        // long descending cry
       noise(t + 0.05, 0.5, vol * 0.5, 3400, 1500, 6, voice);            // raspy raptor texture
     },
+    // Cobra: a deeper, longer menacing hiss than the green snake, ending in a sharp
+    // strike "spit" — distinct so the placed cobra reads as a bigger threat.
+    sfxCobra(vol) {
+      if (!sfxReady()) return; const t = actx.currentTime;
+      noise(t, 1.0, vol, 5400, 4200, 2.4, voice);               // long low hiss
+      noise(t + 0.03, 0.9, vol * 0.5, 2700, 2200, 3.6, voice);  // breathy body
+      noise(t + 0.72, 0.16, vol * 0.85, 7600, 6800, 4, voice);  // strike spit
+    },
     // Duck the music as enemies close in: fades fully to ZERO before point-blank
     // (silent by the time the duck reaches ~0.8), back to normal when they leave.
     setMusicDuck(level) { const k = Math.max(0, Math.min(1, level)); bgm.volume = MUSIC_VOL * Math.max(0, 1 - 1.25 * k); },
@@ -1031,6 +1042,7 @@ function startAtLevel(idx) {
   generateAhead();
   spawnGearForLevel();               // one shoes/rope/helmet on the main path
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  spawnCobras();                     // placed striking cobras (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
@@ -1726,6 +1738,21 @@ function spawnPatrolSnakes() {
   }
 }
 
+// Placed striking cobras (lvl.cobras = [{x, top}]): stationary enemies that sway,
+// rear & strike when Abu nears, and hiss (sfxCobra). Contact docks a life; stomp /
+// thrown carabiner kills (handled generically in handleEnemies).
+function spawnCobras() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.cobras) return;
+  for (const c of lvl.cobras) {
+    const w = c.w || 36, h = c.h || 54;
+    enemies.push({ cobra: true, type: "walker", x: c.x - w / 2, y: c.top - h, w, h,
+      ledgeTop: c.top, dir: -1, alive: true, hp: 1, points: STOMP_POINTS,
+      color: "#6a3", phase: Math.random() * 6.28, hitFlash: 0,
+      frames: { key: "cobraAttack", count: 5, fps: 8 } });
+  }
+}
+
 // String a row of carabiners along each horizontal traverse rope (collected
 // hand-over-hand). Count comes from the rope's `carabiners` field; spaced evenly.
 function placeClimbRopeCarabiners() {
@@ -1946,6 +1973,7 @@ function updateEnemies(dt) {
     if (e.sndCd > 0 || dist > ENEMY_SND_DIST) continue;
     const vol = (0.85 + 0.6 * enemyDuck) * (1 - dist / ENEMY_SND_DIST);   // louder, swells with the duck
     if (e.type === "flyer" || e.eagleGuard) { Music.sfxEagle(vol); e.sndCd = rand(1.6, 2.8); }
+    else if (e.cobra) { Music.sfxCobra(vol); e.sndCd = rand(1.6, 2.6); }
     else { Music.sfxSnake(vol); e.sndCd = rand(1.8, 3.2); }
   }
   // Ease the duck toward how close the nearest enemy is (fast attack, slower release).
@@ -1974,6 +2002,13 @@ function updateEnemies(dt) {
         if (e.diveCd <= 0 && near) { e.diveState = "dive"; e.diveTimer = 1.0; e.diveTx = player.x + player.w / 2; e.diveTy = player.y + player.h / 2; }
       }
       e.dir = (player.x + player.w / 2) < (e.x + e.w / 2) ? -1 : 1;   // face Abu
+      if (e.hitFlash > 0) e.hitFlash -= dt;
+      continue;
+    }
+    if (e.cobra) {                                   // stationary striking cobra: hold position, face Abu
+      e.y = e.ledgeTop - e.h;
+      e.dir = (player.x + player.w / 2) > (e.x + e.w / 2) ? 1 : -1;
+      e.phase += dt;
       if (e.hitFlash > 0) e.hitFlash -= dt;
       continue;
     }
@@ -2039,7 +2074,7 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.eagle || e.x + e.w > cameraX - 200));
+  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.eagle || e.cobra || e.x + e.w > cameraX - 200));
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -3818,6 +3853,25 @@ function drawEnemies() {
       } else { ctx.fillStyle = "#a4763a"; ctx.fillRect(sx, e.y, e.w, e.h); }
       continue;
     }
+    if (e.cobra) {                                       // stationary cobra: sway idle, strike when Abu nears
+      const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
+      if (img) {
+        const cw = img.naturalWidth / fr.count, ch = img.naturalHeight;
+        const near = Math.abs((player.x + player.w / 2) - (e.x + e.w / 2)) < 150 &&
+                     Math.abs((player.y + player.h / 2) - (e.y + e.h / 2)) < 120;
+        const seq = near ? [3, 4, 4, 3] : [0, 1, 2, 1];   // strike vs idle sway
+        const cfps = near ? 8 : 4;
+        const fi = seq[Math.floor(performance.now() / (1000 / cfps)) % seq.length];
+        const DH = e.h / 0.597, DW = DH * (cw / ch);       // content (~0.597 of cell) ≈ hitbox height
+        const footY = e.y + e.h, cxp = sx + e.w / 2, COBRA_FOOT = 0.815;
+        ctx.save();
+        if (e.hitFlash > 0) ctx.globalAlpha = 0.6;
+        if (e.dir < 0) { ctx.translate(cxp, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * cw, 0, cw, ch, -DW / 2, footY - COBRA_FOOT * DH, DW, DH); }
+        else ctx.drawImage(img, fi * cw, 0, cw, ch, cxp - DW / 2, footY - COBRA_FOOT * DH, DW, DH);   // faces right by default; flip to face Abu on the left
+        ctx.restore();
+      } else { ctx.fillStyle = "#6a3"; ctx.fillRect(sx, e.y, e.w, e.h); }
+      continue;
+    }
     if (e.guard) {                                       // red ledge-patrol snake (2-frame walk)
       const fr = e.frames, img = images[fr.key];
       ctx.save();
@@ -4535,6 +4589,7 @@ function resetGame() {
   generateAhead();
   spawnGearForLevel();
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  spawnCobras();                     // placed striking cobras (Level 1)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
