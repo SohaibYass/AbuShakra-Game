@@ -497,7 +497,7 @@ const LEVELS = [
     signs: [{ x: 86, top: 419 }],
     // Steep zones: inside [x0,x1] Abu must JUMP to climb even slight inclines (a tiny
     // auto-step-up limit instead of the default 20). Uphill only; downhill unchanged.
-    steepZones: [{ x0: 0, x1: 1350, stepUp: 3 }],   // seq1 (first loop)
+    steepStepUp: 3,   // must JUMP to climb even slight inclines, across all sequences (uphill only)
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 139 }],
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
@@ -2413,11 +2413,9 @@ function updatePlayer(dt) {
   if (natural && player.onGround && player.vx !== 0 && !obstacleBlocked) {
     const gs = pSurf(nx + player.w / 2);
     const rise = (player.y + player.h) - gs;     // >0: surface is above the feet
-    // Per-zone climb strictness: inside a steepZone, even a slight rise blocks
-    // walking so Abu must jump (uphill only). Elsewhere the default 20px step.
-    let stepUp = TERR_STEP_UP;
-    const sz = currentLevel().steepZones;
-    if (sz) { const pcx = nx + player.w / 2; for (const z of sz) if (pcx >= z.x0 && pcx <= z.x1) { stepUp = z.stepUp; break; } }
+    // Climb strictness: a level may set `steepStepUp` (e.g. 3) so even a slight rise
+    // blocks walking and Abu must JUMP to climb it (uphill only). Default 20px step.
+    const stepUp = currentLevel().steepStepUp || TERR_STEP_UP;
     if (rise > stepUp) {
       nx = player.x;                              // too tall — blocked, must jump
     } else if (rise > -TERR_STEP_DOWN) {
