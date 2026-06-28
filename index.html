@@ -234,6 +234,7 @@ const ASSETS = {
   eagleNest:    "eagle_nest_eggs.png?v=1",                        // eagle nest with eggs — scenery on a seq4 peak
   snowyPine:    "level1_snowy_pine_tree.png?v=1",                 // snowy pine tree — scenery
   snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
+  smallRock3:   "small_rock_3.png?v=1",                           // small snowy rock — scenery
   planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -487,6 +488,8 @@ const LEVELS = [
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
     trees: [{ x: 5376, foot: 415, scale: 0.15 },
             { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
+    // Rock scenery (foot-anchored, like trees): a snowy rock at the vista-cut lip.
+    rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" }],
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
@@ -497,8 +500,7 @@ const LEVELS = [
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
     // Zugspitze background shows through). `surf` = collision height inside the cut:
     // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
-    fgHoles: [{ x0: 6505, x1: 6746, surf: 406 },      // seq5: flat floor (y406) opened to the vista
-              { x0: 6749, x1: 6932, surf: 9999 }],    // seq5/6 seam: bottomless hole (collapsing foothold inside)
+    fgHoles: [{ x0: 6519, x1: 6932, surf: 9999 }],    // open vista (foreground removed): no floor -> falling = death (collapsing foothold at x6848 inside)
     // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
     // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
     caveFloor: { x0: 7035, x1: 7775, surf: [352.1,352.7,353.3,354.0,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,355.8,355.8,357.7,357.1,358.3,357.7,358.3,358.9,357.1,358.9,360.8,360.8,360.2,359.6,358.3,360.2,360.2,360.2,357.7,357.1,357.1,358.9,358.9,360.2,362.7,361.4,360.2,362.0,363.3,362.7,362.7,361.4,362.7,362.7,362.7,362.0,362.0,358.3,350.9] },
@@ -509,7 +511,8 @@ const LEVELS = [
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
     collapseLedges: [{ x: 145, top: 110 },              // seq 1: crashes after the default linger (5s)
                      { x: 340, top: 185, linger: 2 },   // 2nd ledge: crashes after only 2s
-                     { x: 6848, top: 146, linger: 2 }], // seq6: a collapsing foothold in the foreground hole (cracks after 2s)
+                     { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
+                     { x: 6619, top: 289, linger: 1 }], // seq5: collapsing foothold in the void (cracks after 1s)
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
                 { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
@@ -3505,6 +3508,21 @@ function drawTrees() {
     ctx.drawImage(img, sx - dw / 2, tr.foot - dh, dw, dh);
   }
 }
+// Rock scenery (lvl.rocks = [{x, foot, scale, img}]): foot-anchored (bottom-centre)
+// at (x, foot), scaled to `scale` of native size. Same draw as trees.
+function drawRocks() {
+  const lvl = currentLevel();
+  if (!lvl.rocks) return;
+  for (const rk of lvl.rocks) {
+    const key = rk.img || "smallRock3";
+    if (!imgLoaded[key]) continue;
+    const img = images[key];
+    const dw = img.naturalWidth * (rk.scale || 1), dh = img.naturalHeight * (rk.scale || 1);
+    const sx = rk.x - cameraX;
+    if (sx < -dw || sx > VIEW_W + dw) continue;
+    ctx.drawImage(img, sx - dw / 2, rk.foot - dh, dw, dh);
+  }
+}
 // Animated waterfall overlaid on the painted cascade (lvl.waterfalls = [{xTop,
 // yTop, xBot, yBot, wTop, wBot}]): a translucent body with downward-scrolling
 // foam bands + moving vertical strands + a pulsing splash pool, so the painted
@@ -4875,6 +4893,7 @@ function draw() {
   drawSigns();             // "Austria 1km" arrow signpost (Level 1 start)
   drawNests();             // eagle nest with eggs scenery (Level 1 seq4 peak)
   drawTrees();             // snowy pine tree scenery (Level 1)
+  drawRocks();             // snowy rock scenery (Level 1)
   drawShelters();          // wooden refuges on the ground (Level 1)
   drawUpperPlatforms();    // high ledge above the shelter (Level 1)
   drawIceLakes();          // cyan frozen patches over the snow ground (Level 5)
