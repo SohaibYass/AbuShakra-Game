@@ -278,6 +278,7 @@ const ASSETS = {
   stepRock4: "Zugspitze_Waterfall_Stepping_Rock_4.png?v=1",
   stepRock5: "Zugspitze_Waterfall_Stepping_Rock_5.png?v=1",
   collapseLedge: "Zugspitze_Collapsing_Rock_Ledge_3frames.png?v=1",  // 3-frame collapsing ledge (seq 1)
+  collapseLedge2: "collapse_ledge_v2.png?v=1",                       // 3-frame collapsing floating snowy island (seq4 void footholds)
   woodBridge:  "woodbridge.png?v=1",  // Level 1: plank bridge across the seq1->seq2 gap
   ropeBridge:  "Zugspitze_Rope_Bridge.png?v=1",  // Level 1: rope bridge across the seq3->seq4 gap
   ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
@@ -515,19 +516,22 @@ const LEVELS = [
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
     // Zugspitze background shows through). `surf` = collision height inside the cut:
     // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
-    fgHoles: [{ x0: 6519, x1: 6932, surf: 9999 }],    // open vista (foreground removed): no floor -> falling = death (collapsing foothold at x6848 inside)
+    fgHoles: [{ x0: 4797, x1: 5157, surf: 9999 },     // seq4: death zone — only background shows, falling = death
+              { x0: 6519, x1: 6932, surf: 9999 }],     // seq5/6 open vista: no floor -> falling = death (collapsing foothold at x6848 inside)
     // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
     // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
     caveFloor: { x0: 7035, x1: 7775, surf: [352.1,352.7,353.3,354.0,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,353.3,354.6,355.2,355.8,355.8,355.2,354.6,354.0,355.8,355.8,357.7,357.1,358.3,357.7,358.3,358.9,357.1,358.9,360.8,360.8,360.2,359.6,358.3,360.2,360.2,360.2,357.7,357.1,357.1,358.9,358.9,360.2,362.7,361.4,360.2,362.0,363.3,362.7,362.7,361.4,362.7,362.7,362.7,362.0,362.0,358.3,350.9] },
     // Animated waterfall overlay on the painted seq4 cascade (top -> splash pool).
     waterfalls: [{ xTop: 4251, yTop: 318, xBot: 4262, yBot: 464, wTop: 15, wBot: 34 },   // left massif fall
                   { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
-                  { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
     collapseLedges: [{ x: 145, top: 110, linger: 0.4, vibrate: true },   // seq 1: 1st ledge, crashes fast (0.4s), vibrates
                      { x: 340, top: 185, linger: 0.4, vibrate: true },   // seq 1: 2nd ledge, crashes fast (0.4s), vibrates
                      { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
-                     { x: 6619, top: 289, linger: 1 }], // seq5: collapsing foothold in the void (cracks after 1s)
+                     { x: 6619, top: 289, linger: 1 },  // seq5: collapsing foothold in the void (cracks after 1s)
+                     { x: 4903, top: 225, img: "collapseLedge2", scale: 0.5, linger: 0.3 },   // seq4 void: floating collapsing footholds (v2 island, 0.5x, crumble fast)
+                     { x: 5018, top: 100, img: "collapseLedge2", scale: 0.5, linger: 0.3 },
+                     { x: 4986, top: 391, img: "collapseLedge2", scale: 0.5, linger: 0.3 }],
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
                 { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
@@ -3459,8 +3463,11 @@ function drawStepRocks() {
 // `tcx`, span `tx0..tx1`) lands on (x, top). If Abu stays > COLLAPSE_LINGER s it
 // cracks, collapses, and drops away (then respawns).
 const COLLAPSE_SCALE = 0.256;   // 0.32 * 0.8
-const COLLAPSE_FRAME_W = 724;
-const COLLAPSE_META = { ty: 225, tcx: 397, tx0: 168, tx1: 627 };
+// Per-sprite top-surface anchor (src px): (tcx,ty) lands on (x,top); tx0..tx1 = walkable width.
+const COLLAPSE_SPRITES = {
+  collapseLedge:  { ty: 225, tcx: 397, tx0: 168, tx1: 627, fw: 724 },   // v1: wall ledge
+  collapseLedge2: { ty: 205, tcx: 315, tx0: 138, tx1: 492, fw: 724 },   // v2: floating snowy island
+};
 const COLLAPSE_LINGER = 5.0;   // s on the ledge before it starts to crack
 const COLLAPSE_CRACK = 0.6;    // s of cracking (frame 1)
 const COLLAPSE_FALL = 0.32;    // s of collapse (frame 2) before it's gone
@@ -3469,11 +3476,11 @@ let collapsers = [];           // runtime state of the current level's collapsin
 
 function initCollapsers() {
   const lvl = currentLevel();
-  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, linger: c.linger || COLLAPSE_LINGER, vibrate: !!c.vibrate, state: "stable", t: 0 }));
+  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, linger: c.linger || COLLAPSE_LINGER, vibrate: !!c.vibrate, img: c.img || "collapseLedge", scale: c.scale || 1, state: "stable", t: 0 }));
 }
 // Collision box of a collapse ledge's flat top (solid while stable/cracking).
 function collapserBox(c) {
-  const s = COLLAPSE_SCALE, m = COLLAPSE_META;
+  const s = COLLAPSE_SCALE * (c.scale || 1), m = COLLAPSE_SPRITES[c.img] || COLLAPSE_SPRITES.collapseLedge;
   return { x: c.x - (m.tcx - m.tx0) * s, y: c.top, w: (m.tx1 - m.tx0) * s, h: 26, kind: "static", solid: true, collapser: c };
 }
 function updateCollapsers(dt) {
@@ -3496,10 +3503,12 @@ function updateCollapsers(dt) {
   }
 }
 function drawCollapsers() {
-  if (!imgLoaded.collapseLedge) return;
-  const img = images.collapseLedge, s = COLLAPSE_SCALE, m = COLLAPSE_META, fw = COLLAPSE_FRAME_W;
   for (const c of collapsers) {
     if (c.state === "gone") continue;
+    const key = c.img || "collapseLedge";
+    if (!imgLoaded[key]) continue;
+    const s = COLLAPSE_SCALE * (c.scale || 1);
+    const img = images[key], m = COLLAPSE_SPRITES[key] || COLLAPSE_SPRITES.collapseLedge, fw = m.fw;
     const frame = c.state === "stable" ? 0 : c.state === "cracking" ? 1 : 2;
     let dx = c.x - m.tcx * s - cameraX, dy = c.top - m.ty * s;
     if (c.vibrate && c.state === "stable") {                         // unstable telegraph: slow wobble
