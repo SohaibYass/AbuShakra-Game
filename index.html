@@ -1633,7 +1633,10 @@ function updateCaveLayer() {
   const cx = player.x + player.w / 2, cf = caveFloorY(cx);
   if (cf == null) { player.inCave = false; return; }
   const feet = player.y + player.h;
-  player.inCave = Math.abs(feet - cf) <= Math.abs(feet - surfaceY(cx)) + 2;
+  const nearer = Math.abs(feet - cf) <= Math.abs(feet - surfaceY(cx)) + 2;
+  if (nearer) player.inCave = true;                  // entering / resting on the cave floor
+  else if (player.onGround) player.inCave = false;   // switch up to the arch only when actually standing on it
+  // (airborne: keep the current layer, so a jump from the cave floor doesn't pop Abu onto the arch)
 }
 
 // Ground level for ENEMIES. If the level has a dedicated `enemySurf` (e.g. the
@@ -2921,7 +2924,7 @@ function spawnCarabiner() {
   const dir = player.facing >= 0 ? 1 : -1;
   const hx = player.x + player.w / 2 + dir * (player.w * 0.75);   // at the extended throwing hand
   const hy = player.y + player.h * 0.40;
-  projectiles.push({ x: hx - PROJ_W / 2, y: hy - PROJ_H / 2, w: PROJ_W, h: PROJ_H, vx: PROJ_SPEED * dir, dir, angle: 0 });
+  projectiles.push({ x: hx - PROJ_W / 2, y: hy - PROJ_H / 2, w: PROJ_W, h: PROJ_H, vx: PROJ_SPEED * dir, dir, angle: 0, inCave: !!player.inCave });
   Music.sfxJump();   // quick throw whoosh
 }
 function updateProjectiles(dt) {
@@ -2944,7 +2947,13 @@ function updateProjectiles(dt) {
       }
     }
     if (pr.dead) continue;
-    let blocked = (lvl.terrain === "natural") ? (cy >= surfaceY(cx)) : (cy >= GROUND_Y);   // hit the ground/terrain
+    // Terrain block: knives thrown in the cave use the LOWER cave floor (not the arch
+    // top above them, which would block them instantly); outside the cave range there
+    // they fly on. Otherwise the normal surface (or flat ground on block levels).
+    let blocked;
+    if (lvl.terrain !== "natural") blocked = cy >= GROUND_Y;
+    else if (pr.inCave) { const cfy = caveFloorY(cx); blocked = (cfy != null) && cy >= cfy; }
+    else blocked = cy >= surfaceY(cx);
     if (!blocked) for (const p of platforms) {  // hit a solid platform
       if (p.solid === false) continue;
       if (cx > p.x && cx < p.x + p.w && cy > p.y && cy < p.y + p.h) { blocked = true; break; }
