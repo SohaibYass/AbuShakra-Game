@@ -525,8 +525,8 @@ const LEVELS = [
     waterfalls: [{ xTop: 4251, yTop: 318, xBot: 4262, yBot: 464, wTop: 15, wBot: 34 },   // left massif fall
                   { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
-    collapseLedges: [{ x: 145, top: 110, linger: 0.4, vibrate: true },   // seq 1: 1st ledge, crashes fast (0.4s), vibrates
-                     { x: 340, top: 185, linger: 0.4, vibrate: true },   // seq 1: 2nd ledge, crashes fast (0.4s), vibrates
+    collapseLedges: [{ x: 145, top: 110, linger: 0.3, vibrate: true },   // seq 1: 1st ledge, crashes fast (0.3s), vibrates
+                     { x: 340, top: 185, linger: 0.3, vibrate: true },   // seq 1: 2nd ledge, crashes fast (0.3s), vibrates
                      { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
                      { x: 6619, top: 289, linger: 1 },  // seq5: collapsing foothold in the void (cracks after 1s)
                      { x: 4903, top: 225, img: "collapseLedge2", scale: 0.5, linger: 0.3 },   // seq4 void: floating collapsing footholds (v2 island, 0.5x, crumble fast)
@@ -1753,17 +1753,50 @@ function spawnPatrolSnakes() {
 }
 
 // Placed striking cobras (lvl.cobras = [{x, top}]): stationary enemies that sway,
-// rear & strike when Abu nears, and hiss (sfxCobra). Contact docks a life; stomp /
-// thrown carabiner kills (handled generically in handleEnemies).
+// rear & strike + SPRAY POISON when Abu nears, and hiss (sfxCobra). Contact or a
+// poison droplet docks a life; stomp / thrown carabiner kills.
+const COBRA_SPIT_SPEED = 175, COBRA_SPIT_RANGE = 175;   // poison spray reach
+let cobraSpits = [];                                     // active poison droplets
 function spawnCobras() {
+  cobraSpits = [];
   const lvl = currentLevel();
   if (!ENEMIES_ENABLED || !lvl.cobras) return;
   for (const c of lvl.cobras) {
     const w = c.w || 36, h = c.h || 54;
     enemies.push({ cobra: true, type: "walker", x: c.x - w / 2, y: c.top - h, w, h,
       ledgeTop: c.top, dir: -1, alive: true, hp: 1, points: STOMP_POINTS,
-      color: "#6a3", phase: Math.random() * 6.28, hitFlash: 0,
+      color: "#6a3", phase: Math.random() * 6.28, hitFlash: 0, spitCd: rand(0.8, 1.6),
       frames: { key: "cobraAttack", count: 5, fps: 8 } });
+  }
+}
+// A 3-droplet poison spray from the cobra's mouth toward Abu.
+function spawnCobraSpit(e) {
+  const dir = e.dir, mx = e.x + e.w / 2 + dir * (e.w * 0.42), my = e.y + 12;
+  for (let i = 0; i < 3; i++)
+    cobraSpits.push({ x: mx, y: my, vx: dir * (COBRA_SPIT_SPEED + (i - 1) * 22), vy: -34 + i * 20, t: 0, life: 1.3 });
+}
+function updateCobraSpits(dt) {
+  if (!cobraSpits.length) return;
+  for (const sp of cobraSpits) {
+    sp.t += dt; sp.vy += 150 * dt;                         // slight downward arc
+    sp.x += sp.vx * dt; sp.y += sp.vy * dt;
+    if (!player.dying && invulnTimer <= 0 && !playerSheltered &&
+        sp.x > player.x && sp.x < player.x + player.w && sp.y > player.y && sp.y < player.y + player.h) {
+      sp.dead = true; loseLife();                          // a droplet hit -> dock a life (invuln stops the rest)
+    }
+    if (sp.t >= sp.life) sp.dead = true;
+  }
+  cobraSpits = cobraSpits.filter(s => !s.dead && s.x - cameraX > -40 && s.x - cameraX < VIEW_W + 40);
+}
+function drawCobraSpits() {
+  for (const sp of cobraSpits) {
+    const sx = sp.x - cameraX, sy = sp.y;
+    if (sx < -10 || sx > VIEW_W + 10) continue;
+    const a = Math.max(0.2, 1 - sp.t / sp.life);
+    ctx.save(); ctx.globalAlpha = 0.5 + 0.45 * a;
+    ctx.fillStyle = "#79d228"; ctx.beginPath(); ctx.arc(sx, sy, 4.5, 0, 6.2832); ctx.fill();        // green glob
+    ctx.fillStyle = "#c8ff7a"; ctx.beginPath(); ctx.arc(sx - 1, sy - 1, 2, 0, 6.2832); ctx.fill();  // bright core
+    ctx.restore();
   }
 }
 
@@ -2019,11 +2052,16 @@ function updateEnemies(dt) {
       if (e.hitFlash > 0) e.hitFlash -= dt;
       continue;
     }
-    if (e.cobra) {                                   // stationary striking cobra: hold position, face Abu
+    if (e.cobra) {                                   // stationary striking cobra: hold position, face Abu, spit poison
       e.y = e.ledgeTop - e.h;
-      e.dir = (player.x + player.w / 2) > (e.x + e.w / 2) ? 1 : -1;
+      const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2, ccx = e.x + e.w / 2;
+      e.dir = pcx > ccx ? 1 : -1;
       e.phase += dt;
       if (e.hitFlash > 0) e.hitFlash -= dt;
+      e.spitCd -= dt;                                // poison spray when Abu is near + roughly level
+      if (e.spitCd <= 0 && Math.abs(pcx - ccx) < COBRA_SPIT_RANGE && Math.abs(pcy - (e.y + e.h / 2)) < 95 && !player.dying) {
+        spawnCobraSpit(e); e.spitCd = rand(1.3, 2.1);
+      }
       continue;
     }
     if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
@@ -4878,6 +4916,7 @@ function update(dt) {
   updateWaterAmbience(dt);  // waterfall rush + its share of the music duck
   Music.setMusicDuck(Math.max(enemyDuck, waterDuck));   // music ducks for whichever (enemy/water) is closer
   updateProjectiles(dt); // thrown carabiners: fly, hit enemies/terrain
+  updateCobraSpits(dt);  // cobra poison droplets: fly + hit Abu
   updateIcicles(dt);
   handleCarabiners();
   handleKnifeItems();
@@ -5042,6 +5081,7 @@ function draw() {
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
   drawProjectiles();       // thrown carabiners in flight
+  drawCobraSpits();        // cobra poison spray
   drawPlayer();
   drawIcicles();           // telegraph markers + falling spikes (Level 5)
   drawParticles();
