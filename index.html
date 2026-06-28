@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>AbuShakra Adventure</title>
 
+<!-- Cairo (Arabic) font for the towed banner text -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet" />
+
 <!-- PWA: installable + offline -->
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#1b1b25" />
@@ -236,7 +241,7 @@ const ASSETS = {
   snowyPine:    "level1_snowy_pine_tree.png?v=1",                 // snowy pine tree — scenery
   snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
   smallRock3:   "small_rock_3.png?v=1",                           // small snowy rock — scenery
-  planeAbu:     "plane_with_abu_flag_2frames.png?v=1",           // 2-frame plane towing an Abu-flag banner (roams the sky)
+  planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
@@ -3617,27 +3622,41 @@ function drawWaterfalls() {
     ctx.restore();
   }
 }
-// Plane towing an Abu-flag banner (lvl.planes = [{x0, x1, y}]): flies ONE direction
-// (left->right) from x0 to x1 across the whole level at altitude y, then loops back
-// and repeats. Banner waves (2 frames); art faces LEFT so it's flipped. Scenery only.
-const PLANE_CONTENT_H = 50, PLANE_CC_X = 747, PLANE_CC_Y = 486;   // content centre in the source cell
-const PLANE_SPEED = 130, PLANE_FPS = 4;   // px/sec, one-directional looping flight
+// Plane (lvl.planes = [{x0, x1, y}]): flies ONE direction (left->right) from x0 to x1
+// across the whole level at altitude y, then loops back and repeats. It tows a WHITE
+// banner with a black Arabic message (Cairo font), drawn trailing behind it. Scenery.
+const PLANE_DRAW_H = 44, PLANE_SPEED = 130, PLANE_FPS = 4;   // px/sec, one-directional looping flight
+const PLANE_BANNER_TEXT = "نسافر لنجمع التجارب و ليس الاغراض";   // "we travel to collect experiences, not things"
 function drawPlanes() {
   const lvl = currentLevel();
-  if (!lvl.planes || !imgLoaded.planeAbu) return;
-  const img = images.planeAbu, n = 2, cw = img.naturalWidth / n, ch = img.naturalHeight;
-  const s = PLANE_CONTENT_H / 273, t = performance.now() / 1000;   // 273 = content height in source
-  const fi = Math.floor(t * PLANE_FPS) % n;
+  if (!lvl.planes) return;
+  const img = imgLoaded.planeAbu && images.planeAbu;
+  const t = performance.now() / 1000, fi = Math.floor(t * PLANE_FPS) % 2;
+  let planeW = 100;
+  if (img) planeW = PLANE_DRAW_H * ((img.naturalWidth / 2) / img.naturalHeight);
   for (const p of lvl.planes) {
     const span = p.x1 - p.x0;
     const wx = p.x0 + (((t * PLANE_SPEED + (p.phase || 0)) % span) + span) % span;   // fly x0 -> x1, then loop
-    const sx = wx - cameraX, halfW = cw * s;
-    if (sx < -halfW - 40 || sx > VIEW_W + halfW + 40) continue;
-    ctx.save();
-    ctx.translate(sx, p.y);
-    ctx.scale(-1, 1);                                               // always heading right (art faces left -> flip)
-    ctx.drawImage(img, fi * cw, 0, cw, ch, -PLANE_CC_X * s, -PLANE_CC_Y * s, cw * s, ch * s);
-    ctx.restore();
+    const sx = wx - cameraX, cy = p.y;
+    if (sx < -80 || sx > VIEW_W + 320) continue;
+    // --- towed white banner with black Arabic text (trails behind = to the left) ---
+    ctx.font = "700 13px Cairo, 'Segoe UI', sans-serif";
+    const textW = Math.ceil(ctx.measureText(PLANE_BANNER_TEXT).width);
+    const bh = 26, bw = textW + 24, bRight = sx - planeW * 0.49, bLeft = bRight - bw, by = cy - bh / 2;
+    ctx.strokeStyle = "rgba(40,40,40,0.85)"; ctx.lineWidth = 1.5;         // short tow rope tying the banner to the tail
+    ctx.beginPath(); ctx.moveTo(sx - planeW * 0.43, cy); ctx.lineTo(bRight, by + bh / 2); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.fillRect(bLeft, by, bw, bh);              // white flag
+    ctx.strokeStyle = "rgba(20,20,20,0.85)"; ctx.lineWidth = 1.5; ctx.strokeRect(bLeft + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(PLANE_BANNER_TEXT, bLeft + bw / 2, cy + 1);             // black Arabic (Cairo), centred
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    // --- plane (art faces left -> flip to head right) ---
+    if (img) {
+      const cw = img.naturalWidth / 2, ch = img.naturalHeight;
+      ctx.save(); ctx.translate(sx, cy); ctx.scale(-1, 1);
+      ctx.drawImage(img, fi * cw, 0, cw, ch, -planeW / 2, -PLANE_DRAW_H / 2, planeW, PLANE_DRAW_H);
+      ctx.restore();
+    }
   }
 }
 // Planted signpost scenery (lvl.signs = [{x, top}]): the source post foot sits at
@@ -5035,6 +5054,8 @@ loadImages(() => {
   requestAnimationFrame(loop);
   initOnline();   // registration + leaderboard (no-op if Supabase isn't configured)
 });
+// Kick the Cairo web font so the canvas-drawn Arabic banner uses it once loaded.
+try { if (document.fonts && document.fonts.load) document.fonts.load("700 16px 'Cairo'"); } catch (e) {}
 
 // Online registration / leaderboard wiring. The game stays fully playable if
 // Supabase is unavailable — the run just won't qualify for the leaderboard.
