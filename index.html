@@ -215,7 +215,7 @@ const ASSETS = {
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
   cobraAttack:  "cobra_attack.png?v=1",               // 5-frame reared striking cobra (placed enemy)
   enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
-  enemyBabyEagle: "enemy_baby_eagle_3frame.png?v=1",  // 3-frame flying baby eagle (gear guard)
+  enemyBabyEagle: "enemy_baby_eagle_attack.png?v=1",  // 5-frame baby eagle: 0-2 glide/flap, 3-4 talons-out attack dive (gear guard)
   enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
   enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
   enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
@@ -1694,7 +1694,7 @@ function spawnEnemy() {
 }
 // A red snake GUARD that patrols a fixed ledge (back and forth, turning at the edges)
 // instead of scrolling in from the right. Stomp it to clear the way to the shoes.
-const GUARD_SPEED = 72;
+const GUARD_SPEED = 50;
 const ENEMY_SND_DIST = 230;   // within this many px of Abu, an enemy hisses / screeches
 const ENEMY_DUCK_DIST = 300;  // within this many px, the music ducks toward minimal
 let enemyDuck = 0;            // eased 0..1 music-duck level driven by the nearest enemy
@@ -1786,7 +1786,7 @@ function spawnGuardEagle(ax, ay) {
     ax, ay, range: 64, dir: -1, alive: true, hp: 1, points: STOMP_POINTS, color: "#a4763a",
     phase: Math.random() * 6.28, patrolT: 0, diveState: "cruise", diveCd: rand(1.6, 3.2),
     diveTimer: 0, diveTx: 0, diveTy: 0, hitFlash: 0,
-    frames: { key: "enemyBabyEagle", count: 3, fps: 7 } });
+    frames: { key: "enemyBabyEagle", count: 5, fps: 7 } });
 }
 
 /* ===== Placed perching eagle (ported from Level 3's territorial eagle) =====
@@ -3844,10 +3844,13 @@ function drawEnemies() {
     const sx = e.x - cameraX;
     if (e.eagle) { drawEagleShadow(e); drawEagle(e); continue; }   // placed eagle (own renderer + wider cull)
     if (sx > VIEW_W || sx + e.w < 0) continue;
-    if (e.eagleGuard) {                                  // flying baby eagle (3-frame flap), drawn wider than its body box
+    if (e.eagleGuard) {                                  // flying baby eagle, drawn wider than its body box
       const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
       if (img) {
-        const cw = img.naturalWidth / fr.count, fi = Math.floor(performance.now() / (1000 / fr.fps)) % fr.count;
+        const cw = img.naturalWidth / fr.count;
+        // diving = talons-out attack frames (3,4); otherwise the 3-frame glide/flap (0-2)
+        const fi = e.diveState === "dive" ? 3 + (Math.floor(performance.now() / 90) % 2)
+                                          : Math.floor(performance.now() / (1000 / fr.fps)) % 3;
         const DH = e.h * 2.6, DW = DH * (cw / img.naturalHeight);   // square cell -> DW≈DH
         ctx.save();
         ctx.translate(sx + e.w / 2, e.y + e.h / 2);

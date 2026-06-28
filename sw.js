@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v154";
+const CACHE = "abushakra-v155";
 const ASSETS = [
   "./",
   "./index.html",
@@ -81,7 +81,7 @@ const ASSETS = [
   "./upper_platform.png",
   "./enemy_snake_red_walk.png",
   "./cobra_attack.png",
-  "./enemy_baby_eagle_3frame.png",
+  "./enemy_baby_eagle_attack.png",
   "./enemy_snake_distinct_3frames.png",
   "./Zugspitze_Horizontal_Anchor_Rope.png",
   "./abu_climbshill.png",
