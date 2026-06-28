@@ -242,6 +242,7 @@ const ASSETS = {
   snowyPine:    "level1_snowy_pine_tree.png?v=1",                 // snowy pine tree — scenery
   snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
   smallRock3:   "small_rock_3.png?v=1",                           // small snowy rock — scenery
+  edelweiss:    "edelweiss.png?v=1",                              // alpine flower — scenery (seq6 cave)
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -265,6 +266,7 @@ const ASSETS = {
   abuExhausted: "abu_exhausted.png?v=1", // 3-frame panting/hunch when stamina is low
   abuIceSlide: "abu_ice_slide.png?v=1",  // 2-frame ice-slide pose (slippery zones)
   abuFatalFall: "abu_fatal_fall.png?v=1", // 3-frame fatal fall: shock -> crash -> collapsed
+  abuDies:    "abu_dies.png?v=1",         // 3-frame death: shock -> kneel -> collapsed (all deaths)
   abuThrow:   "abu_throw.png?v=2",   // 3-frame carabiner throw (wind-up -> release -> follow-through)
   title:      "AbuVsSnake_4.png?v=1",  // 16:9 cover art; bump ?v on each cover update to dodge stale image caches
   // Per-level mountain backgrounds (see LEVELS below).
@@ -441,6 +443,7 @@ const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
 const START_CARABINERS = 6;    // knives Abu starts levels 2+ holding (Level 1 starts at 0 — collect them off the climb)
 const KNIFE_PICK_W = 34, KNIFE_PICK_H = 20;   // knife-pickup hitbox on the Level-1 climb top ledges
 const ENERGY_PICK_W = 26, ENERGY_PICK_H = 48; // energy-bottle pickup hitbox
+const LIFE_PICK_W = 54, LIFE_PICK_H = 68;     // edelweiss life-pickup hitbox (+1 life)
 const ENERGY_REFILL = 15;                     // stamina restored per energy bottle (15% of max)
 const POWERUP_FRAMES = 3;                     // frames in the transformation strip
 const POWERUP_ANIM_TIME = 1.05;               // transformation duration (frozen, plays the 3 frames)
@@ -511,6 +514,7 @@ const LEVELS = [
             { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
     // Rock scenery (foot-anchored, like trees): a snowy rock at the vista-cut lip.
     rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" }],
+    lifeSpots: [{ x: 7031, top: 402 }],   // edelweiss on the seq6 cave floor: collect for +1 life
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
@@ -552,7 +556,8 @@ const LEVELS = [
                  { x: 6637, top: -18 },
                  { x: 6617, top: 295 }],
     // Fixed carabiner pickups on specific spots.
-    carabinerSpots: [{ x: 4365, top: 343 }],   // seq4 ledge
+    carabinerSpots: [{ x: 4365, top: 343 },   // seq4 ledge
+                     { x: 7150, top: 420 }, { x: 7330, top: 421 }, { x: 7510, top: 424 }, { x: 7690, top: 426 }],   // seq6 cave lower floor (4, for the wolf)
     // Energy-bottle pickups (each refills stamina).
     energySpots: [{ x: 4399, top: 388 },       // seq4 lower ledge
                   { x: 4763, top: 375 }],      // seq4
@@ -956,9 +961,11 @@ const Music = (() => {
     // ---- Sound effects (share the unlocked context; gated by mute) ----
     sfxJump()  { if (!sfxReady()) return; slide(330, 760, actx.currentTime, 0.14, "square", 0.5); },
     sfxCoin()  { if (!sfxReady()) return; const t = actx.currentTime; blip(988, t, 0.07, "square", 0.5); blip(1319, t + 0.07, 0.12, "square", 0.5); },
+    sfxOneUp() { if (!sfxReady()) return; const t = actx.currentTime; blip(523, t, 0.09, "square", 0.5); blip(659, t + 0.09, 0.09, "square", 0.5); blip(784, t + 0.18, 0.09, "square", 0.5); blip(1047, t + 0.27, 0.22, "square", 0.55); },  // cheerful 1-up
     sfxStomp() { if (!sfxReady()) return; slide(440, 120, actx.currentTime, 0.16, "square", 0.6); },
     sfxHurt()  { if (!sfxReady()) return; slide(300, 80, actx.currentTime, 0.32, "sawtooth", 0.6); },
     sfxOver()  { if (!sfxReady()) return; const t = actx.currentTime; blip(523, t, 0.16, "square", 0.5); blip(392, t + 0.16, 0.16, "square", 0.5); blip(262, t + 0.32, 0.42, "square", 0.6); },
+    sfxSad()   { if (!sfxReady()) return; const t = actx.currentTime; slide(392, 330, t, 0.22, "triangle", 0.5); slide(330, 262, t + 0.22, 0.26, "triangle", 0.5); slide(262, 196, t + 0.5, 0.55, "triangle", 0.55); },  // sad descending "aww" on death
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
@@ -1050,7 +1057,7 @@ function startAtLevel(idx) {
   score = prevTarget();              // arrive with the cumulative score of prior levels
   runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
-  platforms = []; carabiners = []; knifeItems = []; energyItems = []; enemies = []; pits = [];
+  platforms = []; carabiners = []; knifeItems = []; energyItems = []; lifeItems = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
@@ -1237,6 +1244,7 @@ let particles = [];   // cosmetic dust / sparkle / poof bits
 let gearItems = [];   // spawned gear pickups in the world (this level)
 let knifeItems = [];  // knife pickups on the Level-1 climb top ledges (each = +1 throwable knife)
 let energyItems = []; // energy-bottle pickups (each refills stamina)
+let lifeItems = [];   // edelweiss pickups (each grants +1 life)
 let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
 let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
 let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
@@ -1799,7 +1807,7 @@ function updateCobraSpits(dt) {
     sp.x += sp.vx * dt; sp.y += sp.vy * dt;
     if (!player.dying && invulnTimer <= 0 && !playerSheltered &&
         sp.x > player.x && sp.x < player.x + player.w && sp.y > player.y && sp.y < player.y + player.h) {
-      sp.dead = true; loseLife();                          // a droplet hit -> dock a life (invuln stops the rest)
+      sp.dead = true; startDeathSequence();                // a droplet hit -> death sequence + respawn
     }
     if (sp.t >= sp.life) sp.dead = true;
   }
@@ -2408,10 +2416,12 @@ function updateWaterAmbience(dt) {
   Music.setWaterLevel(waterDuck);
 }
 function updatePlayer(dt) {
-  if (player.dying) {              // crashed from a lethal fall — play it out, then dock a life
+  if (player.dying) {              // death animation — play it out, then dock a life + respawn at the sequence start
     player.vx = 0; player.dyingTimer -= dt;
     if (player.dyingTimer <= 0) {
-      player.dying = false; player.fatalFalling = false; player.airPeakY = player.y; loseLife();
+      player.dying = false; player.fatalFalling = false; player.airPeakY = player.y;
+      loseLife();
+      if (state !== "gameover") respawnAtSeqStart();
     }
     return;
   }
@@ -2589,12 +2599,7 @@ function updatePlayer(dt) {
   // Fell into a gap in the green line (no ground below) -> lose a life (unless still
   // invulnerable) and respawn on the last safe ground.
   if (natural && !inClimb && !player.dying && player.y > VOID_DEATH_Y) {
-    loseLife();
-    if (state !== "gameover") {
-      player.x = lastSafeX; player.y = lastSafeFeetY - player.h;
-      player.vx = 0; player.vy = 0; player.onGround = true;
-      player.fatalFalling = false; player.airPeakY = player.y;
-    }
+    startDeathSequence();   // death animation + sad sound, then respawn at the sequence start
   }
 
   // Fatal fall (Level 1 high ledges): track the airborne peak; dropping past
@@ -2683,7 +2688,17 @@ function startCollapse() {
 function startDeathSequence() {
   if (player.dying) return;
   player.dying = true; player.dyingTimer = DEATH_SEQ_TIME; player.vx = 0; player.vy = 0;
-  Music.sfxOver(); addShake(12);
+  Music.sfxSad(); addShake(12);   // sad death sound
+}
+// Respawn at the START of the sequence Abu is currently in (its tile's left edge).
+function respawnAtSeqStart() {
+  const ftw = currentLevel().fgTileW || 1350;
+  let x = Math.floor(player.x / ftw) * ftw + 90;             // a little into the sequence
+  for (let t = 0; t < 80 && surfaceY(x) >= 5000; t++) x += 12;   // skip onto solid ground if it's a gap
+  player.x = x; player.vx = 0; player.vy = 0; player.onGround = true; player.inCave = false;
+  player.y = surfaceY(x) - player.h; player.fatalFalling = false; player.airPeakY = player.y;
+  lastSafeX = x; lastSafeFeetY = surfaceY(x);
+  invulnTimer = INVULN_TIME;
 }
 // Recover inside a shelter; run the exhaustion/collapse state machine.
 function updatePower(dt) {
@@ -2744,6 +2759,16 @@ function handleEnergyItems() {
     Music.sfxCoin();
   }
   energyItems = energyItems.filter(e => !e.collected);
+}
+// Edelweiss: collect for an extra life.
+function handleLifeItems() {
+  for (const e of lifeItems) if (!e.collected && aabb(player, e)) {
+    e.collected = true;
+    lives += 1;
+    sparkleBurst(e.x + e.w / 2, e.y + e.h / 2);
+    Music.sfxOneUp();
+  }
+  lifeItems = lifeItems.filter(e => !e.collected);
 }
 // Drink a stored energy bottle (DRINK_KEYS): refill stamina + play the
 // drink->surge->flex transformation. Edge-triggered; one bottle per press.
@@ -2808,6 +2833,12 @@ function spawnGearForLevel(base = 0) {
     for (const s of lvl.energySpots)
       energyItems.push({ spotEnergy: true, x: s.x - ENERGY_PICK_W / 2, y: s.top - ENERGY_PICK_H,
                          w: ENERGY_PICK_W, h: ENERGY_PICK_H, t: Math.random() * 6.28, collected: false });
+  }
+  if (lvl.lifeSpots) {    // edelweiss — collect for +1 life
+    lifeItems = lifeItems.filter(e => !e.spotLife);
+    for (const s of lvl.lifeSpots)
+      lifeItems.push({ spotLife: true, x: s.x - LIFE_PICK_W / 2, y: s.top - LIFE_PICK_H,
+                       w: LIFE_PICK_W, h: LIFE_PICK_H, t: Math.random() * 6.28, collected: false });
   }
   if (lvl.carabinerSpots)   // fixed carabiner pickups (rest on the surface)
     for (const s of lvl.carabinerSpots)
@@ -2895,9 +2926,8 @@ function handleEnemies() {
         e.hitFlash = 0.3; poofBurst(e.x + e.w / 2, e.y + e.h / 2); addShake(4); Music.sfxStomp();
       }
     }
-    // An eagle strike knocks Abu down with the fatal-fall death; other touches just dock a life.
-    else if (e.eagle) { if (invulnTimer <= 0 && !player.dying && !playerSheltered) { Music.sfxEagleHit(); startDeathSequence(); } }
-    else if (!playerSheltered) loseLife();   // safe inside a shelter
+    // Any enemy touch is a death: play the death sequence (then respawn at the sequence start).
+    else if (invulnTimer <= 0 && !player.dying && !playerSheltered) { if (e.eagle) Music.sfxEagleHit(); startDeathSequence(); }
   }
   enemies = enemies.filter(e => e.alive);
 }
@@ -3929,6 +3959,22 @@ function drawEnergyItems() {
     ctx.drawImage(img, sx + (e.w - dw) / 2, e.y + e.h - dh + bob, dw, dh);
   }
 }
+function drawLifeItems() {
+  if (!imgLoaded.edelweiss) return;
+  const img = images.edelweiss, ratio = img.naturalWidth / img.naturalHeight;
+  for (const e of lifeItems) {
+    if (e.collected) continue;
+    const sx = e.x - cameraX;
+    if (sx > VIEW_W || sx + e.w < 0) continue;
+    const pulse = 0.26 + 0.18 * (0.5 + 0.5 * Math.sin(performance.now() / 360 + e.t));   // soft golden "collect me" glow
+    const dh = e.h, dw = dh * ratio;
+    ctx.save();
+    ctx.globalAlpha = pulse; ctx.fillStyle = "#FFE48A";
+    ctx.beginPath(); ctx.ellipse(sx + e.w / 2, e.y + e.h * 0.42, e.w * 0.62, e.h * 0.4, 0, 0, 6.28); ctx.fill();
+    ctx.restore();
+    ctx.drawImage(img, sx + (e.w - dw) / 2, e.y + e.h - dh, dw, dh);   // foot-anchored (planted on the ground)
+  }
+}
 function drawCarabiners() {
   for (const c of carabiners) {
     const sx = c.x - cameraX;
@@ -4236,15 +4282,18 @@ function drawPlayer() {
     return;
   }
 
-  // Fatal fall (Level 1): shock face while plummeting, then crash -> collapsed on impact.
-  if (imgLoaded.abuFatalFall && (player.dying || player.fatalFalling)) {
-    const img = images.abuFatalFall, n = 3, cw = img.naturalWidth / n, ch = img.naturalHeight;
-    const fi = player.dying ? (player.dyingTimer > DEATH_SEQ_TIME * 0.45 ? 1 : 2) : 0;
-    const dh = player.h * 1.05, dw = dh * (cw / ch);
+  // Death (any cause): 3-frame Abu_Dies — shock -> kneel -> collapsed.
+  if ((player.dying || player.fatalFalling) && (imgLoaded.abuDies || imgLoaded.abuFatalFall)) {
+    const useDies = imgLoaded.abuDies;
+    const img = useDies ? images.abuDies : images.abuFatalFall, n = 3, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const p = player.dying ? player.dyingTimer / DEATH_SEQ_TIME : 1;   // 1 -> 0 over the death
+    const fi = !player.dying ? 0 : (p > 0.66 ? 0 : (p > 0.33 ? 1 : 2));
+    const dh = player.h * 1.4, dw = dh * (cw / ch);
+    const footFrac = useDies ? 0.775 : 1;                              // Abu_Dies has padding below the feet
     ctx.save();
     ctx.translate(sx + player.w / 2, player.y + player.h);
     if (player.facing > 0) ctx.scale(-1, 1);
-    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh * footFrac, dw, dh);
     ctx.restore();
     return;
   }
@@ -4953,7 +5002,7 @@ function updateClimb(dt) {
 function enterClimbPlay() {
   climb = null; inClimb = true; state = "playing";
   climbRopeT = 0;
-  platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; projectiles = [];
+  platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; lifeItems = []; projectiles = [];
   shelters = []; descentRopes = []; ropes = []; crashPlats = []; icicles = []; pits = [];
   const p0 = climbRopeAt(0);                         // attach Abu to the rope base
   player.x = p0.x - player.w / 2; player.y = p0.y - player.h; player.vx = 0; player.vy = 0;
@@ -5022,6 +5071,7 @@ function update(dt) {
   handleCarabiners();
   handleKnifeItems();
   handleEnergyItems();
+  handleLifeItems();
   updateDrink();         // drink a stored energy bottle on the use key
   handleGear();
   handleHazards();
@@ -5178,6 +5228,7 @@ function draw() {
   drawCarabiners();
   drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
   drawEnergyItems();       // energy-bottle stamina pickups (Level 1)
+  drawLifeItems();         // edelweiss life pickups (Level 1)
   drawGear();              // collectible shoes / rope / helmet on the path
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
