@@ -514,8 +514,8 @@ const LEVELS = [
                   { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
                   { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
-    collapseLedges: [{ x: 145, top: 110, linger: 1 },   // seq 1: 1st ledge, crashes after 1s
-                     { x: 340, top: 185, linger: 1 },   // seq 1: 2nd ledge, crashes after 1s
+    collapseLedges: [{ x: 145, top: 110, linger: 1, vibrate: true },   // seq 1: 1st ledge, crashes after 1s, vibrates
+                     { x: 340, top: 185, linger: 1, vibrate: true },   // seq 1: 2nd ledge, crashes after 1s, vibrates
                      { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
                      { x: 6619, top: 289, linger: 1 }], // seq5: collapsing foothold in the void (cracks after 1s)
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -3463,7 +3463,7 @@ let collapsers = [];           // runtime state of the current level's collapsin
 
 function initCollapsers() {
   const lvl = currentLevel();
-  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, linger: c.linger || COLLAPSE_LINGER, state: "stable", t: 0 }));
+  collapsers = (lvl.collapseLedges || []).map(c => ({ x: c.x, top: c.top, linger: c.linger || COLLAPSE_LINGER, vibrate: !!c.vibrate, state: "stable", t: 0 }));
 }
 // Collision box of a collapse ledge's flat top (solid while stable/cracking).
 function collapserBox(c) {
@@ -3496,7 +3496,12 @@ function drawCollapsers() {
     if (c.state === "gone") continue;
     const frame = c.state === "stable" ? 0 : c.state === "cracking" ? 1 : 2;
     let dx = c.x - m.tcx * s - cameraX, dy = c.top - m.ty * s;
-    if (c.state === "cracking") dx += (Math.random() * 2 - 1) * 2;   // shudder
+    if (c.vibrate && c.state === "stable") {                         // unstable telegraph: slow wobble
+      const vt = performance.now() / 1000;
+      dx += Math.sin(vt * 7 + c.x) * 1.8;                            // ~1.1 Hz sway (lower = slower)
+      dy += Math.sin(vt * 9 + c.x) * 1.4;
+    }
+    if (c.state === "cracking") dx += (Math.random() * 2 - 1) * 2;   // shudder (stronger, about to fall)
     if (dx > VIEW_W || dx + fw * s < 0) continue;
     ctx.drawImage(img, frame * fw, 0, fw, img.naturalHeight, dx, dy, fw * s, img.naturalHeight * s);
   }
