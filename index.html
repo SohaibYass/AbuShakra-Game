@@ -230,7 +230,7 @@ const ASSETS = {
   gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
   summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
   abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
-  austriaSign:  "Level1_Austria_1km_Arrow_Sign.png?v=1",         // "Austria 1km" arrow signpost (Level 1 start)
+  austriaSign:  "austria_6km_sign.png?v=1",                      // "Austria 6km" arrow signpost (Level 1 start)
   eagleNest:    "eagle_nest_eggs.png?v=1",                        // eagle nest with eggs — scenery on a seq4 peak
   snowyPine:    "level1_snowy_pine_tree.png?v=1",                 // snowy pine tree — scenery
   snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
@@ -478,11 +478,10 @@ const LEVELS = [
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
     flags: [{ x: 2631, top: 97 },    // seq2 spire top
             { x: 2855, top: 130 },   // seq3-start spire top
-            { x: 277,  top: 196 },   // seq1 valley
             { x: 1200, top: 140 },   // seq1 mesa top (wood-bridge approach)
             { x: 1417, top: 140 }],  // seq2 mesa top (wood-bridge far side)
     // "Austria 1km" arrow signpost planted at the level start.
-    signs: [{ x: 43, top: 428 }],
+    signs: [{ x: 86, top: 419 }],
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 139 }],
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
@@ -494,7 +493,7 @@ const LEVELS = [
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
     // Plane towing an Abu-flag banner, roaming back and forth over the seq1 valley.
-    planes: [{ x0: 305, x1: 625, y: 110 }],
+    planes: [{ x0: -300, x1: 8400, y: 110 }],   // fly seq1 -> seq6 (x ~0..8100) one direction, then loop
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
     swingRopes: [{ x: 5923, top: 128, bottom: 356, alt: true }],
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
@@ -3567,11 +3566,11 @@ function drawWaterfalls() {
     ctx.restore();
   }
 }
-// Plane towing an Abu-flag banner (lvl.planes = [{x0, x1, y}]): roams back and
-// forth over [x0,x1] at altitude y (sine), banner waving (2 frames), art faces
-// LEFT so it flips when heading right. Pure scenery — no collision.
+// Plane towing an Abu-flag banner (lvl.planes = [{x0, x1, y}]): flies ONE direction
+// (left->right) from x0 to x1 across the whole level at altitude y, then loops back
+// and repeats. Banner waves (2 frames); art faces LEFT so it's flipped. Scenery only.
 const PLANE_CONTENT_H = 50, PLANE_CC_X = 747, PLANE_CC_Y = 486;   // content centre in the source cell
-const PLANE_ROAM_SPEED = 0.6, PLANE_FPS = 4;
+const PLANE_SPEED = 130, PLANE_FPS = 4;   // px/sec, one-directional looping flight
 function drawPlanes() {
   const lvl = currentLevel();
   if (!lvl.planes || !imgLoaded.planeAbu) return;
@@ -3579,21 +3578,20 @@ function drawPlanes() {
   const s = PLANE_CONTENT_H / 273, t = performance.now() / 1000;   // 273 = content height in source
   const fi = Math.floor(t * PLANE_FPS) % n;
   for (const p of lvl.planes) {
-    const cx = (p.x0 + p.x1) / 2, amp = (p.x1 - p.x0) / 2, ph = p.phase || 0;
-    const wx = cx + amp * Math.sin(t * PLANE_ROAM_SPEED + ph);
-    const dir = Math.cos(t * PLANE_ROAM_SPEED + ph) >= 0 ? 1 : -1;   // +1 heading right
+    const span = p.x1 - p.x0;
+    const wx = p.x0 + (((t * PLANE_SPEED + (p.phase || 0)) % span) + span) % span;   // fly x0 -> x1, then loop
     const sx = wx - cameraX, halfW = cw * s;
     if (sx < -halfW - 40 || sx > VIEW_W + halfW + 40) continue;
     ctx.save();
     ctx.translate(sx, p.y);
-    if (dir > 0) ctx.scale(-1, 1);                                  // art faces left; flip heading right
+    ctx.scale(-1, 1);                                               // always heading right (art faces left -> flip)
     ctx.drawImage(img, fi * cw, 0, cw, ch, -PLANE_CC_X * s, -PLANE_CC_Y * s, cw * s, ch * s);
     ctx.restore();
   }
 }
 // Planted signpost scenery (lvl.signs = [{x, top}]): the source post foot sits at
 // image (SIGN_FOOT_X, SIGN_FOOT_Y); plant it on the surface at (x, top).
-const SIGN_DRAW_H = 128, SIGN_FOOT_X = 682, SIGN_FOOT_Y = 917;
+const SIGN_DRAW_H = 128, SIGN_FOOT_X = 280, SIGN_FOOT_Y = 610;
 function drawSigns() {
   const lvl = currentLevel();
   if (!lvl.signs || !imgLoaded.austriaSign) return;
