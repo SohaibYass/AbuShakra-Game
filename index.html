@@ -433,7 +433,7 @@ const PROJ_W = 22, PROJ_H = 28;// projectile hitbox
 const START_CARABINERS = 6;    // knives Abu starts levels 2+ holding (Level 1 starts at 0 — collect them off the climb)
 const KNIFE_PICK_W = 34, KNIFE_PICK_H = 20;   // knife-pickup hitbox on the Level-1 climb top ledges
 const ENERGY_PICK_W = 26, ENERGY_PICK_H = 48; // energy-bottle pickup hitbox
-const ENERGY_REFILL = 50;                     // stamina restored per energy bottle
+const ENERGY_REFILL = 15;                     // stamina restored per energy bottle (15% of max)
 const POWERUP_FRAMES = 3;                     // frames in the transformation strip
 const POWERUP_ANIM_TIME = 1.05;               // transformation duration (frozen, plays the 3 frames)
 const POWERUP_TIME = 12;                       // how long Abu stays buffed (muscles walk) after
@@ -476,7 +476,11 @@ const LEVELS = [
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     // Placed striking cobras (stationary): sway idle, rear & strike + hiss when Abu nears.
-    cobras: [{ x: 1045, top: 314 }],   // seq1
+    cobras: [{ x: 486,  top: 366 },    // seq1
+             { x: 737,  top: 326 },
+             { x: 861,  top: 316 },
+             { x: 974,  top: 284 },
+             { x: 1168, top: 190 }],
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
@@ -515,8 +519,8 @@ const LEVELS = [
                   { xTop: 4685, yTop: 359, xBot: 4684, yBot: 486, wTop: 15, wBot: 26 },   // mid-right massif fall
                   { xTop: 4830, yTop: 347, xBot: 4827, yBot: 486, wTop: 4,  wBot: 12 },   // right thin fall
                   { xTop: 6204, yTop: 346, xBot: 6210, yBot: 464, wTop: 15, wBot: 30 }],  // seq5 mid-rock fall
-    collapseLedges: [{ x: 145, top: 110, linger: 1, vibrate: true },   // seq 1: 1st ledge, crashes after 1s, vibrates
-                     { x: 340, top: 185, linger: 1, vibrate: true },   // seq 1: 2nd ledge, crashes after 1s, vibrates
+    collapseLedges: [{ x: 145, top: 110, linger: 0.4, vibrate: true },   // seq 1: 1st ledge, crashes fast (0.4s), vibrates
+                     { x: 340, top: 185, linger: 0.4, vibrate: true },   // seq 1: 2nd ledge, crashes fast (0.4s), vibrates
                      { x: 6848, top: 146, linger: 1 },  // seq6: a collapsing foothold in the foreground hole (cracks after 1s)
                      { x: 6619, top: 289, linger: 1 }], // seq5: collapsing foothold in the void (cracks after 1s)
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
@@ -4345,8 +4349,22 @@ function drawHUD() {
     ctx.fillStyle = playerSheltered ? "#9ef0a8" : (critical ? "#ff5a4a" : "#fff");
     ctx.fillText("POWER", px - 6, py + 10);
     ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(px, py, pw, ph);
-    ctx.fillStyle = frac > 0.5 ? "#5ad06a" : frac > 0.25 ? "#ffd84d" : "#ff5a4a";
-    ctx.fillRect(px, py, pw * frac, ph);
+    // While stamina is actively restoring (resting at a shelter or mid energy-drink
+    // surge), fill with a flickering FIRE gradient instead of the flat colour.
+    const regening = (playerSheltered || player.powerupAnimT > 0) && power < POWER_MAX;   // full = back to normal green
+    if (regening) {
+      const flick = 0.82 + 0.18 * Math.sin(performance.now() / 70);   // live flame flicker
+      const g = ctx.createLinearGradient(0, py, 0, py + ph);
+      g.addColorStop(0,   "#ffe14a");                                   // bright yellow top
+      g.addColorStop(0.5, "#ff9b21");                                   // orange
+      g.addColorStop(1,   "#e8431c");                                   // deep red bottom
+      ctx.save(); ctx.globalAlpha = pulse * flick;
+      ctx.fillStyle = g; ctx.fillRect(px, py, pw * frac, ph);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = frac > 0.5 ? "#5ad06a" : frac > 0.25 ? "#ffd84d" : "#ff5a4a";
+      ctx.fillRect(px, py, pw * frac, ph);
+    }
     ctx.strokeStyle = critical ? "#ff5a4a" : "rgba(255,255,255,0.6)"; ctx.lineWidth = critical ? 2 : 1;
     ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
     ctx.restore();
