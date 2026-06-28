@@ -411,11 +411,12 @@ const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer 
 const DESCEND_SPEED = 165;    // px/s climbing down (or up) a platform-edge descent rope
 // Level-1 power / stamina (tunable):
 const POWER_MAX        = 100;
-const POWER_MOVE_RATE  = 1.2;  // per second: drains while moving/exerting, recovers at the same pace standing still
+const POWER_MOVE_RATE  = 1.2;  // per second: drains while moving/exerting (standing does NOT regen)
 const POWER_FALL       = 12;   // dropping off a platform to the ground without a rope — a little extra
 const POWER_MANTLE     = 0;    // mantling a ledge is free (removed — the climb shouldn't tire him out)
 const POWER_CLIMB_RATE = 14;   // per second climbing a descent rope
 const POWER_REFILL     = 45;   // per second recovering inside a shelter
+const POWER_SHELTER_RATE = 5;  // per second: slow refill at a shelter
 const POWER_EXHAUST    = 10;   // below this, Abu is exhausted (pants when idle, moves slower)
 const POWER_FLASH      = 5;    // below this %, the HUD meter flashes/pulses (critical)
 const EXHAUST_SPEED_MUL = 0.72;// movement speed multiplier while exhausted (gentle)
@@ -2581,16 +2582,14 @@ function updatePower(dt) {
   for (const s of shelters) {
     if (cx > s.x && cx < s.x + s.w && player.onGround && Math.abs(feet - s.top) < 10) { playerSheltered = true; break; }
   }
-  if (playerSheltered) power = Math.min(POWER_MAX, power + POWER_REFILL * dt);
+  if (playerSheltered) power = Math.min(POWER_MAX, power + POWER_SHELTER_RATE * dt);   // slow, visible refill (campfire)
   else if (!player.collapsed) {
-    // Moving/exerting drains; standing still recovers at the very same pace (catching his breath).
+    // Moving/exerting drains; standing still does NOT regenerate — only shelters refill.
     const exerting = Math.abs(player.vx) > 1 || !player.onGround ||
                      player.mantle || player.descend || player.swinging || player.throwing;
     if (exerting) {
       power = Math.max(0, power - POWER_MOVE_RATE * dt);
       if (power <= 0) startCollapse();
-    } else {
-      power = Math.min(POWER_MAX, power + POWER_MOVE_RATE * dt);
     }
   }
   if (player.collapsed) {                                     // doubled over, catching his breath
