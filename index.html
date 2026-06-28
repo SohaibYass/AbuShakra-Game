@@ -3634,6 +3634,25 @@ function drawWaterfalls() {
 // banner with a black Arabic message (Cairo font), drawn trailing behind it. Scenery.
 const PLANE_DRAW_H = 44, PLANE_SPEED = 130, PLANE_FPS = 4;   // px/sec, one-directional looping flight
 const PLANE_BANNER_TEXT = "نسافر لنجمع التجارب و ليس الاغراض";   // "we travel to collect experiences, not things"
+// The banner is built once to an offscreen canvas (white flag + black Arabic text),
+// then blitted in vertical strips with a travelling sine so it ripples / waves.
+let planeBannerCanvas = null, planeBannerW = 0, planeBannerH = 0, planeBannerCairo = false;
+function ensurePlaneBanner() {
+  const cairo = !!(document.fonts && document.fonts.check && document.fonts.check("700 13px Cairo"));
+  if (planeBannerCanvas && cairo === planeBannerCairo) return;   // rebuild once when Cairo finishes loading
+  const bh = 26;
+  const probe = document.createElement("canvas").getContext("2d");
+  probe.font = "700 13px Cairo, 'Segoe UI', sans-serif";
+  const bw = Math.ceil(probe.measureText(PLANE_BANNER_TEXT).width) + 24;
+  const off = document.createElement("canvas"); off.width = bw; off.height = bh;
+  const o = off.getContext("2d");
+  o.font = "700 13px Cairo, 'Segoe UI', sans-serif";
+  o.fillStyle = "#fff"; o.fillRect(0, 0, bw, bh);
+  o.strokeStyle = "rgba(20,20,20,0.85)"; o.lineWidth = 1.5; o.strokeRect(0.75, 0.75, bw - 1.5, bh - 1.5);
+  o.fillStyle = "#111"; o.textAlign = "center"; o.textBaseline = "middle";
+  o.fillText(PLANE_BANNER_TEXT, bw / 2, bh / 2 + 1);
+  planeBannerCanvas = off; planeBannerW = bw; planeBannerH = bh; planeBannerCairo = cairo;
+}
 function drawPlanes() {
   const lvl = currentLevel();
   if (!lvl.planes) return;
@@ -3646,17 +3665,19 @@ function drawPlanes() {
     const wx = p.x0 + (((t * PLANE_SPEED + (p.phase || 0)) % span) + span) % span;   // fly x0 -> x1, then loop
     const sx = wx - cameraX, cy = p.y;
     if (sx < -80 || sx > VIEW_W + 320) continue;
-    // --- towed white banner with black Arabic text (trails behind = to the left) ---
-    ctx.font = "700 13px Cairo, 'Segoe UI', sans-serif";
-    const textW = Math.ceil(ctx.measureText(PLANE_BANNER_TEXT).width);
-    const bh = 26, bw = textW + 24, bRight = sx - planeW * 0.49, bLeft = bRight - bw, by = cy - bh / 2;
+    // --- towed waving banner (trails behind = to the left) ---
+    ensurePlaneBanner();
+    const bw = planeBannerW, bh = planeBannerH, bRight = sx - planeW * 0.49, bLeft = bRight - bw, byTop = cy - bh / 2;
     ctx.strokeStyle = "rgba(40,40,40,0.85)"; ctx.lineWidth = 1.5;         // short tow rope tying the banner to the tail
-    ctx.beginPath(); ctx.moveTo(sx - planeW * 0.43, cy); ctx.lineTo(bRight, by + bh / 2); ctx.stroke();
-    ctx.fillStyle = "#fff"; ctx.fillRect(bLeft, by, bw, bh);              // white flag
-    ctx.strokeStyle = "rgba(20,20,20,0.85)"; ctx.lineWidth = 1.5; ctx.strokeRect(bLeft + 0.5, by + 0.5, bw - 1, bh - 1);
-    ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(PLANE_BANNER_TEXT, bLeft + bw / 2, cy + 1);             // black Arabic (Cairo), centred
-    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.beginPath(); ctx.moveTo(sx - planeW * 0.43, cy); ctx.lineTo(bRight, cy); ctx.stroke();
+    if (planeBannerCanvas) {                                              // blit in strips with a travelling sine -> waving flag
+      const tw = performance.now() / 1000, STRIP = 3;
+      for (let xo = 0; xo < bw; xo += STRIP) {
+        const sw2 = Math.min(STRIP, bw - xo);
+        const wave = Math.sin((xo / bw) * 6.5 + tw * 6) * 2.6;
+        ctx.drawImage(planeBannerCanvas, xo, 0, sw2, bh, bLeft + xo, byTop + wave, sw2, bh);
+      }
+    }
     // --- plane (art faces left -> flip to head right) ---
     if (img) {
       const cw = img.naturalWidth / 2, ch = img.naturalHeight;
