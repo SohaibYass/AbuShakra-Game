@@ -4038,6 +4038,7 @@ function drawWaterfalls() {
 // across the whole level at altitude y, then loops back and repeats. It tows a WHITE
 // banner with a black Arabic message (Cairo font), drawn trailing behind it. Scenery.
 const PLANE_DRAW_H = 44, PLANE_SPEED = 130, PLANE_FPS = 4;   // px/sec, one-directional looping flight
+const PLANE_GAP = 234;   // the plane flies this far ABOVE Abu's head (constant gap, so it rises as he climbs)
 // Three banners, shown one per fly-by loop (loop 1,2,3 then repeat). Each is a list of
 // coloured text segments, so a single word can be a different colour.
 const PLANE_BANNERS = [
@@ -4080,7 +4081,13 @@ function drawPlanes() {
   for (const p of lvl.planes) {
     const span = p.x1 - p.x0;
     const wx = p.x0 + (((t * PLANE_SPEED + (p.phase || 0)) % span) + span) % span;   // fly x0 -> x1, then loop
-    const sx = wx - cameraX, cy = p.y;
+    const sx = wx - cameraX;
+    if (player.onGround) p._head = player.y;      // track Abu's STANDING head height (ignore jumps)
+    const baseHead = (p._head != null ? p._head : player.y);
+    let target = baseHead - PLANE_GAP; if (target < 16) target = 16;   // constant gap above Abu; clamp so the banner stays on screen when he's very high
+    if (p._cy == null) p._cy = target;
+    p._cy += (target - p._cy) * 0.05;             // smooth follow as he climbs to a new height
+    const cy = p._cy;
     if (sx < -80 || sx > VIEW_W + 320) continue;
     // --- towed waving banner (trails behind = to the left) ---
     ensurePlaneBanner();
