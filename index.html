@@ -220,6 +220,7 @@ const ASSETS = {
   enemySnake: "enemy_snake.png?v=1",    // single side-on snake; slither is procedural (Level 1)
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
   cobraAttack:  "cobra_attack.png?v=1",               // 5-frame reared striking cobra (placed enemy)
+  crocAttack:   "croc_attack.png?v=1",                // 6-frame lake crocodile: 0-3 swim/lurk, 4-5 jaws-open attack
   wolfAttack:   "wolf_attack.png?v=1",                // 5-frame wolf: 0-2 walk/patrol, 3-4 lunge attack
   enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
   enemyBabyEagle: "enemy_baby_eagle_attack.png?v=1",  // 5-frame baby eagle: 0-2 glide/flap, 3-4 talons-out attack dive (gear guard)
@@ -504,6 +505,7 @@ const LEVELS = [
     // Patrolling wolf guard (seq6): paces [x0,x1] on the arch top; when Abu reaches
     // `trigger` it charges + lunges (attack frames). Needs `hp` knife/carabiner hits.
     wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true }],
+    crocs: [{ x0: 8360, x1: 9320, bottom: 452, surf: 360, hp: 3 }],   // seq7 lake: crocodile lurks at the bottom, lunges up at a swimmer
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
@@ -1100,6 +1102,7 @@ function startAtLevel(idx) {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   spawnCobras();                     // placed striking cobras (Level 1)
   spawnWolves();                     // patrolling wolf guards (Level 1)
+  spawnCrocs();                      // lake crocodiles (Level 1 seq7)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
@@ -1766,6 +1769,7 @@ function spawnEnemy() {
 const GUARD_SPEED = 50;
 const WOLF_PATROL_SPEED = 64, WOLF_ATTACK_SPEED = 200;   // wolf paces slowly, then charges when triggered
 const WOLF_TRIGGER_RANGE = 190;   // wolf pounces when Abu is this close AND down on the cave floor
+const CROC_RANGE = 210, CROC_CHASE = 120, CROC_RISE = 150, CROC_PATROL = 45;   // lake crocodile: lurks at the bottom, lunges up at a nearby swimmer
 const ENEMY_SND_DIST = 230;   // within this many px of Abu, an enemy hisses / screeches
 const ENEMY_DUCK_DIST = 300;  // within this many px, the music ducks toward minimal
 let enemyDuck = 0;            // eased 0..1 music-duck level driven by the nearest enemy
@@ -1870,6 +1874,18 @@ function spawnWolves() {
       dir: -1, alive: true, hp: wf.hp || 3, points: STOMP_POINTS * 2, color: "#888",
       phase: Math.random() * 6.28, hitFlash: 0, followSurf: true, footPad: 2,
       frames: { key: "wolfAttack", count: 5, fps: 7 } });
+  }
+}
+function spawnCrocs() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.crocs) return;
+  for (const c of lvl.crocs) {
+    const w = 100, h = 24;
+    enemies.push({ croc: true, type: "swimmer", x: c.x0, y: c.bottom - h, w, h,
+      x0: c.x0, x1: c.x1, bottomY: c.bottom, surfY: c.surf != null ? c.surf : 360, crocState: "lurk",
+      dir: 1, alive: true, hp: c.hp || 3, maxHp: c.hp || 3, points: STOMP_POINTS * 2, color: "#4a6b3a",
+      phase: Math.random() * 6.28, hitFlash: 0,
+      frames: { key: "crocAttack", count: 6, fps: 6 } });
   }
 }
 
@@ -2094,7 +2110,7 @@ function updateEnemies(dt) {
     const vol = (0.85 + 0.6 * enemyDuck) * (1 - dist / ENEMY_SND_DIST);   // louder, swells with the duck
     if (e.type === "flyer" || e.eagleGuard) { Music.sfxEagle(vol); e.sndCd = rand(1.6, 2.8); }
     else if (e.cobra) { Music.sfxCobra(vol); e.sndCd = rand(1.6, 2.6); }
-    else if (e.wolf) { e.sndCd = rand(2, 3.5); }   // no wolf voice yet (don't hiss like a snake)
+    else if (e.wolf || e.croc) { e.sndCd = rand(2, 3.5); }   // wolf/croc: no snake hiss
     else { Music.sfxSnake(vol); e.sndCd = rand(1.8, 3.2); }
   }
   // Ease the duck toward how close the nearest enemy is (fast attack, slower release).
@@ -2167,6 +2183,27 @@ function updateEnemies(dt) {
       if (e.hitFlash > 0) e.hitFlash -= dt;
       continue;
     }
+    if (e.croc) {                                    // lake crocodile: lurk at the bottom, lunge UP at a nearby swimmer
+      const pcx = player.x + player.w / 2, ecx = e.x + e.w / 2;
+      const near = player.inWater && Math.abs(pcx - ecx) < CROC_RANGE;
+      if (near) {                                    // attack: face Abu, chase + rise to his depth
+        e.crocState = "attack";
+        e.dir = pcx < ecx ? -1 : 1;
+        e.x += e.dir * CROC_CHASE * dt;
+        const ty = (player.y + player.h) - e.h;
+        e.y += Math.sign(ty - e.y) * CROC_RISE * dt;
+      } else {                                       // lurk: drift the bottom, settle down to it
+        e.crocState = "lurk";
+        e.x += e.dir * CROC_PATROL * dt;
+        if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; } else if (e.x + e.w >= e.x1) { e.x = e.x1 - e.w; e.dir = -1; }
+        e.y += Math.sign((e.bottomY - e.h) - e.y) * CROC_RISE * dt;
+      }
+      e.x = Math.max(e.x0, Math.min(e.x1 - e.w, e.x));
+      e.y = Math.max(e.surfY, Math.min(e.bottomY - e.h, e.y));
+      e.phase += dt;
+      if (e.hitFlash > 0) e.hitFlash -= dt;
+      continue;
+    }
     if (e.guard) {                                   // ledge patrol: no scroll, turn at the edges
       e.x += e.dir * GUARD_SPEED * d * dt;
       if (e.x <= e.x0) { e.x = e.x0; e.dir = 1; }
@@ -2229,7 +2266,7 @@ function updateEnemies(dt) {
     }
     // (on block levels walker & tank keep their fixed ground y.)
   }
-  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.eagle || e.cobra || e.wolf || e.x + e.w > cameraX - 200));
+  enemies = enemies.filter(e => e.alive && (e.guard || e.eagleGuard || e.eagle || e.cobra || e.wolf || e.croc || e.x + e.w > cameraX - 200));
   if (!ENEMIES_ENABLED) return;   // TEMP: snakes disabled for terrain testing
   enemySpawnTimer -= dt;
   if (enemySpawnTimer <= 0) {
@@ -4260,6 +4297,24 @@ function drawEnemies() {
       for (let i = 0; i < maxHp; i++) { drawHeart(hhx, headY, HHS, i < e.hp ? "#ff3b46" : "rgba(70,35,38,0.65)"); hhx += HHS + HHG; }
       continue;
     }
+    if (e.croc) {                                        // lake crocodile: 0-3 swim/lurk, 4-5 jaws-open attack
+      const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
+      if (img) {
+        const cw = img.naturalWidth / 6, ch = img.naturalHeight;
+        const fi = e.crocState === "attack" ? 4 + (Math.floor(performance.now() / 160) % 2)
+                                            : Math.floor(performance.now() / (1000 / fr.fps)) % 4;
+        const DH = e.h / 0.46, DW = DH * (cw / ch), footY = e.y + e.h, cxp = sx + e.w / 2, WF = 0.969;
+        ctx.save();
+        if (e.hitFlash > 0) ctx.globalAlpha = 0.6;
+        if (e.dir < 0) { ctx.translate(cxp, 0); ctx.scale(-1, 1); ctx.drawImage(img, fi * cw, 0, cw, ch, -DW / 2, footY - WF * DH, DW, DH); }   // art faces RIGHT; flip to face left
+        else ctx.drawImage(img, fi * cw, 0, cw, ch, cxp - DW / 2, footY - WF * DH, DW, DH);
+        ctx.restore();
+      } else { ctx.fillStyle = "#4a6b3a"; ctx.fillRect(sx, e.y, e.w, e.h); }
+      const maxHpC = e.maxHp || 3, HS = 9, HG = 2, tW = maxHpC * HS + (maxHpC - 1) * HG;
+      let hx = sx + e.w / 2 - tW / 2 + HS / 2;
+      for (let i = 0; i < maxHpC; i++) { drawHeart(hx, e.y - 12, HS, i < e.hp ? "#ff3b46" : "rgba(70,35,38,0.65)"); hx += HS + HG; }
+      continue;
+    }
     if (e.cobra) {                                       // stationary cobra: sway idle, strike when Abu nears
       const fr = e.frames, img = imgLoaded[fr.key] && images[fr.key];
       if (img) {
@@ -5061,6 +5116,7 @@ function resetGame() {
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
   spawnCobras();                     // placed striking cobras (Level 1)
   spawnWolves();                     // patrolling wolf guards (Level 1)
+  spawnCrocs();                      // lake crocodiles (Level 1 seq7)
   placeClimbRopeCarabiners();        // carabiners strung along the traverse rope (Level 1)
   spawnClimbRopeGuards();            // eagle guarding the traverse rope (Level 1)
   spawnPerchEagles();                // placed perching eagle at the nest peak (Level 1)
