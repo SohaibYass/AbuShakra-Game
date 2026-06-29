@@ -520,7 +520,7 @@ const LEVELS = [
     // Swing rope (wooden-post anchor) to cross the seq5 death chasm.
     swingRopes: [{ x: 5923, top: 128, bottom: 356, alt: true }],
     // Slippery ice patch (seq5, world x): Abu slides (ice physics) + ice-slide pose.
-    iceSlides: [{ x0: 5420, x1: 5789, top: 353 }],
+    iceSlides: [{ x0: 5427, x1: 5811, top: 351, fwd: true }],   // forced forward slide; jump off the end onto the rope or fall in the chasm
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
     // Zugspitze background shows through). `surf` = collision height inside the cut:
     // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
@@ -721,6 +721,14 @@ function drawSprite(key, x, y, w, h, color) {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+// Offscreen layer used to FEATHER the foreground cut edges (so the vista seams fade
+// softly into the far background instead of a cheap hard vertical line).
+let _fgFx = null;
+function fgFxLayer() {
+  if (!_fgFx) { _fgFx = document.createElement("canvas"); _fgFx.width = VIEW_W; _fgFx.height = VIEW_H; }
+  _fgFx.getContext("2d").imageSmoothingEnabled = false;
+  return _fgFx;
+}
 function resize() {
   const s = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
   canvas.style.width  = Math.floor(VIEW_W * s) + "px";
@@ -2453,9 +2461,19 @@ function updatePlayer(dt) {
   } else if (currentLevel().terrain === "natural" && player.onGround &&
              isOnIce(player.x + player.w / 2)) {
     player.launchVx = 0;
-    const grip = (move !== 0 ? ICE_GRIP : ICE_STOP_GRIP);
-    player.slideVx += (target - player.slideVx) * Math.min(1, grip * dt);
-    player.vx = player.slideVx;
+    const zone = iceZoneAt(player.x + player.w / 2);
+    if (zone && zone.fwd) {
+      // Forced FORWARD ice slide: always drifts right, can't stop or reverse. Jump off
+      // the end onto the rope, or keep sliding into the chasm and die.
+      player.facing = 1;
+      player.slideVx += (PLAYER_SPEED - player.slideVx) * Math.min(1, ICE_GRIP * dt);
+      if (player.slideVx < 0) player.slideVx = 0;
+      player.vx = player.slideVx;
+    } else {
+      const grip = (move !== 0 ? ICE_GRIP : ICE_STOP_GRIP);
+      player.slideVx += (target - player.slideVx) * Math.min(1, grip * dt);
+      player.vx = player.slideVx;
+    }
   } else {
     player.launchVx = 0;
     player.vx = target;
@@ -2492,6 +2510,7 @@ function updatePlayer(dt) {
   if (player.jumpBufferTimer > 0 && !player.collapsed && (player.onGround || player.coyoteTimer > 0)) {
     player.vy = JUMP_VELOCITY * (inClimb ? 1.0 : (currentLevel().jumpMul || 1));   // full hops on the summit steps
     player.onGround = false;
+    if (isOnIce(player.x + player.w / 2) && Math.abs(player.slideVx) > 5) player.launchVx = player.slideVx;   // ice momentum carries into the jump (reach the rope)
     player.coyoteTimer = 0;
     player.jumpBufferTimer = 0;
     Music.sfxJump();
@@ -3089,6 +3108,11 @@ function iceBreak(x, y, w) {
    All gated on per-level flags so other levels are untouched.
    ============================================================= */
 // Reduced-friction zones repeat every tileW (local-x ranges in lvl.iceZones).
+function iceZoneAt(worldX) {   // the absolute ice patch (Level 1) Abu is over, or null
+  const lvl = currentLevel();
+  if (lvl.iceSlides) for (const z of lvl.iceSlides) if (worldX >= z.x0 && worldX <= z.x1) return z;
+  return null;
+}
 function isOnIce(worldX) {
   const lvl = currentLevel();
   if (lvl.iceSlides) for (const z of lvl.iceSlides) if (worldX >= z.x0 && worldX <= z.x1) return true;   // absolute ice patches (Level 1)
@@ -3418,13 +3442,10 @@ function drawParallaxScene(lvl) {
       // bottom and the messy bottom edge clips off-screen (no gap / fringe).
       const oy = lvl.fgYOffset || 0, ov = lvl.fgOverlay || null, n = list.length;
       const yadj = lvl.fgYAdjust || null;
-      // Holes cut through the foreground (Level 1): clip them OUT so the painting
-      // isn't drawn there and the far Zugspitze background shows through.
-      let holeClip = false;
+      // Holes cut through the foreground (Level 1): merge the on-screen cut x-ranges
+      // into non-overlapping openings (adjacent cuts join so no thin sliver remains).
+      let merged = null;
       if (lvl.fgHoles && lvl.fgHoles.length) {
-        // Merge the cut x-ranges into non-overlapping segments first: adjacent cuts
-        // become ONE opening so the even-odd clip leaves no thin foreground sliver
-        // between them (overlapping rects would flip back to "drawn" under evenodd).
         const segs = [];
         for (const h of lvl.fgHoles) {
           const a = h.x0 - cameraX, b = h.x1 - cameraX;
@@ -3433,20 +3454,21 @@ function drawParallaxScene(lvl) {
         }
         if (segs.length) {
           segs.sort((p, q) => p[0] - q[0]);
-          const merged = [];
+          merged = [];
           for (const s of segs) {
             const last = merged[merged.length - 1];
             if (last && s[0] <= last[1] + 4) last[1] = Math.max(last[1], s[1]);   // join touching/near cuts
             else merged.push([s[0], s[1]]);
           }
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(0, -600, VIEW_W, VIEW_H + 1200);             // everything...
-          for (const m of merged) ctx.rect(m[0], -600, m[1] - m[0], VIEW_H + 1200);   // ...minus the openings
-          ctx.clip("evenodd");
-          holeClip = true;
         }
       }
+      // With cuts: draw the foreground to an offscreen layer, then punch each opening
+      // out of it — solid interior, FEATHERED vertical edges — so the painting fades
+      // softly into the far vista instead of a cheap hard line. Then composite over bg.
+      const FEATHER = 26;
+      const fx = merged ? fgFxLayer() : null;
+      const tctx = fx ? fx.getContext("2d") : ctx;
+      if (fx) tctx.clearRect(0, 0, VIEW_W, VIEW_H);
       const first = Math.floor(cameraX / tileW);
       for (let i = first; ; i++) {
         const x = i * tileW - cameraX;
@@ -3457,17 +3479,35 @@ function drawParallaxScene(lvl) {
         const adj = (yadj && yadj[key]) || 0;
         if (imgLoaded[key]) {
           const fg = images[key];
-          ctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
+          tctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
         }
         // optional per-painting overlay (e.g. the anchored rope on seq 2), drawn
         // at the same dest so it aligns exactly with that painting.
         const ovKey = ov && ov[key];
         if (ovKey && imgLoaded[ovKey]) {
           const im = images[ovKey];
-          ctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, oy, tileW + 1, VIEW_H);
+          tctx.drawImage(im, 0, 0, im.naturalWidth, im.naturalHeight, x, oy, tileW + 1, VIEW_H);
         }
       }
-      if (holeClip) ctx.restore();   // end the hole clip
+      if (fx) {
+        tctx.save();
+        tctx.globalCompositeOperation = "destination-out";   // erase the painting where alpha is high
+        for (const m of merged) { tctx.fillStyle = "#000"; tctx.fillRect(m[0], 0, m[1] - m[0], VIEW_H); }   // hollow the openings
+        // Feather ONLY the vertical-cliff (void) cuts; solid-floor cuts keep a hard edge.
+        for (const h of lvl.fgHoles) {
+          if (!(h.surf == null || h.surf >= 9000)) continue;   // skip solid-floor ledges
+          const a = h.x0 - cameraX, b = h.x1 - cameraX;
+          if (b < -FEATHER || a > VIEW_W + FEATHER) continue;
+          const gL = tctx.createLinearGradient(a - FEATHER, 0, a, 0);   // left edge: kept -> gone toward the cut
+          gL.addColorStop(0, "rgba(0,0,0,0)"); gL.addColorStop(1, "rgba(0,0,0,1)");
+          tctx.fillStyle = gL; tctx.fillRect(a - FEATHER, 0, FEATHER, VIEW_H);
+          const gR = tctx.createLinearGradient(b, 0, b + FEATHER, 0);   // right edge: gone -> kept after the cut
+          gR.addColorStop(0, "rgba(0,0,0,1)"); gR.addColorStop(1, "rgba(0,0,0,0)");
+          tctx.fillStyle = gR; tctx.fillRect(b, 0, FEATHER, VIEW_H);
+        }
+        tctx.restore();
+        ctx.drawImage(fx, 0, 0);   // composite the feathered foreground over the background
+      }
     }
   }
 }
