@@ -513,7 +513,7 @@ const LEVELS = [
             { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
     // Rock scenery (foot-anchored, like trees): a snowy rock at the vista-cut lip.
     rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" }],
-    lifeSpots: [{ x: 7031, top: 402 }],   // edelweiss on the seq6 cave floor: collect for +1 life
+    lifeSpots: [{ x: 7050, top: 421 }],   // edelweiss on the seq6 cave floor: collect for +1 life
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
     perchEagles: [{ x: 5323, range: 150 }],
@@ -1648,7 +1648,7 @@ function pSurf(worldX) {
 // if his feet are nearer it than the arch above, else the normal surface.
 function updateCaveLayer() {
   const cx = player.x + player.w / 2, cf = caveFloorY(cx);
-  if (cf == null) { player.inCave = false; return; }
+  if (cf == null) { if (player.onGround) player.inCave = false; return; }   // leave the cave only when grounded (a jump near the edge keeps the layer)
   const feet = player.y + player.h;
   const nearer = Math.abs(feet - cf) <= Math.abs(feet - surfaceY(cx)) + 2;
   if (nearer) player.inCave = true;                  // entering / resting on the cave floor
@@ -2512,7 +2512,7 @@ function updatePlayer(dt) {
   if (jumpPressed) player.jumpBufferTimer = JUMP_BUFFER;
   else if (player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
-  if (player.jumpBufferTimer > 0 && !player.collapsed && (player.onGround || player.coyoteTimer > 0)) {
+  if (player.jumpBufferTimer > 0 && !player.collapsed && !player.inCave && (player.onGround || player.coyoteTimer > 0)) {   // no jumping on the low-ceiling cave floor
     player.vy = JUMP_VELOCITY * (inClimb ? 1.0 : (currentLevel().jumpMul || 1));   // full hops on the summit steps
     player.onGround = false;
     if (isOnIce(player.x + player.w / 2) && Math.abs(player.slideVx) > 5) player.launchVx = player.slideVx;   // ice momentum carries into the jump (reach the rope)
@@ -2562,6 +2562,9 @@ function updatePlayer(dt) {
     // a bigger drop is left to gravity below (walk off the ledge and fall)
   }
   player.x = nx;
+  // In the cave, a left wall at the entrance: Abu drops in and exits RIGHT (where the
+  // cave floor meets the surface), so he can't walk/drift left back up onto the high arch.
+  if (player.inCave) { const cf = currentLevel().caveFloor; if (cf) player.x = Math.max(player.x, cf.x0 - player.w / 2); }
 
   // Strong wind (Level 5): a steady backward push plus gusts, stronger mid-air
   // where the player has no footing.
@@ -4142,6 +4145,11 @@ function drawEnemies() {
         else ctx.drawImage(img, fi * cw, 0, cw, ch, cxp - DW / 2, footY - WF * DH, DW, DH);   // art faces left
         ctx.restore();
       } else { ctx.fillStyle = "#888"; ctx.fillRect(sx, e.y, e.w, e.h); }
+      // hp pips: 3 small hearts above the wolf (killed by 3 knives or 3 stomps)
+      const maxHp = e.maxHp || 3, HHS = 9, HHG = 2, totalW = maxHp * HHS + (maxHp - 1) * HHG;
+      const headY = (e.y + e.h) - 0.70 * (e.h / 0.36) - 9, cxh = sx + e.w / 2;
+      let hhx = cxh - totalW / 2 + HHS / 2;
+      for (let i = 0; i < maxHp; i++) { drawHeart(hhx, headY, HHS, i < e.hp ? "#ff3b46" : "rgba(70,35,38,0.65)"); hhx += HHS + HHG; }
       continue;
     }
     if (e.cobra) {                                       // stationary cobra: sway idle, strike when Abu nears
