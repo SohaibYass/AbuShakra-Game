@@ -244,6 +244,7 @@ const ASSETS = {
   snowyTree2:   "level1_small_snowy_tree_2.png?v=1",              // small snowy tree #2 — scenery
   smallRock3:   "small_rock_3.png?v=1",                           // small snowy rock — scenery
   edelweiss:    "edelweiss.png?v=1",                              // alpine flower — scenery (seq6 cave)
+  cliffSeam:    "Zugspitze_Symmetric_Cliff_Foreground_NoAbu_Clean.png?v=1",  // cliff that bridges seq6 -> seq7 (covers the seam, descends into the lake)
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -483,7 +484,8 @@ const LEVELS = [
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5", "fgZug6", "fgZug7"],
     fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64, fgZug7: 150 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5; seq7 waterline at ~y353
     fgAnim: { fgZug7: { keys: ["fgZug7", "fgZug7b"], fps: 2 } },   // seq7 lake animates between two full-frame paintings
-    waterZones: [{ x0: 8100, x1: 9450, top: 353 }],   // seq7 deep water: Abu swims across it
+    fgFlats: [{ x0: 8100, x1: 8217, surf: [244.2,244.5,245.0,245.6,246.1,246.5,246.8,246.9,246.8,246.7,246.5,246.3,246.1,246.1,246.3,246.6,247.0,247.4,247.9,248.4,249.0,249.7,250.9,252.9,256.4,261.2,266.9,272.4,276.9,279.8,281.6,282.6,283.3,283.8,284.3,284.7,285.4,287.0,289.9,294.3,299.5,304.5,308.4,310.9,312.3,313.3,314.1,314.8,315.3,315.7,315.9,316.2,316.5,316.9,317.3,317.9,319.2,321.9,326.6,333.2,340.8,348.3,353.0,353.0] }],   // seq7: cliff-platform collision profile (follows the basalt steps down to the water's edge at x8217)
+    waterZones: [{ x0: 8218, x1: 9450, top: 353 }],   // seq7 deep water: Abu swims from the cliff's water edge on
     fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6, fgZug7: ZUG_PANO_SURF7 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
@@ -520,7 +522,8 @@ const LEVELS = [
     trees: [{ x: 5376, foot: 415, scale: 0.15 },
             { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
     // Rock scenery (foot-anchored, like trees): a snowy rock at the vista-cut lip.
-    rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" }],
+    rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" },
+            { x: 8180, foot: 470, scale: 0.75, img: "cliffSeam" }],   // seq6->seq7 transition cliff (covers the seam, steps down into the lake)
     lifeSpots: [{ x: 7050, top: 421 }],   // edelweiss on the seq6 cave floor: collect for +1 life
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
@@ -1607,6 +1610,14 @@ function fgSurfaceY(worldX) {
 
 function surfaceY(worldX) {
   const lvl = currentLevel();
+  if (lvl.fgFlats) for (const f of lvl.fgFlats)    // collision-only walk surface (no painting cut) — e.g. the seq7 cliff platform
+    if (worldX >= f.x0 && worldX <= f.x1) {
+      if (Array.isArray(f.surf)) {                 // a height-map profile (follows the cliff steps)
+        const t = (worldX - f.x0) / (f.x1 - f.x0) * (f.surf.length - 1), i = Math.floor(t), fr = t - i;
+        return f.surf[i] + (f.surf[Math.min(f.surf.length - 1, i + 1)] - f.surf[i]) * fr;
+      }
+      return f.surf;
+    }
   if (lvl.bridges) for (const br of lvl.bridges)   // walk flat across a bridge deck
     if (worldX >= br.x0 && worldX <= br.x1) return br.top;
   if (lvl.fgHoles) for (const h of lvl.fgHoles)    // a cut through the foreground: collision = h.surf (9999/omit = bottomless hole, else a flat floor)
