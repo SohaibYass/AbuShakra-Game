@@ -430,7 +430,7 @@ const POWER_REFILL     = 45;   // per second recovering inside a shelter
 const POWER_SHELTER_RATE = 5;  // per second: slow refill at a shelter
 const POWER_EXHAUST    = 10;   // below this, Abu is exhausted (pants when idle, moves slower)
 const POWER_FLASH      = 5;    // below this %, the HUD meter flashes/pulses (critical)
-const EXHAUST_SPEED_MUL = 0.72;// movement speed multiplier while exhausted (gentle)
+const EXHAUST_SPEED_MUL = 0.5; // movement speed multiplier while exhausted (low stamina = clearly slow walk)
 const COLLAPSE_TIME    = 1.6;  // seconds Abu is doubled over (catching his breath) at 0 stamina
 const FATAL_FALL_DIST  = 320;  // dropping more than this from the airborne peak is a lethal fall (Level 1 high ledges)
 const VOID_DEATH_Y     = 600;  // falling past this (off a green-line gap) costs a life + respawns on safe ground
@@ -2667,12 +2667,11 @@ function loseLife() {
   }
 }
 
-// Level-1 stamina: exertion drains it. Hitting empty does NOT instantly cost a life —
-// Abu slips off whatever he's climbing and collapses to catch his breath instead.
+// Level-1 stamina: exertion drains it. Hitting empty does NOT cost a life or make Abu
+// collapse — it just stays empty (red) and he moves slowly until he reaches a shelter / drinks.
 function drainPower(amt) {
   if (!currentLevel().power) return;
   power = Math.max(0, power - amt);
-  if (power <= 0 && !player.collapsed) startCollapse();
 }
 function startCollapse() {
   player.collapsed = true; player.collapseTimer = COLLAPSE_TIME;
@@ -2697,6 +2696,7 @@ function respawnAtSeqStart() {
   player.x = x; player.vx = 0; player.vy = 0; player.onGround = true; player.inCave = false;
   player.y = surfaceY(x) - player.h; player.fatalFalling = false; player.airPeakY = player.y;
   lastSafeX = x; lastSafeFeetY = surfaceY(x);
+  power = POWER_MAX; player.exhausted = false; player.collapsed = false;   // respawn with full stamina
   invulnTimer = INVULN_TIME;
 }
 // Recover inside a shelter; run the exhaustion/collapse state machine.
@@ -2709,20 +2709,15 @@ function updatePower(dt) {
     if (cx > s.x && cx < s.x + s.w && player.onGround && Math.abs(feet - s.top) < 10) { playerSheltered = true; break; }
   }
   if (playerSheltered) power = Math.min(POWER_MAX, power + POWER_SHELTER_RATE * dt);   // slow, visible refill (campfire)
-  else if (!player.collapsed) {
-    // Moving/exerting drains; standing still does NOT regenerate — only shelters refill.
+  else {
+    // Moving/exerting drains; NOTHING auto-refills. Once stamina is low it STAYS low (red)
+    // until a shelter or an energy drink — Abu never gets free stamina back. Low stamina
+    // just slows him down (EXHAUST_SPEED_MUL), it does not make him collapse.
     const exerting = Math.abs(player.vx) > 1 || !player.onGround ||
                      player.mantle || player.descend || player.swinging || player.throwing;
-    if (exerting) {
-      power = Math.max(0, power - POWER_MOVE_RATE * dt);
-      if (power <= 0) startCollapse();
-    }
+    if (exerting) power = Math.max(0, power - POWER_MOVE_RATE * dt);
   }
-  if (player.collapsed) {                                     // doubled over, catching his breath
-    player.collapseTimer -= dt;
-    power = Math.min(POWER_MAX * 0.4, power + POWER_REFILL * 0.8 * dt);
-    if (player.collapseTimer <= 0) { player.collapsed = false; power = Math.max(power, POWER_MAX * 0.3); }
-  }
+  player.collapsed = false;
   player.exhausted = power < POWER_EXHAUST;
 }
 
@@ -3557,7 +3552,7 @@ function drawUpperPlatforms() {
 // sprite via `img` (default the wood plank bridge).
 const BRIDGE_META = {
   woodBridge: { img: "woodBridge", L: 155, R: 1740, top: 450 },
-  ropeBridge: { img: "ropeBridge", L: 43,  R: 1830, top: 410 },
+  ropeBridge: { img: "ropeBridge", L: 43,  R: 1830, top: 465 },   // deck-plank surface (was 410 = top cable); Abu walks the deck
 };
 function drawBridges() {
   const lvl = currentLevel();
