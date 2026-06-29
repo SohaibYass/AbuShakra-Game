@@ -185,6 +185,7 @@
   <button class="test-btn" data-seq="4" aria-label="Test sequence 4">&#9654; S4</button>
   <button class="test-btn" data-seq="5" aria-label="Test sequence 5">&#9654; S5</button>
   <button class="test-btn" data-seq="6" aria-label="Test sequence 6">&#9654; S6</button>
+  <button class="test-btn" data-seq="7" aria-label="Test sequence 7">&#9654; S7</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -279,7 +280,8 @@ const ASSETS = {
   fgZug4:      "Zugspitze_Foreground_4.png?v=1",  // Level 1: clean panorama painting 4
   fgZug5:      "Zugspitze_Foreground_5.png?v=2",  // Level 1: clean panorama painting 5 (green walk, blue death chasm, black jump-obstacles)
   fgZug6:      "Zugspitze_Foreground_6.png?v=1",  // Level 1: panorama painting 6 (green walk surface)
-  fgZug7:      "Zugspitze_Foreground_Deep_Water_2frames.png?v=1",  // Level 1: panorama painting 7 (deep water, 2-frame ripple; collision follows the waterline)
+  fgZug7:      "Zugspitze_Foreground_Deep_Water_Sequence_frame2_v3.png?v=1",  // Level 1: panorama painting 7 frame 1 (deep water; collision follows the waterline)
+  fgZug7b:     "Zugspitze_Seq7_Animated_Lake_Frame2.png?v=1",                 // Level 1: panorama painting 7 frame 2 (animated lake)
   stepRock1: "Zugspitze_Waterfall_Stepping_Rock_1.png?v=1",  // Level 1: floating stepping-rock platforms (seq 2 gap)
   stepRock3: "Zugspitze_Waterfall_Stepping_Rock_3.png?v=1",
   stepRock4: "Zugspitze_Waterfall_Stepping_Rock_4.png?v=1",
@@ -330,7 +332,7 @@ const ZUG_PANO_SURF4 = [230.6,230.6,230.6,230.0,226.2,186.5,180.9,178.4,168.4,11
 // gaps in the green line are marked 9999 (no ground -> Abu must jump them)
 const ZUG_PANO_SURF5 = [257.1,257.1,256.5,256.5,256.5,257.1,252.7,253.3,255.8,258.3,258.3,258.3,258.3,258.3,258.3,258.3,259.0,259.6,259.6,260.2,260.2,260.2,260.8,261.5,261.5,261.5,262.7,263.4,263.4,263.4,264.0,265.9,265.2,265.9,265.2,265.2,265.9,267.1,268.4,268.4,267.7,266.5,265.9,265.2,265.2,265.9,264.6,264.0,262.7,260.8,260.2,259.6,259.6,259.6,260.2,261.5,262.7,262.7,262.7,262.1,261.5,259.6,257.7,257.1,256.5,256.5,256.5,256.5,256.5,255.2,254.6,254.6,254.6,254.6,254.6,255.8,257.1,258.3,259.6,260.2,260.2,260.2,259.6,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,283.4,282.8,281.5,279.7,274.6,271.5,266.5,265.9,255.2,248.3,241.4,237.6,235.1,235.1,234.5,233.9,233.9,233.3,232.6,232.0,232.0,232.6,232.6,237.0,250.8,250.8,250.2,249.6,238.3,236.4,236.4,235.8,235.8,236.4,237.0,237.6,237.6,237.6,237.6,237.6,238.3,242.7,257.7,261.5,264.6,271.5,271.5,272.1,272.8,274.0,275.3,276.5,276.5,277.1,278.4,277.8,277.1,277.1,277.1,277.1,277.1,272.1,268.4,267.1,267.1,267.7,273.4,278.4,279.7,279.7,280.3,279.7,278.4,277.8,277.8,277.8,278.4,277.8,280.9,299.1,300.3,303.5,310.4,309.8,309.8,309.8,310.4,300.3,291.6,271.5,262.1,257.1,256.5,255.2,253.9,253.3,252.1,250.2,237.0,229.5,227.0,224.5,223.9,223.2,222.0,219.5,211.3,204.4,201.3,200.7,200.0,198.8,174.9,170.6,168.7,167.4,157.4,154.9,154.2,144.8,137.9,136.7,135.4,134.8,134.2,133.6,132.9,131.7,130.4,129.2,128.5,127.9,127.3,126.7,126.7,9999.0];
 const ZUG_PANO_SURF6 = [275.3,275.3,275.3,275.3,276.0,277.8,278.5,279.1,279.7,280.3,277.2,276.0,274.1,273.5,272.9,272.9,271.0,269.1,267.9,267.3,266.0,262.9,261.0,259.8,258.6,257.3,257.3,256.7,256.1,254.2,251.7,250.5,249.9,248.6,246.8,246.1,246.1,221.9,220.0,215.7,205.1,183.4,165.3,162.8,159.7,156.6,154.8,152.3,149.8,147.9,145.4,144.8,144.2,143.0,141.7,140.5,139.2,138.0,136.7,135.5,134.9,134.3,134.3,134.3,135.5,136.7,138.0,139.2,139.8,140.5,142.3,145.4,149.8,151.7,151.7,152.3,152.9,154.1,156.6,158.5,161.0,162.8,165.3,167.2,169.7,170.9,172.2,173.4,174.7,175.9,178.4,179.0,179.6,181.5,182.7,185.2,186.5,187.7,188.3,187.7,186.5,186.5,185.8,185.2,185.2,185.2,185.8,187.7,187.7,188.3,189.0,189.0,190.2,190.2,190.2,190.2,189.0,188.3,187.7,187.7,187.7,187.1,185.8,185.2,185.8,185.8,185.2,184.6,184.6,185.2,186.5,188.3,189.0,189.6,189.6,190.2,190.2,190.2,190.2,190.2,189.6,189.6,188.3,188.3,188.3,189.0,189.6,191.4,192.1,192.1,191.4,191.4,191.4,191.4,191.4,193.9,194.5,195.2,195.8,195.2,195.2,194.5,193.3,192.1,191.4,191.4,192.7,192.7,192.7,193.3,193.9,194.5,194.5,194.5,194.5,197.0,197.7,197.0,197.0,196.4,195.8,195.8,196.4,197.7,197.0,197.7,197.0,196.4,196.4,196.4,195.8,193.9,193.3,192.7,191.4,190.8,190.2,190.2,190.2,191.4,192.7,194.5,196.4,325.7,323.2,318.9,317.6,315.7,314.5,313.9,313.9,313.3,313.3,313.3,313.3,313.3,312.6,312.6,312.6,312.6,312.6,312.0,312.0,311.4,310.8,309.5,308.9,307.7,307.7,305.2,297.1,288.4,274.1,264.2,261.7,259.8,259.2,257.3,255.5,251.7,241.8,210.7,211.9,212.6,212.6,212.6,212.6,211.9,208.8,189.6,189.0,189.0,189.0,189.0,189.6,186.5,155.4,154.1,154.1,154.8,154.8,154.8,154.1,152.9,152.9,152.3,152.3,151.7,151.0,150.4,150.4];
-const ZUG_PANO_SURF7 = [191.4,191.4,191.4,192.7,193.9,193.9,193.9,195.2,195.2,195.2,196.4,196.4,192.7,195.2,195.2,195.2,193.9,193.9,195.2,195.2,195.2,192.7,195.2,195.2,193.9,193.9,193.9,193.9,196.4,196.4,197.7,196.4,196.4,197.7,196.4,196.4,196.4,196.4,196.4,195.2,192.7,192.7,193.9,190.2,190.2,189.0,190.2,190.2,191.4,190.2,190.2,191.4,189.0,189.0,190.2,190.2,190.2,189.0,191.4,191.4,189.0,189.0,189.0,189.0,187.7,187.7,186.5,186.5,186.5,187.7,187.7,187.7,186.5,186.5,186.5,185.2,185.2,185.2,187.7,189.0,189.0,186.5,187.7,187.7,189.0,191.4,191.4,191.4,192.7,192.7,192.7,190.2,191.4,191.4,190.2,190.2,190.2,190.2,190.2,190.2,190.2,191.4,191.4,191.4,192.7,192.7,193.9,195.2,195.2,195.2,196.4,196.4,195.2,196.4,196.4,195.2,196.4,196.4,196.4,195.2,195.2,196.4,193.9,193.9,195.2,192.7,192.7,193.9,193.9,193.9,193.9,195.2,195.2,192.7,192.7,192.7,195.2,193.9,193.9,193.9,192.7,192.7,191.4,192.7,192.7,191.4,192.7,192.7,190.2,187.7,187.7,189.0,189.0,189.0,187.7,187.7,187.7,186.5,187.7,187.7,187.7,187.7,187.7,187.7,189.0,189.0,189.0,189.0,189.0,189.0,190.2,190.2,189.0,189.0,189.0,189.0,186.5,186.5,186.5,187.7,189.0,189.0,186.5,190.2,190.2,191.4,189.0,189.0,191.4,191.4,191.4,193.9,193.9,193.9,192.7,192.7,192.7,192.7,192.7,192.7,192.7,192.7,192.7,191.4,193.9,193.9,193.9,193.9,193.9,195.2,195.2,195.2,195.2,195.2,195.2,196.4,197.7,197.7,196.4,196.4,196.4,197.7,196.4,196.4,195.2,195.2,195.2,193.9,193.9,193.9,191.4,191.4,191.4,192.7,190.2,190.2,191.4,190.2,190.2,192.7,192.7,192.7,193.9,191.4,191.4,191.4,191.4,191.4,191.4,189.0,189.0,189.0,187.7,187.7,189.0,187.7,187.7,185.2,187.7,187.7,187.7,185.2,185.2,186.5,187.7,187.7,186.5,186.5,186.5,190.2];   // seq7 deep-water waterline
+const ZUG_PANO_SURF7 = [172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.2,172.2,172.2,172.2,172.2,172.2,172.2,172.2,172.2,171.5,170.9,170.9,170.9,170.9,170.9,170.9,171.5,171.5,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.2,172.2,172.2,172.2,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.2,172.2,172.2,172.2,172.2,172.2,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.8,172.2,172.2,172.2,172.2,172.2,172.2,172.2,172.2,172.2,171.5,171.5,170.9,170.9,170.9,170.9,171.5,171.5,172.8,172.8,172.8];   // seq7 deep-water waterline (v3 art)
 // `rope:true` hangs a descent rope off that platform's end (not every platform has one).
 const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true,shelter:true}];
 // A high floating ledge up-LEFT, above the regular platforms (drawn from
@@ -479,8 +481,8 @@ const LEVELS = [
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
     terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5", "fgZug6", "fgZug7"],
-    fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64, fgZug7: 130 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5; seq7 water dropped so the waterline sits lower (~y353)
-    fgAnim: { fgZug7: { n: 2, fps: 2 } },   // seq7 deep water ripples (2-frame strip)
+    fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64, fgZug7: 150 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5; seq7 waterline at ~y353
+    fgAnim: { fgZug7: { keys: ["fgZug7", "fgZug7b"], fps: 2 } },   // seq7 lake animates between two full-frame paintings
     waterZones: [{ x0: 8100, x1: 9450, top: 353 }],   // seq7 deep water: Abu swims across it
     fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6, fgZug7: ZUG_PANO_SURF7 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
@@ -984,6 +986,9 @@ const Music = (() => {
     sfxLevel() { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047].forEach((f, i) => blip(f, t + i * 0.09, 0.12, "square", 0.5)); },
     sfxWin()   { if (!sfxReady()) return; const t = actx.currentTime; [523,659,784,1047,784,1047,1319].forEach((f, i) => blip(f, t + i * 0.12, 0.16, "square", 0.55)); },
     sfxGear()  { if (!sfxReady()) return; const t = actx.currentTime; [659,988,1319,1568].forEach((f, i) => blip(f, t + i * 0.06, 0.13, "triangle", 0.5)); },  // bright rising "gear found" jingle
+    sfxSwim()   { if (!sfxReady()) return; noise(actx.currentTime, 0.17, 0.16, 760, 320, 1.1); },                 // soft per-stroke water swish
+    sfxBubble() { if (!sfxReady()) return; slide(320, 880, actx.currentTime, 0.07, "sine", 0.15); },              // tiny rising bubble blip
+    sfxSplash() { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.30, 0.42, 1100, 240, 0.9); slide(220, 90, t, 0.16, "triangle", 0.22); },  // plunge into the water
     sfxEagleCry()     { if (!sfxReady()) return; const t = actx.currentTime; blip(1450, t, 0.05, "sawtooth", 0.28); blip(1950, t + 0.05, 0.07, "sawtooth", 0.24); blip(1250, t + 0.13, 0.06, "sawtooth", 0.2); },  // screech (dive warning)
     sfxEagleDive()    { if (!sfxReady()) return; slide(620, 170, actx.currentTime, 0.32, "sawtooth", 0.24); },   // fast wind swoosh
     sfxEagleHit()     { if (!sfxReady()) return; slide(220, 70, actx.currentTime, 0.14, "triangle", 0.4); },     // feather/impact
@@ -2247,8 +2252,10 @@ function updateWater(dt) {
   let z = null; for (const w of lvl.waterZones) if (cx >= w.x0 && cx <= w.x1) { z = w; break; }
   if (!z) { player.inWater = false; return false; }
   const feet = player.y + player.h;
-  if (!player.inWater && feet < z.top - 4) return false;   // approaching from above land — let him reach the water first
+  const justEntered = !player.inWater;
+  if (justEntered && feet < z.top - 4) return false;   // approaching from above land — let him reach the water first
   player.inWater = true;
+  if (justEntered) Music.sfxSplash();                  // plunge in
   player.swinging = false; player.swing = null; player.mantle = null; player.descend = null; player.launchVx = 0;
   const left = anyKey(LEFT_KEYS), right = anyKey(RIGHT_KEYS), up = anyKey(JUMP_KEYS), down = anyKey(DOWN_KEYS);
   const move = (right ? 1 : 0) - (left ? 1 : 0);
@@ -2261,6 +2268,19 @@ function updateWater(dt) {
   player.y += player.vy * dt;
   player.onGround = false; player.exhausted = false; player.collapsed = false;
   player.swimPhase = (player.swimPhase || 0) + dt * (move ? 9 : 5);
+  // FX: per-stroke hand splashes (synced to the animation) + a steady rising bubble trail
+  const fi = Math.floor(player.swimPhase) % 6;
+  if (move && fi !== player._swimFi && (fi === 0 || fi === 3)) {
+    swimSplash(player.x + player.w / 2 + player.facing * player.w * 0.75, z.top + 5);
+    Music.sfxSwim();                                   // soft swish on each stroke
+  }
+  player._swimFi = fi;
+  player._bubbleCd = (player._bubbleCd || 0) - dt;
+  if (player._bubbleCd <= 0) {
+    player._bubbleCd = rand(0.18, 0.36);
+    swimBubbles(player.x + player.w / 2 - player.facing * player.w * 0.35, z.top + 12);
+    if (Math.random() < 0.4) Music.sfxBubble();        // occasional bubble blip
+  }
   return true;
 }
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
@@ -3131,6 +3151,18 @@ function poofBurst(x, y) {
     grav: 220, lifeMin: 0.3, lifeMax: 0.6, sizeMin: 3, sizeMax: 6,
     colors: ["#7bd36a", "#4f9e3f", "#bff2a8"] });
 }
+// White water splash at the swimmer's stroking hands.
+function swimSplash(x, y) {
+  spawnParticles(x, y, 5, { angMin: -Math.PI, angMax: 0, spdMin: 30, spdMax: 130,
+    grav: 380, lifeMin: 0.2, lifeMax: 0.45, sizeMin: 1.5, sizeMax: 3.5,
+    colors: ["#cfeaff", "#9fd4f5", "#ffffff"] });
+}
+// Rising bubbles trailing the swimmer (negative gravity -> float up).
+function swimBubbles(x, y) {
+  spawnParticles(x, y, 2, { angMin: -Math.PI * 0.72, angMax: -Math.PI * 0.28, spdMin: 12, spdMax: 42,
+    grav: -55, lifeMin: 0.5, lifeMax: 1.0, sizeMin: 1, sizeMax: 2.6,
+    colors: ["#bfe6ff", "#dff3ff", "#a8d8f0"] });
+}
 function addShake(mag) { if (mag > shake) shake = mag; }
 // Icy shards when a crash platform cracks / breaks.
 function iceCrack(x, y) {
@@ -3521,8 +3553,13 @@ function drawParallaxScene(lvl) {
         if (imgLoaded[key]) {
           const fg = images[key];
           const an = lvl.fgAnim && lvl.fgAnim[key];   // animated painting (e.g. seq7 rippling water): pick a frame from a side-by-side strip
-          if (an) {
-            const cw = fg.naturalWidth / an.n, fi = Math.floor(performance.now() / (1000 / an.fps)) % an.n;
+          if (an && an.keys) {                          // animate between separate full-frame paintings
+            const fk = an.keys[Math.floor(performance.now() / (1000 / an.fps)) % an.keys.length];
+            const f2 = imgLoaded[fk] ? images[fk] : fg;
+            tctx.drawImage(f2, 0, 0, f2.naturalWidth, f2.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
+          } else if (an) {                               // animate a side-by-side frame strip
+            const cw = fg.naturalWidth / an.n;
+            const fi = an.frozen != null ? an.frozen : Math.floor(performance.now() / (1000 / an.fps)) % an.n;   // `frozen` pauses on one frame
             tctx.drawImage(fg, fi * cw, 0, cw, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
           } else {
             tctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
@@ -3652,6 +3689,31 @@ const BRIDGE_META = {
   woodBridge: { img: "woodBridge", L: 155, R: 1740, top: 450 },
   ropeBridge: { img: "ropeBridge", L: 43,  R: 1830, top: 465 },   // deck-plank surface (was 410 = top cable); Abu walks the deck
 };
+// Small traveling surface waves on the seq7 lake: a few thin sine crest lines that drift
+// sideways at different speeds/depths for a layered ripple look. Pure procedural overlay.
+function drawLakeWaves() {
+  const lvl = currentLevel();
+  if (!lvl.waterZones) return;
+  const t = performance.now() / 1000;
+  const LINES = [
+    { d: 3,  amp: 2.0, wl: 150, spd: 1.3,  ph: 0.0, col: "rgba(226,246,255,0.55)", w: 1.6 },
+    { d: 16, amp: 2.6, wl: 205, spd: -0.9, ph: 1.7, col: "rgba(193,229,250,0.40)", w: 1.4 },
+    { d: 31, amp: 3.0, wl: 270, spd: 0.7,  ph: 3.1, col: "rgba(171,213,242,0.30)", w: 1.3 },
+  ];
+  for (const z of lvl.waterZones) {
+    const x0 = Math.max(z.x0, cameraX - 4), x1 = Math.min(z.x1, cameraX + VIEW_W + 4);
+    if (x1 <= x0) continue;
+    for (const ln of LINES) {
+      ctx.beginPath();
+      for (let wx = x0; wx <= x1; wx += 6) {
+        const y = z.top + ln.d + ln.amp * Math.sin(wx / ln.wl * 6.2832 + t * ln.spd + ln.ph);
+        const sx = wx - cameraX;
+        if (wx === x0) ctx.moveTo(sx, y); else ctx.lineTo(sx, y);
+      }
+      ctx.strokeStyle = ln.col; ctx.lineWidth = ln.w; ctx.stroke();
+    }
+  }
+}
 function drawBridges() {
   const lvl = currentLevel();
   if (!lvl.bridges) return;
@@ -5343,6 +5405,7 @@ function draw() {
   drawBackground();
   drawPlanes();             // banner plane roaming the sky (behind the foreground terrain)
   drawGround();
+  drawLakeWaves();          // small traveling surface ripples on the seq7 lake
   drawWaterfalls();         // animated flowing water on the painted seq4 cascade
   drawBridges();           // wood plank bridge across the seq1->seq2 gap (Level 1)
   drawCollapsers();        // collapsing rock ledges (Level 1)
