@@ -448,7 +448,7 @@ const LIFE_PICK_W = 54, LIFE_PICK_H = 68;     // edelweiss life-pickup hitbox (+
 const ENERGY_REFILL = 15;                     // stamina restored per energy bottle (15% of max)
 const POWERUP_FRAMES = 3;                     // frames in the transformation strip
 const POWERUP_ANIM_TIME = 1.05;               // transformation duration (frozen, plays the 3 frames)
-const POWERUP_TIME = 12;                       // how long Abu stays buffed (muscles walk) after
+const POWERUP_TIME = 10;                       // how long Abu stays buffed (kills enemies on touch) after drinking
 // Knives Abu holds when a level begins. Level 1 (the knife-climb) starts at 0 — he
 // collects them off the climb top ledges. Within a run knives CARRY OVER between
 // levels (advanceLevel no longer refills), so the spare knife stacks in Level 1
@@ -524,7 +524,8 @@ const LEVELS = [
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
     // Zugspitze background shows through). `surf` = collision height inside the cut:
     // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
-    fgHoles: [{ x0: 4797, x1: 5157, surf: 9999 },     // seq4: death zone — only background shows, falling = death
+    fgHoles: [{ x0: 4715, x1: 4805, surf: 211 },      // seq4: cut showing background, solid ledge at y211 just before the void
+              { x0: 4797, x1: 5157, surf: 9999 },     // seq4: death zone — only background shows, falling = death
               { x0: 6519, x1: 6932, surf: 9999 }],     // seq5/6 open vista: no floor -> falling = death (collapsing foothold at x6848 inside)
     // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
     // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
@@ -548,16 +549,17 @@ const LEVELS = [
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
                  { x: 1910, top: 211 },    // knife on seq2's lowest stepping rock
                  { x: 2587, top: 94 },     // knife on the small seq2 wood bridge
-                 { x: 4744, top: 207 },    // knife on a seq4 ledge
+                 { x: 4909, top: 234 },    // knife on a seq4 void foothold
                  { x: 6843, top: 151 },    // knife on the seq5/6 vista footholds
                  { x: 6637, top: -18 },
                  { x: 6617, top: 295 }],
     // Fixed carabiner pickups on specific spots.
     carabinerSpots: [{ x: 4365, top: 343 },   // seq4 ledge
+                     { x: 5024, top: 110 }, { x: 5183, top: 356 },   // seq4: void foothold + terrain ledge
                      { x: 7150, top: 420 }, { x: 7330, top: 421 }, { x: 7510, top: 424 }, { x: 7690, top: 426 }],   // seq6 cave lower floor (4, for the wolf)
     // Energy-bottle pickups (each refills stamina).
     energySpots: [{ x: 4399, top: 388 },       // seq4 lower ledge
-                  { x: 4763, top: 375 }],      // seq4
+                  { x: 4992, top: 398 }],      // seq4 void foothold
     shelterSpots: [{ x: 3550, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
@@ -2773,6 +2775,7 @@ function updateDrink() {
     energyDrinks -= 1;
     power = Math.min(POWER_MAX, power + ENERGY_REFILL);
     player.powerupAnimT = POWERUP_ANIM_TIME;
+    player.poweredT = POWERUP_TIME;             // 10s buffed: touching any enemy kills it
     sparkleBurst(player.x + player.w / 2, player.y + player.h / 2);
     Music.sfxGear();
   }
@@ -2906,6 +2909,14 @@ function handleHazards() {
 function handleEnemies() {
   for (const e of enemies) {
     if (!e.alive || !aabb(player, e)) continue;
+    // Energy-drink buff: touching ANY enemy instantly kills it (one-shot, even tanks).
+    if (player.poweredT > 0) {
+      e.alive = false; score += e.points; runScore += e.points;
+      if (window.AbuTracking) AbuTracking.trackKill(currentLevel().id, e.points);
+      poofBurst(e.x + e.w / 2, e.y + e.h / 2); sparkleBurst(e.x + e.w / 2, e.y + e.h / 2);
+      addShake(6); Music.sfxStomp(); if (e.eagle) Music.sfxEagleHit();
+      continue;
+    }
     const feet = player.y + player.h;
     const stomping = player.vy > 0 && feet < e.y + e.h * 0.6;
     if (stomping) {
@@ -4226,7 +4237,7 @@ function drawPlayer() {
     const dh = player.h * 1.28, dw = dh * (cw / ch);
     ctx.save();
     ctx.translate(sx + player.w / 2, player.y + player.h);
-    if (player.facing > 0) ctx.scale(-1, 1);
+    if (player.facing < 0) ctx.scale(-1, 1);   // powerup art faces RIGHT; flip when going left
     ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
     ctx.restore();
     return;
@@ -4288,6 +4299,18 @@ function drawPlayer() {
     ctx.translate(sx + player.w / 2, player.y + player.h);
     if (player.facing > 0) ctx.scale(-1, 1);
     ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh * footFrac, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // Energy-drink buff active (after the transformation): HOLD the flex/aura pose (frame 2).
+  if (player.poweredT > 0 && imgLoaded.abuPowerup) {
+    const img = images.abuPowerup, cw = img.naturalWidth / POWERUP_FRAMES, ch = img.naturalHeight;
+    const dh = player.h * 1.28, dw = dh * (cw / ch);
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h);
+    if (player.facing < 0) ctx.scale(-1, 1);   // powerup art faces RIGHT; flip when going left
+    ctx.drawImage(img, 1 * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);   // frame index 1 = Abu_Energy_Powerup_frame2 (flex + aura)
     ctx.restore();
     return;
   }
