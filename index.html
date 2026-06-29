@@ -221,6 +221,8 @@ const ASSETS = {
   enemySnakeRedWalk: "enemy_snake_red_walk.png?v=2",  // red snake 2-frame walk cycle (ledge guard)
   cobraAttack:  "cobra_attack.png?v=1",               // 5-frame reared striking cobra (placed enemy)
   crocAttack:   "croc_attack.png?v=1",                // 6-frame lake crocodile: 0-3 swim/lurk, 4-5 jaws-open attack
+  harpoonGun:   "harpoon_gun.png?v=1",                // speargun pickup (collect to fire harpoons in water)
+  abuHarpoon:   "abu_harpoon_shoot.png?v=1",          // 4-frame Abu firing the speargun while swimming
   wolfAttack:   "wolf_attack.png?v=1",                // 5-frame wolf: 0-2 walk/patrol, 3-4 lunge attack
   enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
   enemyBabyEagle: "enemy_baby_eagle_attack.png?v=1",  // 5-frame baby eagle: 0-2 glide/flap, 3-4 talons-out attack dive (gear guard)
@@ -505,7 +507,8 @@ const LEVELS = [
     // Patrolling wolf guard (seq6): paces [x0,x1] on the arch top; when Abu reaches
     // `trigger` it charges + lunges (attack frames). Needs `hp` knife/carabiner hits.
     wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true }],
-    crocs: [{ x0: 8360, x1: 9320, bottom: 452, surf: 360, hp: 3 }],   // seq7 lake: crocodile lurks at the bottom, lunges up at a swimmer
+    crocs: [{ x0: 8360, x1: 9320, bottom: 452, surf: 360, hp: 1 }],   // seq7 lake: crocodile lurks at the bottom, lunges up at a swimmer (1 harpoon kills)
+    weaponSpots: [{ x: 8090, top: 246 }],   // speargun on the seq6 rock before the lake
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
@@ -1083,7 +1086,7 @@ function startAtLevel(idx) {
   score = prevTarget();              // arrive with the cumulative score of prior levels
   runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
-  platforms = []; carabiners = []; knifeItems = []; energyItems = []; lifeItems = []; enemies = []; pits = [];
+  platforms = []; carabiners = []; knifeItems = []; energyItems = []; lifeItems = []; weaponItems = []; enemies = []; pits = [];
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
@@ -1272,6 +1275,7 @@ let gearItems = [];   // spawned gear pickups in the world (this level)
 let knifeItems = [];  // knife pickups on the Level-1 climb top ledges (each = +1 throwable knife)
 let energyItems = []; // energy-bottle pickups (each refills stamina)
 let lifeItems = [];   // edelweiss pickups (each grants +1 life)
+let weaponItems = []; // speargun pickup (collect -> hasHarpoon)
 let gearThisLevel = { shoes: false, rope: false, helmet: false };  // collected flags, reset each level
 let gearPop = { shoes: 0, rope: 0, helmet: 0 };  // HUD pickup pop timers
 let carabinersThisLevel = 0;   // carabiners collected this level (toward 20; gate wired later)
@@ -1770,6 +1774,8 @@ const GUARD_SPEED = 50;
 const WOLF_PATROL_SPEED = 64, WOLF_ATTACK_SPEED = 200;   // wolf paces slowly, then charges when triggered
 const WOLF_TRIGGER_RANGE = 190;   // wolf pounces when Abu is this close AND down on the cave floor
 const CROC_RANGE = 210, CROC_CHASE = 120, CROC_RISE = 150, CROC_PATROL = 45;   // lake crocodile: lurks at the bottom, lunges up at a nearby swimmer
+const HARPOON_W = 48, HARPOON_H = 8, HARPOON_SPEED = 560, HARPOON_CD = 0.6, HARPOON_ANIM_TIME = 0.45;   // speargun shot
+const WEAPON_PICK_W = 84, WEAPON_PICK_H = 46;   // speargun pickup hitbox (bigger, highlighted)
 const ENEMY_SND_DIST = 230;   // within this many px of Abu, an enemy hisses / screeches
 const ENEMY_DUCK_DIST = 300;  // within this many px, the music ducks toward minimal
 let enemyDuck = 0;            // eased 0..1 music-duck level driven by the nearest enemy
@@ -2288,7 +2294,8 @@ function initPlayer() {
              traverse: null, traverseAnim: 0, ropeCd: 0, poweredT: 0, powerupAnimT: 0,
              onPlatform: false, exhausted: false, collapsed: false, collapseTimer: 0,
              airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0,
-             throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false, prevDrink: false };
+             throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false, prevDrink: false,
+             hasHarpoon: false, harpoonAnimT: 0 };
 }
 
 // Deep-water swim (seq7): inside a waterZone Abu SWIMS — he floats at the surface
@@ -2895,6 +2902,32 @@ function handleLifeItems() {
   }
   lifeItems = lifeItems.filter(e => !e.collected);
 }
+// Speargun: collect it to fire harpoons (Throw key) while swimming.
+function handleWeaponItems() {
+  for (const e of weaponItems) if (!e.collected && aabb(player, e)) {
+    e.collected = true; player.hasHarpoon = true;
+    sparkleBurst(e.x + e.w / 2, e.y + e.h / 2);
+    Music.sfxGear();
+    toast = { text: "Speargun! Press F in the water", timer: 2.0 };
+  }
+  weaponItems = weaponItems.filter(e => !e.collected);
+}
+function drawWeaponItems() {
+  if (!imgLoaded.harpoonGun) return;
+  const img = images.harpoonGun, ratio = img.naturalWidth / img.naturalHeight;
+  for (const e of weaponItems) {
+    if (e.collected) continue;
+    const sx = e.x - cameraX; if (sx > VIEW_W || sx + e.w < 0) continue;
+    const bob = Math.sin(performance.now() / 320 + e.t) * 3, cy = e.y + bob;
+    const pulse = 0.4 + 0.22 * (0.5 + 0.5 * Math.sin(performance.now() / 280 + e.t));   // pulsing yellow highlight (like gear)
+    ctx.save();
+    ctx.globalAlpha = pulse; ctx.fillStyle = "#ffe07a";
+    ctx.beginPath(); ctx.ellipse(sx + e.w / 2, cy + e.h / 2, e.w * 0.62, e.h * 0.66, 0, 0, 6.28); ctx.fill();
+    ctx.restore();
+    const dw = e.w, dh = dw / ratio;
+    ctx.drawImage(img, sx + (e.w - dw) / 2, cy + e.h - dh, dw, dh);
+  }
+}
 // Drink a stored energy bottle (DRINK_KEYS): refill stamina + play the
 // drink->surge->flex transformation. Edge-triggered; one bottle per press.
 function updateDrink() {
@@ -2965,6 +2998,12 @@ function spawnGearForLevel(base = 0) {
     for (const s of lvl.lifeSpots)
       lifeItems.push({ spotLife: true, x: s.x - LIFE_PICK_W / 2, y: s.top - LIFE_PICK_H,
                        w: LIFE_PICK_W, h: LIFE_PICK_H, t: Math.random() * 6.28, collected: false });
+  }
+  if (lvl.weaponSpots && !player.hasHarpoon) {   // speargun pickup
+    weaponItems = weaponItems.filter(e => !e.spotWeapon);
+    for (const s of lvl.weaponSpots)
+      weaponItems.push({ spotWeapon: true, x: s.x - WEAPON_PICK_W / 2, y: s.top - WEAPON_PICK_H,
+                         w: WEAPON_PICK_W, h: WEAPON_PICK_H, t: Math.random() * 6.28, collected: false });
   }
   if (lvl.carabinerSpots)   // fixed carabiner pickups (rest on the surface)
     for (const s of lvl.carabinerSpots)
@@ -3071,9 +3110,17 @@ function handleEnemies() {
 // and gravity continue during the throw, but another can't start until it finishes.
 function updateThrow(dt) {
   if (player.throwCd > 0) player.throwCd -= dt;
+  if (player.harpoonAnimT > 0) player.harpoonAnimT -= dt;
   const held = anyKey(THROW_KEYS), pressed = held && !player.prevThrow;
   player.prevThrow = held;
   const busy = player.dying || player.collapsed || player.swinging || player.descend || player.mantle;
+  // In the water: the speargun fires a harpoon (if collected); no knife-throwing while swimming.
+  if (player.inWater) {
+    if (pressed && player.hasHarpoon && player.throwCd <= 0 && !busy) {
+      player.harpoonAnimT = HARPOON_ANIM_TIME; spawnHarpoon(); player.throwCd = HARPOON_CD;
+    }
+    return;
+  }
   if (pressed && !player.throwing && player.throwCd <= 0 && carabinerAmmo > 0 && !busy) {
     player.throwing = true; player.throwTimer = 0; player.threw = false;
     carabinerAmmo -= 1;                         // each throw uses one stored carabiner
@@ -3091,12 +3138,19 @@ function spawnCarabiner() {
   projectiles.push({ x: hx - PROJ_W / 2, y: hy - PROJ_H / 2, w: PROJ_W, h: PROJ_H, vx: PROJ_SPEED * dir, dir, angle: 0, inCave: !!player.inCave });
   Music.sfxJump();   // quick throw whoosh
 }
+function spawnHarpoon() {
+  const dir = player.facing >= 0 ? 1 : -1;
+  const hx = player.x + player.w / 2 + dir * (player.w * 0.7);
+  const hy = player.y + player.h * 0.45;
+  projectiles.push({ x: hx - HARPOON_W / 2, y: hy - HARPOON_H / 2, w: HARPOON_W, h: HARPOON_H, vx: HARPOON_SPEED * dir, dir, angle: 0, harpoon: true });
+  sparkleBurst(hx, hy); Music.sfxStomp();   // speargun "thunk"
+}
 function updateProjectiles(dt) {
   const lvl = currentLevel();
   for (const pr of projectiles) {
     if (pr.dead) continue;
     pr.x += pr.vx * dt;                          // horizontal flight
-    pr.angle += pr.dir * 14 * dt;               // spin
+    if (!pr.harpoon) pr.angle += pr.dir * 14 * dt;   // knives spin; the harpoon flies straight
     const sx = pr.x - cameraX;
     if (sx < -60 || sx > VIEW_W + 60) { pr.dead = true; continue; }   // left the screen
     const cx = pr.x + pr.w / 2, cy = pr.y + pr.h / 2;
@@ -3111,6 +3165,7 @@ function updateProjectiles(dt) {
       }
     }
     if (pr.dead) continue;
+    if (pr.harpoon) continue;   // the harpoon flies underwater unobstructed (only dies on an enemy hit or off-screen)
     // Terrain block: knives thrown in the cave use the LOWER cave floor (not the arch
     // top above them, which would block them instantly); outside the cave range there
     // they fly on. Otherwise the normal surface (or flat ground on block levels).
@@ -3131,7 +3186,16 @@ function drawProjectiles() {
   for (const pr of projectiles) {
     const sx = pr.x + pr.w / 2 - cameraX, sy = pr.y + pr.h / 2;
     ctx.save();
-    ctx.translate(sx, sy); ctx.rotate(pr.angle);
+    ctx.translate(sx, sy);
+    if (pr.harpoon) {                                   // a steel spear flying straight in its direction
+      if (pr.dir < 0) ctx.scale(-1, 1);
+      const L = pr.w;
+      ctx.strokeStyle = "#7a6248"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(L / 2 - 8, 0); ctx.stroke();   // wooden shaft
+      ctx.fillStyle = "#cfd6de"; ctx.beginPath(); ctx.moveTo(L / 2, 0); ctx.lineTo(L / 2 - 10, -5); ctx.lineTo(L / 2 - 10, 5); ctx.closePath(); ctx.fill();   // steel tip
+      ctx.fillStyle = "#aeb6c2"; ctx.fillRect(L / 2 - 14, -3, 4, 6);   // barb
+      ctx.restore(); continue;
+    }
+    ctx.rotate(pr.angle);
     if (imgLoaded.knife) { const img = images.knife, dw = 40, dh = dw * img.naturalHeight / img.naturalWidth; ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh); }
     else if (imgLoaded.carabiner) ctx.drawImage(images.carabiner, -pr.w / 2, -pr.h / 2, pr.w, pr.h);
     else { ctx.strokeStyle = "#aeb6c2"; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, pr.w / 2 - 1, pr.h / 2 - 1, 0, 0, 6.28); ctx.stroke(); }
@@ -4533,6 +4597,19 @@ function drawPlayer() {
     return;
   }
 
+  // Speargun shot (in water): play the 4-frame firing animation (art faces RIGHT).
+  if (player.inWater && player.harpoonAnimT > 0 && imgLoaded.abuHarpoon) {
+    const img = images.abuHarpoon, n = 4, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const prog = 1 - player.harpoonAnimT / HARPOON_ANIM_TIME;
+    const fi = Math.min(n - 1, Math.floor(prog * n));
+    const dh = player.h * 0.91, dw = dh * (cw / ch);   // sized so Abu's body matches the swim sprite
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h / 2);
+    if (player.facing < 0) ctx.scale(-1, 1);          // art faces RIGHT; flip to aim left
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh * 0.55, dw, dh);
+    ctx.restore();
+    return;
+  }
   // Deep-water swim (seq7): horizontal 6-frame stroke, centred on Abu's body at the surface.
   if (player.inWater && imgLoaded.abuSwim) {
     const img = images.abuSwim, n = 6, cw = img.naturalWidth / n, ch = img.naturalHeight;
@@ -4796,6 +4873,12 @@ function drawHUD() {
   else { ctx.fillStyle = "#7CFFB2"; ctx.fillRect(ex, 8, 10, 24); }
   ctx.fillStyle = energyDrinks > 0 ? "#9affc2" : "#9fb0bf"; ctx.font = "bold 20px Segoe UI, Arial";
   ctx.fillText("× " + energyDrinks, ex + 18, 28);
+  // Speargun (once collected): icon after the energy-drink count.
+  if (player.hasHarpoon && imgLoaded.harpoonGun) {
+    const gx = ex + 18 + ctx.measureText("× " + energyDrinks).width + 18;
+    const gh = 22, gw = gh * images.harpoonGun.naturalWidth / images.harpoonGun.naturalHeight;
+    ctx.drawImage(images.harpoonGun, gx, 20 - gh / 2, gw, gh);
+  }
   // Enemy/combat score (stomps + knife kills), centred — separate from the carabiner count.
   ctx.textAlign = "center"; ctx.fillStyle = "#ffd84d"; ctx.font = "bold 20px Segoe UI, Arial";
   ctx.fillText("Score: " + runScore, VIEW_W / 2, 28);
@@ -5269,7 +5352,7 @@ function updateClimb(dt) {
 function enterClimbPlay() {
   climb = null; inClimb = true; state = "playing";
   climbRopeT = 0;
-  platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; lifeItems = []; projectiles = [];
+  platforms = []; enemies = []; carabiners = []; knifeItems = []; gearItems = []; lifeItems = []; weaponItems = []; projectiles = [];
   shelters = []; descentRopes = []; ropes = []; crashPlats = []; icicles = []; pits = [];
   const p0 = climbRopeAt(0);                         // attach Abu to the rope base
   player.x = p0.x - player.w / 2; player.y = p0.y - player.h; player.vx = 0; player.vy = 0;
@@ -5339,6 +5422,7 @@ function update(dt) {
   handleKnifeItems();
   handleEnergyItems();
   handleLifeItems();
+  handleWeaponItems();
   updateDrink();         // drink a stored energy bottle on the use key
   handleGear();
   handleHazards();
@@ -5497,6 +5581,7 @@ function draw() {
   drawKnifeItems();        // knife pickups on the Level-1 climb top ledges
   drawEnergyItems();       // energy-bottle stamina pickups (Level 1)
   drawLifeItems();         // edelweiss life pickups (Level 1)
+  drawWeaponItems();       // speargun pickup (Level 1 seq6)
   drawGear();              // collectible shoes / rope / helmet on the path
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
