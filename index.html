@@ -394,6 +394,7 @@ const BG_PARALLAX     = 0.5;   // background scrolls at half camera speed
 const CARABINER_POINTS = 1;    // clip a carabiner = +1
 const STOMP_POINTS     = 2;    // stomp an enemy   = +2
 const START_LIVES      = 3;
+const LEVEL1_START_X   = 181;   // Abu's start (and seq1 respawn) world-X on the natural Level-1 terrain
 const LEVEL_BONUS_LIVES = 1;   // +1 life awarded on each level advance
 
 const ENEMY_SPAWN_MIN = 1.6, ENEMY_SPAWN_MAX = 3.2;  // seconds
@@ -480,17 +481,13 @@ const LEVELS = [
               { x0: 2788, x1: 2852, top: 122 },    // small wood bridge between two seq3-start spire tops
               { x0: 3985, x1: 4145, top: 108, img: "ropeBridge" }],   // rope bridge across the seq3->seq4 gap
     // Green patrol snakes pacing a flat stretch back and forth (from->to world-X, surface top).
-    patrolSnakes: [{ x0: 203,  x1: 343,  top: 407 },   // seq1 valley floor
-                   { x0: 1292, x1: 1366, top: 140 },   // wood bridge (seq1->seq2 mesa tops)
+    patrolSnakes: [{ x0: 1292, x1: 1366, top: 140 },   // wood bridge (seq1->seq2 mesa tops)
                    { x0: 1777, x1: 1875, top: 335 },   // seq2 lower ledge
                    { x0: 2227, x1: 2315, top: 315 },   // seq2 mid ledge
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     // Placed striking cobras (stationary): sway idle, rear & strike + hiss when Abu nears.
     cobras: [{ x: 486,  top: 366 },    // seq1
-             { x: 737,  top: 326 },
-             { x: 861,  top: 316 },
-             { x: 974,  top: 284 },
              { x: 1168, top: 190 }],
     // Patrolling wolf guard (seq6): paces [x0,x1] on the arch top; when Abu reaches
     // `trigger` it charges + lunges (attack frames). Needs `hp` knife/carabiner hits.
@@ -506,7 +503,7 @@ const LEVELS = [
     signs: [{ x: 86, top: 419 }],
     // Steep zones: inside [x0,x1] Abu must JUMP to climb even slight inclines (a tiny
     // auto-step-up limit instead of the default 20). Uphill only; downhill unchanged.
-    steepStepUp: 3,   // must JUMP to climb even slight inclines, across all sequences (uphill only)
+    steepStepUp: 10,   // must JUMP to climb even slight inclines, across all sequences (uphill only)
     // Eagle nest with eggs — scenery resting on a seq4 peak.
     nests: [{ x: 5323, top: 139 }],
     // Snowy pine trees (scenery): foot planted at (x, foot); scale = fraction of native size.
@@ -545,7 +542,7 @@ const LEVELS = [
                      { x: 5018, top: 100, img: "collapseLedge2", scale: 0.5, linger: 0.3 },
                      { x: 4986, top: 391, img: "collapseLedge2", scale: 0.5, linger: 0.3 }],
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
-                { id: "rope",  x: 1953, top: -26, guard: "eagle" }],   // rope on seq2's highest rock, flying-eagle guarded
+                { id: "rope",  x: 1953, top: -26, guard: "eagle", eagleX: 1775, eagleY: -100 }],   // rope on seq2's highest rock; flying-eagle guard hovers at x1775/y-100
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
@@ -1065,7 +1062,7 @@ function startAtLevel(idx) {
   carabinerAmmo = startAmmo(); projectiles = [];
   invulnTimer = INVULN_TIME;
   if (currentLevel().terrain === "natural") {
-    player.x = 80;
+    player.x = LEVEL1_START_X;
     player.y = surfaceY(player.x + player.w / 2) - player.h;
     player.vy = 0; player.onGround = true;
   }
@@ -2693,7 +2690,9 @@ function startDeathSequence() {
 // Respawn at the START of the sequence Abu is currently in (its tile's left edge).
 function respawnAtSeqStart() {
   const ftw = currentLevel().fgTileW || 1350;
-  let x = Math.floor(player.x / ftw) * ftw + 90;             // a little into the sequence
+  const tile = Math.floor(player.x / ftw);
+  // seq1 (the first sequence) respawns at the game-start spot; later sequences at their tile start.
+  let x = (tile === 0 && currentLevel().terrain === "natural") ? LEVEL1_START_X : tile * ftw + 90;
   for (let t = 0; t < 80 && surfaceY(x) >= 5000; t++) x += 12;   // skip onto solid ground if it's a gap
   player.x = x; player.vx = 0; player.vy = 0; player.onGround = true; player.inCave = false;
   player.y = surfaceY(x) - player.h; player.fatalFalling = false; player.airPeakY = player.y;
@@ -2852,7 +2851,7 @@ function spawnGearForLevel(base = 0) {
       const g = GEAR.find(x => x.id === sp.id); if (!g) continue;
       const w = gearW(g);
       gearItems.push({ id: g.id, asset: g.asset, label: g.label, x: sp.x - w / 2, y: sp.top - g.h, w, h: g.h, t: Math.random() * 6.28 });
-      if (sp.guard === "eagle") spawnGuardEagle(sp.x, sp.top - 46);   // flying eagle hovers above the rock
+      if (sp.guard === "eagle") spawnGuardEagle(sp.eagleX != null ? sp.eagleX : sp.x, sp.eagleY != null ? sp.eagleY : sp.top - 46);   // flying eagle hovers above the rock (eagleX/eagleY override the anchor)
       else if (sp.guard !== false) spawnGuardSnake(sp.x, sp.top, sp.gw || 110);
       placed[sp.id] = true;
     }
@@ -4839,6 +4838,7 @@ function resetGame() {
   carabinerAmmo = startAmmo(); projectiles = [];
   initPlayer();
   if (LEVELS[0].terrain === "natural") {
+    player.x = LEVEL1_START_X;                                 // begin a little into seq1
     player.y = surfaceY(player.x + player.w / 2) - player.h;   // stand on the painted ledge
   } else {
     worldGenX = 300;
