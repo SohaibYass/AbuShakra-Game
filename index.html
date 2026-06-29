@@ -246,6 +246,7 @@ const ASSETS = {
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
+  abuPoweredWalk: "abu_powered_walk.png?v=1",                     // 3-frame buffed walk (while powered)
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -415,7 +416,8 @@ const SWING_G       = 1600;   // pendulum gravity (px/s^2-ish)
 const SWING_PUMP    = 8.5;    // rad/s^2 the player adds holding left/right (drives the swing)
 const SWING_DAMP    = 0.5;    // gentle per-second damping on angular velocity
 const SWING_MAX     = 1.45;   // max angle from vertical (~83deg) — never loops over the anchor
-const SWING_RELEASE = 1.05;   // launch-velocity multiplier when letting go
+const SWING_RELEASE = 1.05;   // (legacy) launch-velocity multiplier when letting go
+const SWING_LAUNCH  = 400;    // CONSTANT launch speed off the rope (independent of swing speed)
 const SWING_CLIMB   = 115;    // px/s the rope shortens while holding Up (climb toward anchor)
 const SWING_MIN_L   = 30;     // shortest rope length — Abu's hands near the anchor/clip
 const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer hold climbs
@@ -2265,8 +2267,11 @@ function updateSwing(dt) {
     const jumpOff = upReleased && player.ropeHold <= ROPE_TAP;   // released as a quick tap
     // Leave the rope with a jump off (real upward leap + the swing's momentum).
     if (jumpOff) {
-      player.vx = Math.cos(s.theta) * s.L * s.omega * SWING_RELEASE;
-      player.vy = -Math.sin(s.theta) * s.L * s.omega * SWING_RELEASE - 470;
+      // Constant launch speed (not s.L*s.omega) so a fast swing doesn't throw Abu
+      // further — the release ANGLE still aims it, but the strength is always the same.
+      const dir = (s.omega < 0) ? -1 : 1;                 // launch in the swing's direction
+      player.vx = Math.cos(s.theta) * SWING_LAUNCH * dir;
+      player.vy = -Math.sin(s.theta) * SWING_LAUNCH * dir - 470;
       player.launchVx = player.vx;
       player.swinging = false; player.swing = null; player.onGround = false;
       player.prevJump = upHeld;
@@ -4343,14 +4348,19 @@ function drawPlayer() {
     return;
   }
 
-  // Energy-drink buff active (after the transformation): HOLD the flex/aura pose (frame 2).
-  if (player.poweredT > 0 && imgLoaded.abuPowerup) {
-    const img = images.abuPowerup, cw = img.naturalWidth / POWERUP_FRAMES, ch = img.naturalHeight;
-    const dh = player.h * 1.28, dw = dh * (cw / ch);
+  // Energy-drink buff active (after the transformation): animated buffed WALK (aura).
+  if (player.poweredT > 0 && (imgLoaded.abuPoweredWalk || imgLoaded.abuPowerup)) {
+    const walk = imgLoaded.abuPoweredWalk;
+    const img = walk ? images.abuPoweredWalk : images.abuPowerup;
+    const n = 3, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const moving = Math.abs(player.vx) > 1 && player.onGround;
+    const fi = walk ? (moving ? 1 + Math.floor(performance.now() / 120) % 2 : 0)   // 0 idle, 1/2 strides
+                    : 1;                                                            // fallback: static flex (frame 2)
+    const dh = player.h * 1.3, dw = dh * (cw / ch);
     ctx.save();
     ctx.translate(sx + player.w / 2, player.y + player.h);
     if (player.facing < 0) ctx.scale(-1, 1);   // powerup art faces RIGHT; flip when going left
-    ctx.drawImage(img, 1 * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);   // frame index 1 = Abu_Energy_Powerup_frame2 (flex + aura)
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh, dw, dh);
     ctx.restore();
     return;
   }
