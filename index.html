@@ -247,6 +247,7 @@ const ASSETS = {
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
   abuPoweredWalk: "abu_powered_walk.png?v=1",                     // 3-frame buffed walk (while powered)
+  abuSwim:     "abu_swimming_6frames_refined.png?v=1",            // 6-frame swim (seq7 deep water)
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -278,6 +279,7 @@ const ASSETS = {
   fgZug4:      "Zugspitze_Foreground_4.png?v=1",  // Level 1: clean panorama painting 4
   fgZug5:      "Zugspitze_Foreground_5.png?v=2",  // Level 1: clean panorama painting 5 (green walk, blue death chasm, black jump-obstacles)
   fgZug6:      "Zugspitze_Foreground_6.png?v=1",  // Level 1: panorama painting 6 (green walk surface)
+  fgZug7:      "Zugspitze_Foreground_Deep_Water_2frames.png?v=1",  // Level 1: panorama painting 7 (deep water, 2-frame ripple; collision follows the waterline)
   stepRock1: "Zugspitze_Waterfall_Stepping_Rock_1.png?v=1",  // Level 1: floating stepping-rock platforms (seq 2 gap)
   stepRock3: "Zugspitze_Waterfall_Stepping_Rock_3.png?v=1",
   stepRock4: "Zugspitze_Waterfall_Stepping_Rock_4.png?v=1",
@@ -328,6 +330,7 @@ const ZUG_PANO_SURF4 = [230.6,230.6,230.6,230.0,226.2,186.5,180.9,178.4,168.4,11
 // gaps in the green line are marked 9999 (no ground -> Abu must jump them)
 const ZUG_PANO_SURF5 = [257.1,257.1,256.5,256.5,256.5,257.1,252.7,253.3,255.8,258.3,258.3,258.3,258.3,258.3,258.3,258.3,259.0,259.6,259.6,260.2,260.2,260.2,260.8,261.5,261.5,261.5,262.7,263.4,263.4,263.4,264.0,265.9,265.2,265.9,265.2,265.2,265.9,267.1,268.4,268.4,267.7,266.5,265.9,265.2,265.2,265.9,264.6,264.0,262.7,260.8,260.2,259.6,259.6,259.6,260.2,261.5,262.7,262.7,262.7,262.1,261.5,259.6,257.7,257.1,256.5,256.5,256.5,256.5,256.5,255.2,254.6,254.6,254.6,254.6,254.6,255.8,257.1,258.3,259.6,260.2,260.2,260.2,259.6,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,9999.0,283.4,282.8,281.5,279.7,274.6,271.5,266.5,265.9,255.2,248.3,241.4,237.6,235.1,235.1,234.5,233.9,233.9,233.3,232.6,232.0,232.0,232.6,232.6,237.0,250.8,250.8,250.2,249.6,238.3,236.4,236.4,235.8,235.8,236.4,237.0,237.6,237.6,237.6,237.6,237.6,238.3,242.7,257.7,261.5,264.6,271.5,271.5,272.1,272.8,274.0,275.3,276.5,276.5,277.1,278.4,277.8,277.1,277.1,277.1,277.1,277.1,272.1,268.4,267.1,267.1,267.7,273.4,278.4,279.7,279.7,280.3,279.7,278.4,277.8,277.8,277.8,278.4,277.8,280.9,299.1,300.3,303.5,310.4,309.8,309.8,309.8,310.4,300.3,291.6,271.5,262.1,257.1,256.5,255.2,253.9,253.3,252.1,250.2,237.0,229.5,227.0,224.5,223.9,223.2,222.0,219.5,211.3,204.4,201.3,200.7,200.0,198.8,174.9,170.6,168.7,167.4,157.4,154.9,154.2,144.8,137.9,136.7,135.4,134.8,134.2,133.6,132.9,131.7,130.4,129.2,128.5,127.9,127.3,126.7,126.7,9999.0];
 const ZUG_PANO_SURF6 = [275.3,275.3,275.3,275.3,276.0,277.8,278.5,279.1,279.7,280.3,277.2,276.0,274.1,273.5,272.9,272.9,271.0,269.1,267.9,267.3,266.0,262.9,261.0,259.8,258.6,257.3,257.3,256.7,256.1,254.2,251.7,250.5,249.9,248.6,246.8,246.1,246.1,221.9,220.0,215.7,205.1,183.4,165.3,162.8,159.7,156.6,154.8,152.3,149.8,147.9,145.4,144.8,144.2,143.0,141.7,140.5,139.2,138.0,136.7,135.5,134.9,134.3,134.3,134.3,135.5,136.7,138.0,139.2,139.8,140.5,142.3,145.4,149.8,151.7,151.7,152.3,152.9,154.1,156.6,158.5,161.0,162.8,165.3,167.2,169.7,170.9,172.2,173.4,174.7,175.9,178.4,179.0,179.6,181.5,182.7,185.2,186.5,187.7,188.3,187.7,186.5,186.5,185.8,185.2,185.2,185.2,185.8,187.7,187.7,188.3,189.0,189.0,190.2,190.2,190.2,190.2,189.0,188.3,187.7,187.7,187.7,187.1,185.8,185.2,185.8,185.8,185.2,184.6,184.6,185.2,186.5,188.3,189.0,189.6,189.6,190.2,190.2,190.2,190.2,190.2,189.6,189.6,188.3,188.3,188.3,189.0,189.6,191.4,192.1,192.1,191.4,191.4,191.4,191.4,191.4,193.9,194.5,195.2,195.8,195.2,195.2,194.5,193.3,192.1,191.4,191.4,192.7,192.7,192.7,193.3,193.9,194.5,194.5,194.5,194.5,197.0,197.7,197.0,197.0,196.4,195.8,195.8,196.4,197.7,197.0,197.7,197.0,196.4,196.4,196.4,195.8,193.9,193.3,192.7,191.4,190.8,190.2,190.2,190.2,191.4,192.7,194.5,196.4,325.7,323.2,318.9,317.6,315.7,314.5,313.9,313.9,313.3,313.3,313.3,313.3,313.3,312.6,312.6,312.6,312.6,312.6,312.0,312.0,311.4,310.8,309.5,308.9,307.7,307.7,305.2,297.1,288.4,274.1,264.2,261.7,259.8,259.2,257.3,255.5,251.7,241.8,210.7,211.9,212.6,212.6,212.6,212.6,211.9,208.8,189.6,189.0,189.0,189.0,189.0,189.6,186.5,155.4,154.1,154.1,154.8,154.8,154.8,154.1,152.9,152.9,152.3,152.3,151.7,151.0,150.4,150.4];
+const ZUG_PANO_SURF7 = [191.4,191.4,191.4,192.7,193.9,193.9,193.9,195.2,195.2,195.2,196.4,196.4,192.7,195.2,195.2,195.2,193.9,193.9,195.2,195.2,195.2,192.7,195.2,195.2,193.9,193.9,193.9,193.9,196.4,196.4,197.7,196.4,196.4,197.7,196.4,196.4,196.4,196.4,196.4,195.2,192.7,192.7,193.9,190.2,190.2,189.0,190.2,190.2,191.4,190.2,190.2,191.4,189.0,189.0,190.2,190.2,190.2,189.0,191.4,191.4,189.0,189.0,189.0,189.0,187.7,187.7,186.5,186.5,186.5,187.7,187.7,187.7,186.5,186.5,186.5,185.2,185.2,185.2,187.7,189.0,189.0,186.5,187.7,187.7,189.0,191.4,191.4,191.4,192.7,192.7,192.7,190.2,191.4,191.4,190.2,190.2,190.2,190.2,190.2,190.2,190.2,191.4,191.4,191.4,192.7,192.7,193.9,195.2,195.2,195.2,196.4,196.4,195.2,196.4,196.4,195.2,196.4,196.4,196.4,195.2,195.2,196.4,193.9,193.9,195.2,192.7,192.7,193.9,193.9,193.9,193.9,195.2,195.2,192.7,192.7,192.7,195.2,193.9,193.9,193.9,192.7,192.7,191.4,192.7,192.7,191.4,192.7,192.7,190.2,187.7,187.7,189.0,189.0,189.0,187.7,187.7,187.7,186.5,187.7,187.7,187.7,187.7,187.7,187.7,189.0,189.0,189.0,189.0,189.0,189.0,190.2,190.2,189.0,189.0,189.0,189.0,186.5,186.5,186.5,187.7,189.0,189.0,186.5,190.2,190.2,191.4,189.0,189.0,191.4,191.4,191.4,193.9,193.9,193.9,192.7,192.7,192.7,192.7,192.7,192.7,192.7,192.7,192.7,191.4,193.9,193.9,193.9,193.9,193.9,195.2,195.2,195.2,195.2,195.2,195.2,196.4,197.7,197.7,196.4,196.4,196.4,197.7,196.4,196.4,195.2,195.2,195.2,193.9,193.9,193.9,191.4,191.4,191.4,192.7,190.2,190.2,191.4,190.2,190.2,192.7,192.7,192.7,193.9,191.4,191.4,191.4,191.4,191.4,191.4,189.0,189.0,189.0,187.7,187.7,189.0,187.7,187.7,185.2,187.7,187.7,187.7,185.2,185.2,186.5,187.7,187.7,186.5,186.5,186.5,190.2];   // seq7 deep-water waterline
 // `rope:true` hangs a descent rope off that platform's end (not every platform has one).
 const ZUG_PLATFORMS = [{x0:49,x1:196,top:170,rope:true}, {x0:312,x1:421,top:189}, {x0:531,x1:633,top:159,rope:true,shelter:true}];
 // A high floating ledge up-LEFT, above the regular platforms (drawn from
@@ -418,6 +421,7 @@ const SWING_DAMP    = 0.5;    // gentle per-second damping on angular velocity
 const SWING_MAX     = 1.45;   // max angle from vertical (~83deg) — never loops over the anchor
 const SWING_RELEASE = 1.05;   // (legacy) launch-velocity multiplier when letting go
 const SWING_LAUNCH  = 400;    // CONSTANT launch speed off the rope (independent of swing speed)
+const SWIM_SPEED    = 150;    // horizontal swim speed in deep water (seq7)
 const SWING_CLIMB   = 115;    // px/s the rope shortens while holding Up (climb toward anchor)
 const SWING_MIN_L   = 30;     // shortest rope length — Abu's hands near the anchor/clip
 const ROPE_TAP      = 0.16;   // s; a quick Up tap (< this) jumps off, a longer hold climbs
@@ -474,9 +478,11 @@ const LEVELS = [
     enemySurf: ZUG_SNAKE_SURF,   // (panorama uses the green-line surface; this is a harmless fallback)
     // Two parallax layers: far mountains (bg, slow) + transparent foreground
     // terrain (fg, 1:1) with 3 floating platforms; collision = surf + platforms.
-    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5", "fgZug6"],
-    fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5
-    fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6 },   // each sequence's collision follows its own green line
+    terrain: "natural", bgMode: "parallax", surf: ZUG_SURF, tileW: ZUG_TILE_W, fgTileW: 1350, fgYOffset: 32, fgList: ["fgZug", "fgZug2", "fgZug3", "fgZug4", "fgZug5", "fgZug6", "fgZug7"],
+    fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64, fgZug7: 130 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5; seq7 water dropped so the waterline sits lower (~y353)
+    fgAnim: { fgZug7: { n: 2, fps: 2 } },   // seq7 deep water ripples (2-frame strip)
+    waterZones: [{ x0: 8100, x1: 9450, top: 353 }],   // seq7 deep water: Abu swims across it
+    fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6, fgZug7: ZUG_PANO_SURF7 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
               { x0: 2645, x1: 2792, top: 122 },    // wood bridge on the seq2/seq3 mesa tops
@@ -2231,6 +2237,32 @@ function initPlayer() {
              throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false, prevDrink: false };
 }
 
+// Deep-water swim (seq7): inside a waterZone Abu SWIMS — he floats at the surface
+// (buoyancy), strokes left/right, holds Up to rise (and can leap out near the top) and
+// Down to dive. Returns true while swimming (skips normal walk/gravity this frame).
+function updateWater(dt) {
+  const lvl = currentLevel();
+  if (!lvl.waterZones) { player.inWater = false; return false; }
+  const cx = player.x + player.w / 2;
+  let z = null; for (const w of lvl.waterZones) if (cx >= w.x0 && cx <= w.x1) { z = w; break; }
+  if (!z) { player.inWater = false; return false; }
+  const feet = player.y + player.h;
+  if (!player.inWater && feet < z.top - 4) return false;   // approaching from above land — let him reach the water first
+  player.inWater = true;
+  player.swinging = false; player.swing = null; player.mantle = null; player.descend = null; player.launchVx = 0;
+  const left = anyKey(LEFT_KEYS), right = anyKey(RIGHT_KEYS), up = anyKey(JUMP_KEYS), down = anyKey(DOWN_KEYS);
+  const move = (right ? 1 : 0) - (left ? 1 : 0);
+  if (move) player.facing = move;
+  player.vx = move * SWIM_SPEED; player.x += player.vx * dt; if (player.x < 0) player.x = 0;
+  // vertical: spring toward a resting float depth (head/shoulders out), Up rises, Down dives; water damping
+  const floatFeet = z.top + 38 + (down ? 80 : 0) - (up ? 70 : 0);   // resting depth: body immersed at the surface
+  player.vy += (floatFeet - feet) * 10 * dt;
+  player.vy *= (1 - 5 * dt);
+  player.y += player.vy * dt;
+  player.onGround = false; player.exhausted = false; player.collapsed = false;
+  player.swimPhase = (player.swimPhase || 0) + dt * (move ? 9 : 5);
+  return true;
+}
 // Rope SWING + CLIMB (Level 4): a real pendulum hung from a high rock. Jump into a
 // rope to grab; hold Left/Right to pump the swing; HOLD Up to CLIMB up the rope (to
 // climb above the enemies); a quick TAP of Up jumps off with a real upward leap
@@ -2437,6 +2469,7 @@ function updatePlayer(dt) {
     }
     return;
   }
+  if (updateWater(dt)) return;     // in deep water (seq7) — swim this frame
   if (updateSwing(dt)) return;     // on a rope — the pendulum handles movement this frame
   if (player.mantle) { updateMantle(dt); return; }   // climbing a platform edge
   if (player.descend) { updateDescend(dt); return; } // climbing down a descent rope
@@ -3487,7 +3520,13 @@ function drawParallaxScene(lvl) {
         const adj = (yadj && yadj[key]) || 0;
         if (imgLoaded[key]) {
           const fg = images[key];
-          tctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
+          const an = lvl.fgAnim && lvl.fgAnim[key];   // animated painting (e.g. seq7 rippling water): pick a frame from a side-by-side strip
+          if (an) {
+            const cw = fg.naturalWidth / an.n, fi = Math.floor(performance.now() / (1000 / an.fps)) % an.n;
+            tctx.drawImage(fg, fi * cw, 0, cw, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
+          } else {
+            tctx.drawImage(fg, 0, 0, fg.naturalWidth, fg.naturalHeight, x, oy + adj, tileW + 1, VIEW_H);
+          }
         }
         // optional per-painting overlay (e.g. the anchored rope on seq 2), drawn
         // at the same dest so it aligns exactly with that painting.
@@ -4033,12 +4072,7 @@ function drawLifeItems() {
     if (e.collected) continue;
     const sx = e.x - cameraX;
     if (sx > VIEW_W || sx + e.w < 0) continue;
-    const pulse = 0.26 + 0.18 * (0.5 + 0.5 * Math.sin(performance.now() / 360 + e.t));   // soft golden "collect me" glow
     const dh = e.h, dw = dh * ratio;
-    ctx.save();
-    ctx.globalAlpha = pulse; ctx.fillStyle = "#FFE48A";
-    ctx.beginPath(); ctx.ellipse(sx + e.w / 2, e.y + e.h * 0.42, e.w * 0.62, e.h * 0.4, 0, 0, 6.28); ctx.fill();
-    ctx.restore();
     ctx.drawImage(img, sx + (e.w - dw) / 2, e.y + e.h - dh, dw, dh);   // foot-anchored (planted on the ground)
   }
 }
@@ -4366,6 +4400,19 @@ function drawPlayer() {
     ctx.translate(sx + player.w / 2, player.y + player.h);
     if (player.facing > 0) ctx.scale(-1, 1);
     ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh * footFrac, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // Deep-water swim (seq7): horizontal 6-frame stroke, centred on Abu's body at the surface.
+  if (player.inWater && imgLoaded.abuSwim) {
+    const img = images.abuSwim, n = 6, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const fi = Math.floor((player.swimPhase || 0)) % n;
+    const dh = player.h * 2.6, dw = dh * (cw / ch);   // wide horizontal swimmer
+    ctx.save();
+    ctx.translate(sx + player.w / 2, player.y + player.h / 2);
+    if (player.facing > 0) ctx.scale(-1, 1);          // art faces LEFT; flip to swim right
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -dw / 2, -dh * 0.502, dw, dh);   // content centred at 0.502
     ctx.restore();
     return;
   }

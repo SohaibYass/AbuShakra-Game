@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v164";
+const CACHE = "abushakra-v167";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,6 +23,7 @@ const ASSETS = [
   "./Zugspitze_Foreground_4.png",
   "./Zugspitze_Foreground_5.png",
   "./Zugspitze_Foreground_6.png",
+  "./Zugspitze_Foreground_Deep_Water_2frames.png",
   "./woodbridge.png",
   "./Zugspitze_Rope_Bridge.png",
   "./rope_anchor_hill.png",
@@ -101,7 +102,8 @@ const ASSETS = [
   "./level1_small_snowy_tree_2.png",
   "./small_rock_3.png",
   "./edelweiss.png",
-  "./abu_powered_walk.png"
+  "./abu_powered_walk.png",
+  "./abu_swimming_6frames_refined.png"
 ];
 
 self.addEventListener("install", (e) => {
