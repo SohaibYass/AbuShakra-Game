@@ -186,6 +186,8 @@
   <button class="test-btn" data-seq="5" aria-label="Test sequence 5">&#9654; S5</button>
   <button class="test-btn" data-seq="6" aria-label="Test sequence 6">&#9654; S6</button>
   <button class="test-btn" data-seq="7" aria-label="Test sequence 7">&#9654; S7</button>
+  <button class="test-btn" data-seq="8" aria-label="Test sequence 8">&#9654; S8</button>
+  <button class="test-btn" data-seq="9" aria-label="Test sequence 9">&#9654; S9</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -248,6 +250,7 @@ const ASSETS = {
   smallRock3:   "small_rock_3.png?v=1",                           // small snowy rock — scenery
   edelweiss:    "edelweiss.png?v=1",                              // alpine flower — scenery (seq6 cave)
   cliffSeam:    "Zugspitze_Symmetric_Cliff_Foreground_NoAbu_Clean.png?v=1",  // cliff that bridges seq6 -> seq7 (covers the seam, descends into the lake)
+  cliffSeam2:   "Zugspitze_Symmetric_Cliff_Foreground_NoAbu.png?v=1",        // cliff at the seq7 -> seq8 lake edge
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -533,7 +536,8 @@ const LEVELS = [
             { x: 5395, foot: 443, scale: 0.15, img: "snowyTree2" }],
     // Rock scenery (foot-anchored, like trees): a snowy rock at the vista-cut lip.
     rocks: [{ x: 6504, foot: 406, scale: 0.15, img: "smallRock3" },
-            { x: 8180, foot: 470, scale: 0.75, img: "cliffSeam" }],   // seq6->seq7 transition cliff (covers the seam, steps down into the lake)
+            { x: 8180, foot: 470, scale: 0.75, img: "cliffSeam" },   // seq6->seq7 transition cliff (covers the seam, steps down into the lake)
+            { x: 9574, foot: 433, scale: 0.75, img: "cliffSeam2" }],   // seq7->seq8 cliff at the lake's far edge
     lifeSpots: [{ x: 7050, top: 421 }],   // edelweiss on the seq6 cave floor: collect for +1 life
     // A placed eagle that perches on the nest peak, watches Abu, flushes when he nears,
     // and dive-bombs him (territorial-eagle mechanics ported from Level 3).
