@@ -260,9 +260,6 @@ const ASSETS = {
   wolfAttack:   "wolf_attack.png?v=1",                // 5-frame wolf: 0-2 walk/patrol, 3-4 lunge attack
   enemySnakeDistinct: "enemy_snake_distinct_3frames.png?v=1",  // distinct green snake, 3-frame walk (Level 1 patrol)
   enemyBabyEagle: "enemy_baby_eagle_attack.png?v=1",  // 5-frame baby eagle: 0-2 glide/flap, 3-4 talons-out attack dive (gear guard)
-  enemyBear:  "enemy_bear.png?v=1",     // side-on grizzly (static fallback)
-  enemyBearWalk: "enemy_bear_walk.png?v=2", // 4-frame grizzly walk strip (Level 2)
-  enemyGyr:   "enemy_gyrfalcon_walk.png?v=1", // 4-frame gyrfalcon flap strip (Level 3)
   enemyEagle: "enemy_eagle_walk.png?v=1",     // golden eagle, 3 frames (wings raised/level/lowered), faces left
   eagleLanding: "guardian_eagle_landing_2frame.png?v=1", // 2-frame perched/landed pose (used while sitting on the cliff)
 
@@ -345,15 +342,8 @@ const ASSETS = {
   smallBridge:    "Zugspitze_Small_Wood_Bridge.png?v=1",       // small plank bridge (seq9)
   ropeAnchorHill: "rope_anchor_hill.png?v=1",  // Level 1: anchored rope strung across seq 2 (overlay)
   horizontalRope: "Zugspitze_Horizontal_Anchor_Rope.png?v=1",  // Level 1: taut horizontal traverse rope (seq3 gaps)
-  abuClimbsHill:  "abu_climbshill.png?v=1",     // Level 1: 4-frame hand-over-hand traverse (hangs below the rope)
-  bgGlockBack: "Grossglockner_Back.png?v=1",    // Level 2 parallax: far mountains
-  fgGlock:     "Grossglockner_Front2.png?v=2",  // Level 2 parallax: near terrain + platforms (transparent)
-  bgGrandeBack: "Grande_Back.png?v=1",      // Level 3 parallax: far Dolomites towers
-  fgGrande:     "Grande_Front.png?v=1",     // Level 3 parallax: near terrain + platforms (transparent)
-  bgMatterhornBack: "Matterhorn_Back.png?v=1",   // Level 4 parallax: far Matterhorn
-  fgMatterhorn:     "Matterhorn_Front2.png?v=1", // Level 4 parallax: near terrain (platforms erased — ropes instead)
-  bgMontBlancBack:  "MontBlanc_Back.png?v=1",    // Level 5 parallax: far Mont Blanc massif
-  fgMontBlanc:      "MontBlanc_Front.png?v=1"    // Level 5 parallax: near snow ridge + platforms (transparent)
+  abuClimbsHill:  "abu_climbshill.png?v=1"     // Level 1: 4-frame hand-over-hand traverse (hangs below the rope)
+  // (Level 2-5 parallax backdrops removed in the Level-1-only release build)
 };
 
 /* =============================================================
@@ -720,6 +710,7 @@ const LEVELS = [
     terrain: "natural", bgMode: "parallax", surf: MB_FRONT_SURF, tileW: MB_FRONT_TILE_W, platforms: MB_FRONT_PLATFORMS,
     music: "level5_niknet_art-super-suspense-adrenaline-trailer-music-297760.mp3" }
 ];
+LEVELS.length = 1;   // RELEASE BUILD: publish Level 1 (Zugspitze) only; finishing it wins the game.
 
 // Elevated stone platforms (the ones you jump onto).
 const PLAT_GAP_MIN   = 150, PLAT_GAP_MAX = 300;   // horizontal spacing
@@ -5190,8 +5181,8 @@ function drawInstructions() {
     { t: "On phones, use the on-screen buttons", c: "#9fb6c8" },
     { t: "Carabiners +" + CARABINER_POINTS + "   ·   Stomp / knife enemies +" + STOMP_POINTS + "   →  your Score", c: "#cfe8ff" },
     { t: "To finish Level 1: collect 20 carabiners + 3 gear", c: "#ffe08a" },
-    { t: "(shoes · rope · helmet), reach the flag, then climb the rope!", c: "#ffe08a" },
-    { t: "Watch your POWER — rest at the cabin.  Climb all " + LEVELS.length + " peaks!", c: "#ffd27a" }
+    { t: "(shoes · rope · helmet), then reach the flag at the summit!", c: "#ffe08a" },
+    { t: "Watch your POWER — rest at the cabin.  Conquer the Zugspitze!", c: "#ffd27a" }
   ];
   ctx.font = "19px Segoe UI, Arial";
   let y = 118;
@@ -5324,7 +5315,7 @@ function drawWin() {
   recordBest();  // idempotent (only updates if higher)
   const lines = [
     { text: "★ YOU WIN! ★", font: "bold 52px Segoe UI, Arial", color: "#ffd84d", gap: 54 },
-    { text: "All " + LEVELS.length + " Alpine peaks conquered", font: "22px Segoe UI, Arial", color: "#ffffff", gap: 44 },
+    { text: "The Zugspitze has been conquered", font: "22px Segoe UI, Arial", color: "#ffffff", gap: 44 },
     { text: "Final Score: " + score + "      Best: " + bestScore, font: "26px Segoe UI, Arial", gap: 48 }
   ];
   if (newBest) lines.push({ text: "★ NEW BEST! ★", font: "bold 28px Segoe UI, Arial", color: "#7bd36a", gap: 48 });

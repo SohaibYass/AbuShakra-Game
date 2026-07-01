@@ -1,5 +1,5 @@
 // Offline app-shell cache. Bump CACHE when files change to refresh clients.
-const CACHE = "abushakra-v192";
+const CACHE = "abushakra-v193";
 const ASSETS = [
   "./",
   "./index.html",
@@ -48,25 +48,10 @@ const ASSETS = [
   "./Zugspitze_Collapsing_Rock_Ledge_3frames.png",
   "./collapse_ledge_v2.png",
   "./level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
-  "./level2_energysound-action-risk-countdown-trailer-509281.mp3",
-  "./level3_luis_humanoide-sport-news-formula-1-vibes-265165.mp3",
-  "./level4_niknet_art-thriller-action-trailer-336723.mp3",
-  "./level5_niknet_art-super-suspense-adrenaline-trailer-music-297760.mp3",
-  "./Grossglockner_Back.png",
-  "./Grossglockner_Front2.png",
-  "./Grande_Back.png",
-  "./Grande_Front.png",
-  "./Matterhorn_Back.png",
-  "./Matterhorn_Front2.png",
-  "./MontBlanc_Back.png",
-  "./MontBlanc_Front.png",
   "./character.png",
   "./character_walk.png",
   "./enemy.png",
   "./enemy_snake.png",
-  "./enemy_bear.png",
-  "./enemy_bear_walk.png",
-  "./enemy_gyrfalcon_walk.png",
   "./enemy_wolf_walk.png",
   "./platform.png",
   "./carabiner.png",
