@@ -219,6 +219,7 @@
   <button class="test-btn" data-seq="7" aria-label="Test sequence 7">&#9654; S7</button>
   <button class="test-btn" data-seq="8" aria-label="Test sequence 8">&#9654; S8</button>
   <button class="test-btn" data-seq="9" aria-label="Test sequence 9">&#9654; S9</button>
+  <button class="test-btn" data-action="gate" aria-label="Test summit gate on seq9 with all gear">&#9654; Gate</button>
 </div>
 <div id="touch-controls">
   <div id="btn-left"  class="btn">&#9664;</div>
@@ -615,8 +616,9 @@ const LEVELS = [
                      { x: 4903, top: 225, img: "collapseLedge2", scale: 0.5, linger: 0.3 },   // seq4 void: floating collapsing footholds (v2 island, 0.5x, crumble fast)
                      { x: 5018, top: 100, img: "collapseLedge2", scale: 0.5, linger: 0.3 },
                      { x: 4986, top: 391, img: "collapseLedge2", scale: 0.5, linger: 0.3 }],
-    gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
-                { id: "rope",  x: 7134, top: 413, guard: "eagle", eagleX: 1775, eagleY: -100 }],   // rope on the seq6 cave floor; the flying-eagle hazard still hovers in seq2 at x1775/y-100
+    gearSpots: [{ id: "shoes",  x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
+                { id: "rope",   x: 7134, top: 413, guard: "eagle", eagleX: 1775, eagleY: -100 },   // rope on the seq6 cave floor; the flying-eagle hazard still hovers in seq2 at x1775/y-100
+                { id: "helmet", x: 1950, top: -22, guard: false }],   // helmet up on seq2's highest stepping rock (no ground guard; the seq2 eagle hovers nearby)
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
     // Info checkpoints: a scroll icon floats at each x; press I nearby to open the info card.
     infoPoints: [{ x: 210,  card: "infoCard1" },     // seq1: "The Climb Begins"
@@ -651,7 +653,7 @@ const LEVELS = [
     platforms: null,   // TEST: old floating platforms / descent ropes / upper ledges removed to inspect the collision line
     music: "level1_music_cramosicamus-persecucion-autor-marcos-molina-113857.mp3",
     jumpMul: 0.86, ledgeGrab: true, descend: false, power: true, upperPlat: false, camLift: true, groundClipsOnly: true, sparseClips: true,
-    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"] } },   // finale: collect all -> climb the summit hill
+    climbGate: { carabiners: 20, gear: ["shoes", "rope", "helmet"], armX: 10862, gateX: 12079 } },   // finale: collect all + reach the seq9 launch ledge -> the summit checkpoint appears at x12079 (across the parachute chasm)
     // (Level 1 victory cutscene temporarily disabled — re-add cutscene:"Zugspitze_victory.mp4" to restore.)
   { id: 2, name: "Grossglockner", country: "Austria", bg: "bgGlockBack", fg: "fgGlock", target: 40,
     enemySpeedMul: 1.35, spawnMul: 0.75,
@@ -1195,7 +1197,8 @@ const testBtns = document.getElementById("test-buttons");
 testBtns.querySelectorAll(".test-btn").forEach((b) =>
   b.addEventListener("click", (e) => {
     e.preventDefault();
-    if (b.dataset.seq) startAtSeq(+b.dataset.seq);
+    if (b.dataset.action === "gate") testSummitGate();
+    else if (b.dataset.seq) startAtSeq(+b.dataset.seq);
   }));
 // Dev: start Level 1 with Abu dropped at the start of sequence N (1-based), so
 // each panorama sequence can be tested without replaying from the beginning.
@@ -1218,6 +1221,22 @@ function testSummitClimb() {
   carabinersThisLevel = 20;
   gearThisLevel = { shoes: true, rope: true, helmet: true };
   startSummitClimb();
+}
+// Dev: drop Abu on seq9 already carrying 20 carabiners + all gear + the parachute, just
+// before the launch ledge — so the summit gate (armX/gateX) can be tested end-to-end.
+function testSummitGate() {
+  startAtLevel(0);
+  carabinersThisLevel = 20;
+  gearThisLevel = { shoes: true, rope: true, helmet: true };
+  player.hasParachute = true; player.parachuting = false; player.parachuteDone = false;
+  let x = 10740;                                   // seq9 spire, just before the parachute launch (x10870)
+  for (let t = 0; t < 140 && surfaceY(x) >= 5000; t++) x += 8;   // step onto solid ground if it's a gap
+  player.x = x; player.vx = 0; player.vy = 0; player.onGround = true;
+  player.y = surfaceY(x) - player.h;
+  lastSafeX = x; lastSafeFeetY = surfaceY(x);
+  cameraX = Math.max(0, x - VIEW_W * 0.4); cameraY = 0;
+  worldGenX = Math.max(worldGenX, x + 1400);
+  generateAhead();
 }
 // Only show the test buttons on the cover screen.
 let _testBtnVis = null;
@@ -1612,6 +1631,7 @@ function generateAhead() {
 // Level 4: a single ground clip per tile at a random spot — sparse, so Abu mostly
 // scores by stomping the wolves/falcons rather than collecting.
 function placeSparseGroundClips(tile, tw) {
+  if (tile % 2 !== 0 || tile > 18) return;   // 10 auto ground clips total: every other tile across seq1..seq9
   const x = tile * tw + rand(0.25, 0.75) * tw;
   const bottom = surfaceY(x) - rand(10, 24);
   carabiners.push({ x: x - CARABINER_W / 2, y: bottom - CARABINER_H, w: CARABINER_W, h: CARABINER_H, t: Math.random() * 6.28 });
@@ -5490,13 +5510,19 @@ function summitGateMet() {
 // Arm the gate (once) and trigger the climb when Abu reaches it.
 function checkClimbGate() {
   const lvl = currentLevel();
-  if (!lvl.climbGate || state !== "playing" || inClimb) return;
-  if (!summitReady && summitGateMet()) {
+  const g = lvl.climbGate;
+  if (!g || state !== "playing" || inClimb) return;
+  // Arm once the gate is met AND (if armX is set) Abu has reached that launch point.
+  if (!summitReady && summitGateMet() && player.x >= (g.armX != null ? g.armX : -1e9)) {
     summitReady = true;
-    const tw = lvl.tileW;
-    let gx = (Math.floor(player.x / tw) + 1) * tw;   // end of the current loop
-    if (gx - player.x < 360) gx += tw;               // give him room to walk to it
-    summitGateX = gx;
+    if (g.gateX != null) {
+      summitGateX = g.gateX;                         // fixed checkpoint location (seq9, across the chasm)
+    } else {
+      const tw = lvl.tileW;
+      let gx = (Math.floor(player.x / tw) + 1) * tw; // else: end of the current loop
+      if (gx - player.x < 360) gx += tw;             // give him room to walk to it
+      summitGateX = gx;
+    }
     toast = { text: "All gear ready — reach the summit!", timer: 2.6 };
   }
   if (summitReady && player.onGround && player.x + player.w / 2 >= summitGateX) {
