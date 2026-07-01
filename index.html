@@ -296,6 +296,8 @@ const ASSETS = {
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
   abuPoweredWalk: "abu_powered_walk.png?v=1",                     // 3-frame buffed walk (while powered)
   abuSwim:     "abu_swimming_6frames_refined.png?v=1",            // 6-frame swim (seq7 deep water)
+  abuParachute:  "abu_parachute_fly_4frames.png?v=1",             // 4-frame parachute glide (seq9)
+  parachuteIcon: "parachute_icon.png?v=1",                        // parachute canopy pickup marker (seq8)
   abuGearup:  "abu_gearup.png?v=1",  // 5-frame gear-up (shoes -> helmet -> rope) before the summit climb
   abuRopeClimb: "abu_ropeclimb.png?v=1", // 4-frame hand-over-hand rope climb up the summit hill
   climbRopeSeg: "climb_rope_seg.png?v=1", // tileable braided rope (drawn along the climb path)
@@ -557,6 +559,10 @@ const LEVELS = [
     wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true }],
     crocs: [{ x0: 8360, x1: 9320, bottom: 452, surf: 360, hp: 1 }],   // seq7 lake: crocodile lurks at the bottom, lunges up at a swimmer (1 harpoon kills)
     weaponSpots: [{ x: 8090, top: 246 }],   // speargun on the seq6 rock before the lake
+    // Parachute: collect the canopy in seq8, then it auto-deploys at the seq9 launch ledge
+    // and cruises Abu across the chasm to the far bridge.
+    parachuteSpot: { x: 10799, top: 145 },   // seq8 pickup (surface ~139)
+    parachuteRun: { x0: 10870, y0: 139, x1: 12046, y1: 94, speed: 190 },   // seq9 glide: launch -> land on the far bridge
     // Horizontal anchor rope Abu traverses hand-over-hand across the seq3 gap section.
     climbRopes: [{ x0: 2983, x1: 3314, y: 120, carabiners: 5, guard: "eagle" }],
     // Planted rectangular flags-on-a-stick (scenery), foot resting on the surface.
@@ -1071,6 +1077,7 @@ const Music = (() => {
     sfxEagleTakeoff() { if (!sfxReady()) return; const t = actx.currentTime; slide(170, 90, t, 0.11, "triangle", 0.2); slide(150, 80, t + 0.1, 0.11, "triangle", 0.17); },  // two wing beats
     sfxScrollOpen()  { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.36, 0.42, 520, 3000, 1.0); slide(360, 780, t, 0.30, "triangle", 0.34); blip(1050, t + 0.28, 0.12, "sine", 0.28); },   // parchment unfurl (louder/brighter: rustle up + open tone + settle)
     sfxScrollClose() { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.26, 0.18, 2700, 480, 1.0); slide(600, 260, t, 0.20, "triangle", 0.14); },   // roll back up (rustle down)
+    sfxParachute()   { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.55, 0.30, 300, 1500, 0.8); slide(200, 440, t, 0.5, "triangle", 0.16); },   // canopy deploy: airy fabric whoosh
     // Enemy proximity voices (vol fades with distance, passed in by the caller).
     // Snake: a sibilant "sssss" — airy high band-pass noise (broad Q) with a faint
     // lower layer for body, swelling then trailing off.
@@ -2367,7 +2374,8 @@ function initPlayer() {
              onPlatform: false, exhausted: false, collapsed: false, collapseTimer: 0,
              airPeakY: 0, fatalFalling: false, dying: false, dyingTimer: 0,
              throwing: false, throwTimer: 0, threw: false, throwCd: 0, prevThrow: false, prevDrink: false,
-             hasHarpoon: false, harpoonAnimT: 0 };
+             hasHarpoon: false, harpoonAnimT: 0,
+             hasParachute: false, parachuting: false, parachuteDone: false, paraAnim: 0 };
 }
 
 // Deep-water swim (seq7): inside a waterZone Abu SWIMS — he floats at the surface
@@ -2607,6 +2615,72 @@ function updateWaterAmbience(dt) {
   waterDuck += (target - waterDuck) * Math.min(1, (target > waterDuck ? 6 : 2.5) * dt);
   Music.setWaterLevel(waterDuck);
 }
+// Parachute glide (Level 1, seq9): once Abu has the canopy, reaching the launch ledge
+// (run.x0) auto-deploys it and cruises him along a straight path to the far landing
+// point (run.x1), where he lands and resumes normal play.
+const PARA_FOOT_FRAC = 0.918;   // where the flier's feet sit in the sprite frame
+const PARA_SINK = 20, PARA_CLIMB = 82, PARA_DIVE = 120;   // px/s: gentle default sink, ↑ climb, ↓ dive
+const PARA_MIN_FEET = 46, PARA_MAX_FEET = 224;            // altitude band Abu can steer within
+function updateParachute(dt) {
+  const run = currentLevel().parachuteRun;
+  if (!run) return false;
+  if (player.parachuting) {
+    player.paraAnim += dt;
+    player.x += run.speed * dt;                            // steady forward cruise
+    let vy = PARA_SINK;                                    // parachute drifts down by default...
+    if (anyKey(JUMP_KEYS)) vy = -PARA_CLIMB;               // ...hold ↑ to climb...
+    else if (anyKey(DOWN_KEYS)) vy = PARA_DIVE;            // ...hold ↓ to drop faster
+    player.paraFeet = Math.max(PARA_MIN_FEET, Math.min(PARA_MAX_FEET, player.paraFeet + vy * dt));
+    let landY = surfaceY(run.x1); if (landY >= 5000) landY = run.y1;
+    const easeStart = run.x1 - 150;                        // ease to the landing height over the last stretch
+    if (player.x > easeStart) {
+      const b = Math.min(1, (player.x - easeStart) / 150);
+      player.paraFeet = player.paraFeet * (1 - b) + landY * b;
+    }
+    player.y = player.paraFeet - player.h;
+    player.vx = 0; player.vy = 0; player.onGround = false; player.onPlatform = false; player.facing = 1;
+    if (player.x >= run.x1) {                              // arrived — land on the far side
+      player.x = run.x1; player.parachuting = false; player.parachuteDone = true;
+      player.y = landY - player.h; player.onGround = true; player.vy = 0;
+      lastSafeX = player.x; lastSafeFeetY = player.y + player.h;
+    }
+    return true;
+  }
+  if (player.hasParachute && !player.parachuteDone && player.x >= run.x0 && player.x < run.x1) {
+    player.parachuting = true; player.paraAnim = 0; player.paraFeet = run.y0; Music.sfxParachute();   // deploy
+    return true;
+  }
+  return false;
+}
+function parachuteBox() {
+  const sp = currentLevel().parachuteSpot; if (!sp) return null;
+  const W = 46, H = 52;
+  return { x: sp.x - W / 2, y: sp.top - H, w: W, h: H };
+}
+function handleParachuteItem() {
+  if (player.hasParachute) return;
+  const box = parachuteBox(); if (!box) return;
+  if (aabb(player, box)) {
+    player.hasParachute = true;
+    sparkleBurst(box.x + box.w / 2, box.y + box.h / 2);
+    Music.sfxGear();
+    toast = { text: "Parachute! Walk to the ledge to glide", timer: 2.2 };
+  }
+}
+function drawParachuteIcon() {
+  const box = parachuteBox();
+  if (!box || player.hasParachute || player.parachuteDone || !imgLoaded.parachuteIcon) return;
+  const sx = box.x - cameraX; if (sx > VIEW_W || sx + box.w < 0) return;
+  const img = images.parachuteIcon, ratio = img.naturalWidth / img.naturalHeight;
+  const bob = Math.sin(performance.now() / 320) * 3, cy = box.y + bob;
+  const pulse = 0.4 + 0.22 * (0.5 + 0.5 * Math.sin(performance.now() / 280));
+  ctx.save();
+  ctx.globalAlpha = pulse; ctx.fillStyle = "#ffe07a";
+  ctx.beginPath(); ctx.ellipse(sx + box.w / 2, cy + box.h / 2, box.w * 0.62, box.h * 0.66, 0, 0, 6.28); ctx.fill();
+  ctx.restore();
+  const dw = box.w, dh = dw / ratio;
+  ctx.drawImage(img, sx + (box.w - dw) / 2, cy + box.h - dh, dw, dh);
+}
 function updatePlayer(dt) {
   if (player.dying) {              // death animation — play it out, then dock a life + respawn at the sequence start
     player.vx = 0; player.dyingTimer -= dt;
@@ -2617,6 +2691,7 @@ function updatePlayer(dt) {
     }
     return;
   }
+  if (updateParachute(dt)) return; // parachute glide across the seq9 chasm
   if (updateWater(dt)) return;     // in deep water (seq7) — swim this frame
   if (updateSwing(dt)) return;     // on a rope — the pendulum handles movement this frame
   if (player.mantle) { updateMantle(dt); return; }   // climbing a platform edge
@@ -3131,6 +3206,7 @@ function handleGear() {
   gearItems = gearItems.filter(it => !it.collected);
 }
 function handleHazards() {
+  if (player.parachuting) return;   // gliding across the chasm — no fall hazards
   // Empty holes — falling in costs a life; rescue back to the near solid edge.
   const cx = player.x + player.w / 2;
   if (player.y + player.h > GROUND_Y + PIT_FALL_DEPTH) {
@@ -4697,6 +4773,18 @@ function drawPlayer() {
     return;
   }
   // Deep-water swim (seq7): horizontal 6-frame stroke, centred on Abu's body at the surface.
+  if (player.parachuting && imgLoaded.abuParachute) {
+    const img = images.abuParachute, n = 4, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const fi = Math.floor(player.paraAnim * 6) % n;              // ~6 fps canopy sway
+    const DH = 152, DW = DH * cw / ch;
+    const drawTop = (player.y + player.h) - PARA_FOOT_FRAC * DH;  // align the flier's feet to Abu's feet
+    ctx.save();
+    ctx.translate(sx + player.w / 2, drawTop + DH / 2);
+    ctx.scale(-1, 1);                                            // flip to face the direction of travel
+    ctx.drawImage(img, fi * cw, 0, cw, ch, -DW / 2, -DH / 2, DW, DH);
+    ctx.restore();
+    return;
+  }
   if (player.inWater && imgLoaded.abuSwim) {
     const img = images.abuSwim, n = 6, cw = img.naturalWidth / n, ch = img.naturalHeight;
     const fi = Math.floor((player.swimPhase || 0)) % n;
@@ -5511,6 +5599,7 @@ function update(dt) {
   handleEnergyItems();
   handleLifeItems();
   handleWeaponItems();
+  handleParachuteItem();
   updateDrink();         // drink a stored energy bottle on the use key
   handleGear();
   handleHazards();
@@ -5720,6 +5809,7 @@ function draw() {
   drawEnergyItems();       // energy-bottle stamina pickups (Level 1)
   drawLifeItems();         // edelweiss life pickups (Level 1)
   drawWeaponItems();       // speargun pickup (Level 1 seq6)
+  drawParachuteIcon();     // parachute canopy pickup (Level 1 seq8)
   drawGear();              // collectible shoes / rope / helmet on the path
   drawSummitMarker();      // summit-climb beacon once all gear is collected
   drawEnemies();
