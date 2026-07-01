@@ -5761,18 +5761,26 @@ function drawInfoIcons() {   // world space (inside the camera transform)
     const p = lvl.infoPoints[i];
     const sx = p.x - cameraX;
     if (sx < -60 || sx > VIEW_W + 60) continue;
-    const gy = surfaceY(p.x); const base = (gy >= 5000 ? 380 : gy) - 92;   // float above the ground
+    const gy = surfaceY(p.x); const base = (gy >= 5000 ? 380 : gy) - 80;   // float above the ground (lowered a touch)
     const bob = Math.sin(t * 2 + i) * 4, S = 46;
-    ctx.drawImage(images.infoIcon, sx - S / 2, base + bob - S / 2, S, S);
-    if (infoNear === i && infoOpen < 0 && imgLoaded.infoBtn) {
-      const B = 26, gap = 4, cy = base + bob + S / 2 - 2;   // "Press [i]" prompt just below the scroll icon
+    const cx = sx, cy = base + bob;                        // scroll-icon centre
+    ctx.drawImage(images.infoIcon, cx - S / 2, cy - S / 2, S, S);
+    if (infoNear === i && infoOpen < 0) {
+      // "i" button badged on the UPPER-RIGHT corner of the scroll icon (mostly outside it, on the sky, so it stands out)
+      if (imgLoaded.infoBtn) {
+        const B = 30;
+        ctx.drawImage(images.infoBtn, cx + S / 2 - B * 0.6, cy - S / 2 - B * 0.55, B, B);
+      }
+      // "Press [i]" centred just below the scroll icon: the word + a small i-button beside it
       ctx.font = "bold 14px Segoe UI, Arial";
-      const label = "Press", tw = ctx.measureText(label).width;
-      const startX = sx - (tw + gap + B) / 2;              // center "Press" + icon together
+      const label = "Press", b = 20, gap = 1;
+      const tw = ctx.measureText(label).width;
+      const startX = cx - (tw + gap + b) / 2;         // centre "Press" + the small button as one unit
+      const ty = cy + S / 2 + 2, midY = ty + b / 2;
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillText(label, startX + 1, cy + B / 2 + 1);   // shadow
-      ctx.fillStyle = "#ffe07a"; ctx.fillText(label, startX, cy + B / 2);
-      ctx.drawImage(images.infoBtn, startX + tw + gap, cy, B, B);
+      ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillText(label, startX + 1, midY + 1);   // shadow
+      ctx.fillStyle = "#ffe07a"; ctx.fillText(label, startX, midY);
+      if (imgLoaded.infoBtn) ctx.drawImage(images.infoBtn, startX + tw + gap, ty, b, b);
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
   }
