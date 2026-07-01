@@ -106,16 +106,26 @@
     z-index: 30;
     cursor: pointer;
   }
-  #info-overlay.show { display: flex; }
+  #info-overlay.show { display: flex; animation: infoDimIn 0.3s ease both; }
   #info-card {
     max-height: 90vh; max-width: 94vw;
     object-fit: contain;
     border-radius: 8px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.6);
   }
+  /* scroll "unrolls" open from the top */
+  #info-overlay.show #info-card { transform-origin: top center; animation: scrollUnroll 0.5s cubic-bezier(0.22,1,0.36,1) both; }
   #info-hint {
     color: #fff; font: 600 15px "Segoe UI", Arial, sans-serif;
     background: rgba(0,0,0,0.5); padding: 5px 14px; border-radius: 14px;
+  }
+  #info-overlay.show #info-hint { animation: infoFadeIn 0.6s ease both; }
+  @keyframes infoDimIn { from { background: rgba(0,0,0,0); } to { background: rgba(0,0,0,0.72); } }
+  @keyframes infoFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes scrollUnroll {
+    0%   { transform: scaleY(0.05) scaleX(0.72); opacity: 0; }
+    55%  { transform: scaleY(1.05) scaleX(1.02); opacity: 1; }
+    100% { transform: scaleY(1) scaleX(1); opacity: 1; }
   }
   #test-buttons {
     position: fixed;
@@ -274,6 +284,12 @@ const ASSETS = {
   cliffSeam2:   "Zugspitze_Symmetric_Cliff_Foreground_NoAbu.png?v=1",        // cliff at the seq7 -> seq8 lake edge
   infoIcon:     "infopoint_icon.png?v=1",   // floating scroll marker at an info checkpoint (press I to open)
   infoCard1:    "info_point1.png?v=1",       // Level 1 seq1 info card (Arabic)
+  infoCard2:    "info_point2.png?v=2",       // Level 1 seq1->seq2 "Cross the Heights" info card (Arabic)
+  infoCard3:    "info_point3.png?v=1",       // Level 1 seq3 "Traverse & Rest" info card (Arabic)
+  infoCard4:    "info_point4.png?v=1",       // Level 1 seq4 "The Void & the Surge" info card (Arabic)
+  infoCard5:    "info_point5.png?v=1",       // Level 1 seq5 "Ice Slide & Swing" info card (Arabic)
+  infoCard6:    "info_point6.png?v=1",       // Level 1 seq6 "The Cave & the Wolf" info card (Arabic)
+  infoCard7:    "info_point7.png?v=1",       // Level 1 seq7 "The Lake & the Crocodile" info card (Arabic)
   infoBtn:      "infoicon_button.png?v=1",   // "i" prompt shown by the checkpoint icon
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
@@ -597,7 +613,13 @@ const LEVELS = [
                 { id: "rope",  x: 7134, top: 413, guard: "eagle", eagleX: 1775, eagleY: -100 }],   // rope on the seq6 cave floor; the flying-eagle hazard still hovers in seq2 at x1775/y-100
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
     // Info checkpoints: a scroll icon floats at each x; press I nearby to open the info card.
-    infoPoints: [{ x: 210, card: "infoCard1" }],   // seq1: "The Climb Begins"
+    infoPoints: [{ x: 210,  card: "infoCard1" },     // seq1: "The Climb Begins"
+                 { x: 1180, card: "infoCard2" },     // seq1->seq2: "Cross the Heights"
+                 { x: 2850, card: "infoCard3" },     // seq3: "Traverse & Rest"
+                 { x: 4250, card: "infoCard4" },     // seq4: "The Void & the Surge"
+                 { x: 5354, card: "infoCard5" },     // seq5: "Ice Slide & Swing" (high ledge before the ice slide)
+                 { x: 7246, card: "infoCard6" },     // seq6: "The Cave & the Wolf"
+                 { x: 8187, card: "infoCard7" }],    // seq7: "The Lake & the Crocodile"
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
                  { x: 1910, top: 211 },    // knife on seq2's lowest stepping rock
@@ -810,8 +832,8 @@ window.addEventListener("keydown", (e) => {
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
   // I = open/close the info card (only when standing at a checkpoint).
   if (e.code === "KeyI" && !e.repeat && state === "playing") {
-    if (infoOpen >= 0) infoOpen = -1;
-    else if (infoNear >= 0) infoOpen = infoNear;
+    if (infoOpen >= 0) closeInfoCard();
+    else if (infoNear >= 0) openInfoCard(infoNear);
   }
   // Any of jump / Enter / R advances whichever non-play screen we're on.
   // Ignore key auto-repeat so a held key can't skip through screens.
@@ -822,7 +844,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => { keys[e.code] = false; });
 // Tap/click anywhere on the info overlay closes it.
 document.getElementById("info-overlay").addEventListener("pointerdown", (e) => {
-  infoOpen = -1; syncInfoOverlay(); e.preventDefault(); e.stopPropagation();
+  closeInfoCard(); e.preventDefault(); e.stopPropagation();
 });
 // (mouse clicks are handled by the single pointerdown listener below — no
 //  separate mousedown handler, which would double-advance the start screens.)
@@ -1047,6 +1069,8 @@ const Music = (() => {
     sfxEagleDive()    { if (!sfxReady()) return; slide(620, 170, actx.currentTime, 0.32, "sawtooth", 0.24); },   // fast wind swoosh
     sfxEagleHit()     { if (!sfxReady()) return; slide(220, 70, actx.currentTime, 0.14, "triangle", 0.4); },     // feather/impact
     sfxEagleTakeoff() { if (!sfxReady()) return; const t = actx.currentTime; slide(170, 90, t, 0.11, "triangle", 0.2); slide(150, 80, t + 0.1, 0.11, "triangle", 0.17); },  // two wing beats
+    sfxScrollOpen()  { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.36, 0.42, 520, 3000, 1.0); slide(360, 780, t, 0.30, "triangle", 0.34); blip(1050, t + 0.28, 0.12, "sine", 0.28); },   // parchment unfurl (louder/brighter: rustle up + open tone + settle)
+    sfxScrollClose() { if (!sfxReady()) return; const t = actx.currentTime; noise(t, 0.26, 0.18, 2700, 480, 1.0); slide(600, 260, t, 0.20, "triangle", 0.14); },   // roll back up (rustle down)
     // Enemy proximity voices (vol fades with distance, passed in by the caller).
     // Snake: a sibilant "sssss" — airy high band-pass noise (broad Q) with a faint
     // lower layer for body, swelling then trailing off.
@@ -5644,6 +5668,8 @@ function drawInfoIcons() {   // world space (inside the camera transform)
 }
 // The info card is shown as a real DOM <img> overlay (full resolution / crisp) rather than
 // drawn into the low-res game canvas. syncInfoOverlay() reflects infoOpen into the DOM.
+function openInfoCard(i) { if (infoOpen === i) return; infoOpen = i; Music.sfxScrollOpen(); syncInfoOverlay(); }
+function closeInfoCard() { if (infoOpen < 0) return; infoOpen = -1; Music.sfxScrollClose(); syncInfoOverlay(); }
 function syncInfoOverlay() {
   const ov = document.getElementById("info-overlay");
   if (!ov) return;
