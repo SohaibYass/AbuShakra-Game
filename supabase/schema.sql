@@ -60,6 +60,11 @@ create table if not exists public.players (
   birth_year     smallint not null check (birth_year between 1900 and 2100),
   age_group      text not null check (age_group in ('under_13','13_17','18_plus')),
   privacy_version text not null,
+  first_name     text,
+  last_name      text,
+  email          text,
+  phone_vorwahl  text,
+  phone_number   text,
   created_at     timestamptz not null default now(),
   -- name rules: 3–20 chars, letters/numbers/space/_/- (validated after trim by trigger too)
   constraint players_display_name_len check (char_length(btrim(display_name)) between 3 and 20),
@@ -81,8 +86,9 @@ begin
   else return '18_plus'; end if;
 end $$;
 
--- Validate + normalise a player row on insert/update: trim name, enforce the
--- blocked-word list, recompute age_group from birth fields, reject under_13.
+-- Validate + normalise a player row on insert/update: trim name + contact fields,
+-- enforce the blocked-word list, check email format, and recompute age_group from
+-- birth fields. Players from age 1 are allowed (no under_13 rejection).
 create or replace function public.players_validate()
 returns trigger language plpgsql as $$
 declare
@@ -104,11 +110,19 @@ begin
   if new.birth_month not between 1 and 12 then raise exception 'INVALID_BIRTH_MONTH'; end if;
   if new.birth_year  not between 1900 and (extract(year from now())::int) then raise exception 'INVALID_BIRTH_YEAR'; end if;
 
+  -- Contact fields: trim + basic email check (optional at the DB level; the client requires them).
+  new.first_name    := btrim(new.first_name);
+  new.last_name     := btrim(new.last_name);
+  new.email         := btrim(new.email);
+  new.phone_vorwahl := btrim(new.phone_vorwahl);
+  new.phone_number  := btrim(new.phone_number);
+  if new.email is not null and new.email <> '' and new.email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'INVALID_EMAIL';
+  end if;
+
   computed := public.compute_age_group(new.birth_month, new.birth_year);
   new.age_group := computed;                    -- always trust the server's computation
-  if computed = 'under_13' then
-    raise exception 'UNDER_13';                 -- neutral message handled client-side
-  end if;
+  -- Age rule: players from age 1 are allowed (no UNDER_13 rejection).
   return new;
 end $$;
 
