@@ -97,6 +97,26 @@
   #btn-leaderboard:active { filter: brightness(1.2); }
 
   /* Dev/test shortcuts — jump straight into a level. Only shown on the cover. */
+  /* Info-checkpoint card: full-resolution DOM overlay (crisp, not drawn into the canvas). */
+  #info-overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+    background: rgba(0,0,0,0.72);
+    z-index: 30;
+    cursor: pointer;
+  }
+  #info-overlay.show { display: flex; }
+  #info-card {
+    max-height: 90vh; max-width: 94vw;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+  #info-hint {
+    color: #fff; font: 600 15px "Segoe UI", Arial, sans-serif;
+    background: rgba(0,0,0,0.5); padding: 5px 14px; border-radius: 14px;
+  }
   #test-buttons {
     position: fixed;
     top: max(14px, env(safe-area-inset-top));
@@ -176,6 +196,7 @@
 </head>
 <body>
 <canvas id="game" width="800" height="450"></canvas>
+<div id="info-overlay"><img id="info-card" alt="info point"><div id="info-hint">&#9432;&nbsp; press I or tap to close</div></div>
 <button id="btn-mute" aria-label="Toggle music">&#128266;</button>
 <button id="btn-fullscreen" aria-label="Fullscreen">&#9974;</button>
 <div id="test-buttons">
@@ -251,6 +272,9 @@ const ASSETS = {
   edelweiss:    "edelweiss.png?v=1",                              // alpine flower — scenery (seq6 cave)
   cliffSeam:    "Zugspitze_Symmetric_Cliff_Foreground_NoAbu_Clean.png?v=1",  // cliff that bridges seq6 -> seq7 (covers the seam, descends into the lake)
   cliffSeam2:   "Zugspitze_Symmetric_Cliff_Foreground_NoAbu.png?v=1",        // cliff at the seq7 -> seq8 lake edge
+  infoIcon:     "infopoint_icon.png?v=1",   // floating scroll marker at an info checkpoint (press I to open)
+  infoCard1:    "info_point1.png?v=1",       // Level 1 seq1 info card (Arabic)
+  infoBtn:      "infoicon_button.png?v=1",   // "i" prompt shown by the checkpoint icon
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -572,6 +596,8 @@ const LEVELS = [
     gearSpots: [{ id: "shoes", x: 145,  top: 110, gw: 110 },   // shoes on seq1's 1st ledge, red-snake guarded
                 { id: "rope",  x: 7134, top: 413, guard: "eagle", eagleX: 1775, eagleY: -100 }],   // rope on the seq6 cave floor; the flying-eagle hazard still hovers in seq2 at x1775/y-100
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
+    // Info checkpoints: a scroll icon floats at each x; press I nearby to open the info card.
+    infoPoints: [{ x: 210, card: "infoCard1" }],   // seq1: "The Climb Begins"
     knifeSpots: [{ x: 340,  top: 185 },    // knife on seq1's 2nd ledge
                  { x: 2110, top: 25 },     // knife on seq2's 2nd stepping rock
                  { x: 1910, top: 211 },    // knife on seq2's lowest stepping rock
@@ -782,6 +808,11 @@ const DRINK_KEYS = ["KeyE"];               // drink a stored energy bottle (refi
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+  // I = open/close the info card (only when standing at a checkpoint).
+  if (e.code === "KeyI" && !e.repeat && state === "playing") {
+    if (infoOpen >= 0) infoOpen = -1;
+    else if (infoNear >= 0) infoOpen = infoNear;
+  }
   // Any of jump / Enter / R advances whichever non-play screen we're on.
   // Ignore key auto-repeat so a held key can't skip through screens.
   if (!e.repeat && state !== "playing" && (JUMP_KEYS.includes(e.code) || e.code === "Enter" || e.code === "KeyR")) {
@@ -789,6 +820,10 @@ window.addEventListener("keydown", (e) => {
   }
 });
 window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+// Tap/click anywhere on the info overlay closes it.
+document.getElementById("info-overlay").addEventListener("pointerdown", (e) => {
+  infoOpen = -1; syncInfoOverlay(); e.preventDefault(); e.stopPropagation();
+});
 // (mouse clicks are handled by the single pointerdown listener below — no
 //  separate mousedown handler, which would double-advance the start screens.)
 function anyKey(list) { return list.some(k => keys[k]); }
@@ -1097,6 +1132,7 @@ function startAtLevel(idx) {
   runScore = 0;
   cameraX = 0; cameraY = 0; camAnchorFeet = 9999; worldGenX = 0;
   platforms = []; carabiners = []; knifeItems = []; energyItems = []; lifeItems = []; weaponItems = []; enemies = []; pits = [];
+  infoNear = -1; infoOpen = -1;   // info checkpoints reset each run
   levelCarabiners = 0; dashboard = null;
   gearThisLevel = { shoes: false, rope: false, helmet: false };   // gear resets every level
   gearPop = { shoes: 0, rope: 0, helmet: 0 }; carabinersThisLevel = 0; toast = null;
@@ -1283,6 +1319,8 @@ cutsceneVideo.addEventListener("error", () => { if (state === "cutscene") endCut
 let particles = [];   // cosmetic dust / sparkle / poof bits
 let gearItems = [];   // spawned gear pickups in the world (this level)
 let knifeItems = [];  // knife pickups on the Level-1 climb top ledges (each = +1 throwable knife)
+let infoNear = -1;    // index of the info checkpoint Abu is standing near (or -1)
+let infoOpen = -1;    // index of the info card currently open on screen (or -1 = closed)
 let energyItems = []; // energy-bottle pickups (each refills stamina)
 let lifeItems = [];   // edelweiss pickups (each grants +1 life)
 let weaponItems = []; // speargun pickup (collect -> hasHarpoon)
@@ -5423,6 +5461,8 @@ function finishSummitClimb() {
 
 function update(dt) {
   if (inClimb) { updateClimbPlay(dt); return; }   // playable summit climb: only player + camera
+  updateInfoNear();                    // which info checkpoint (if any) Abu is standing near
+  if (infoOpen >= 0) return;            // freeze the world while an info card is open
   updateWeather(dt);     // set this frame's wind before the player reads it
   updatePlatforms(dt);   // move/elevator platforms first so landing sees new pos
   updatePlayer(dt);
@@ -5573,6 +5613,53 @@ function drawSummitMarker() {
   }
 }
 
+// Info checkpoints: a scroll icon floats at each point; standing near it and pressing
+// I opens that point's full info card (a paused overlay).
+const INFO_NEAR = 90;
+function updateInfoNear() {
+  const lvl = currentLevel();
+  infoNear = -1;
+  if (!lvl.infoPoints) { infoOpen = -1; return; }
+  for (let i = 0; i < lvl.infoPoints.length; i++) {
+    if (Math.abs(player.x - lvl.infoPoints[i].x) < INFO_NEAR) { infoNear = i; break; }
+  }
+  if (infoOpen >= 0 && infoNear !== infoOpen) infoOpen = -1;   // walked away -> auto-close
+}
+function drawInfoIcons() {   // world space (inside the camera transform)
+  const lvl = currentLevel();
+  if (!lvl.infoPoints || !imgLoaded.infoIcon) return;
+  const t = performance.now() / 1000;
+  for (let i = 0; i < lvl.infoPoints.length; i++) {
+    const p = lvl.infoPoints[i];
+    const sx = p.x - cameraX;
+    if (sx < -60 || sx > VIEW_W + 60) continue;
+    const gy = surfaceY(p.x); const base = (gy >= 5000 ? 380 : gy) - 92;   // float above the ground
+    const bob = Math.sin(t * 2 + i) * 4, S = 46;
+    ctx.drawImage(images.infoIcon, sx - S / 2, base + bob - S / 2, S, S);
+    if (infoNear === i && infoOpen < 0 && imgLoaded.infoBtn) {
+      const B = 26;                                   // "i" prompt just below the scroll icon
+      ctx.drawImage(images.infoBtn, sx - B / 2, base + bob + S / 2 - 2, B, B);
+    }
+  }
+}
+// The info card is shown as a real DOM <img> overlay (full resolution / crisp) rather than
+// drawn into the low-res game canvas. syncInfoOverlay() reflects infoOpen into the DOM.
+function syncInfoOverlay() {
+  const ov = document.getElementById("info-overlay");
+  if (!ov) return;
+  const show = infoOpen >= 0 && state === "playing";
+  if (show) {
+    const lvl = currentLevel();
+    const p = lvl.infoPoints && lvl.infoPoints[infoOpen];
+    const img = document.getElementById("info-card");
+    if (p && images[p.card] && img.getAttribute("data-key") !== p.card) {
+      img.src = images[p.card].src; img.setAttribute("data-key", p.card);
+    }
+    ov.classList.add("show");
+  } else {
+    ov.classList.remove("show");
+  }
+}
 function draw() {
   if (state === "cutscene") { drawCutscene(); return; }
   if (state === "climbing") { drawClimb(); return; }
@@ -5590,6 +5677,7 @@ function draw() {
   drawClimbRopes();        // horizontal traverse rope across the seq3 gaps (Level 1)
   drawFlags();             // planted rectangular flags-on-a-stick scenery (Level 1)
   drawSigns();             // "Austria 1km" arrow signpost (Level 1 start)
+  drawInfoIcons();         // floating info-checkpoint scroll markers (Level 1)
   drawNests();             // eagle nest with eggs scenery (Level 1 seq4 peak)
   drawTrees();             // snowy pine tree scenery (Level 1)
   drawRocks();             // snowy rock scenery (Level 1)
@@ -5641,6 +5729,7 @@ function loop(now) {
   if (shake > 0) ctx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);
   draw();
   ctx.restore();
+  syncInfoOverlay();                 // reflect the open info card into the DOM overlay
   requestAnimationFrame(loop);
 }
 
