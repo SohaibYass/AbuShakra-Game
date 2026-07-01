@@ -295,7 +295,7 @@ const ASSETS = {
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
-  abuPoweredWalk: "abu_powered_walk.png?v=1",                     // 3-frame buffed walk (while powered)
+  abuPoweredWalk: "Abu_Energy_Powerup_frame2_walk_5frames_v3_clean.png?v=1",   // 5-frame buffed walk (while powered)
   abuSwim:     "abu_swimming_6frames_refined.png?v=1",            // 6-frame swim (seq7 deep water)
   abuParachute:  "abu_parachute_fly_4frames.png?v=1",             // 4-frame parachute glide (seq9)
   parachuteIcon: "parachute_icon.png?v=1",                        // parachute canopy pickup marker (seq8)
@@ -4821,9 +4821,9 @@ function drawPlayer() {
   if (player.poweredT > 0 && (imgLoaded.abuPoweredWalk || imgLoaded.abuPowerup)) {
     const walk = imgLoaded.abuPoweredWalk;
     const img = walk ? images.abuPoweredWalk : images.abuPowerup;
-    const n = 3, cw = img.naturalWidth / n, ch = img.naturalHeight;
+    const n = walk ? 5 : POWERUP_FRAMES, cw = img.naturalWidth / n, ch = img.naturalHeight;
     const moving = Math.abs(player.vx) > 1 && player.onGround;
-    const fi = walk ? (moving ? 1 + Math.floor(performance.now() / 120) % 2 : 0)   // 0 idle, 1/2 strides
+    const fi = walk ? (moving ? 1 + Math.floor(performance.now() / 90) % 4 : 0)     // 0 idle, 1..4 stride cycle
                     : 1;                                                            // fallback: static flex (frame 2)
     const dh = player.h * 1.3, dw = dh * (cw / ch);
     ctx.save();
