@@ -273,7 +273,7 @@ const ASSETS = {
   gearShoes:  "gear_shoes.png?v=1",  // collectible gear: climbing shoes
   gearRope:   "gear_rope.png?v=1",   // collectible gear: rope
   gearHelmet: "gear_helmet.png?v=1", // collectible gear: helmet
-  summitFlag: "abu_flag.png?v=1",    // 2-frame waving mountain flag — the Level 1 checkpoint marker
+  summitFlag: "Abu_Rectangular_Flag_With_Stick.png?v=1",    // rectangular flag-on-a-stick — the Level 1 checkpoint marker
   abuFlagStick: "Abu_Rectangular_Flag_With_Stick_512.png?v=1",   // planted rectangular flag-on-a-stick scenery
   austriaSign:  "austria_6km_sign.png?v=1",                      // "Austria 6km" arrow signpost (Level 1 start)
   eagleNest:    "eagle_nest_eggs.png?v=1",                        // eagle nest with eggs — scenery on a seq4 peak
@@ -5526,7 +5526,7 @@ function checkClimbGate() {
     toast = { text: "All gear ready — reach the summit!", timer: 2.6 };
   }
   if (summitReady && player.onGround && player.x + player.w / 2 >= summitGateX) {
-    startSummitClimb();
+    finishSummitClimb();   // reaching the flag completes Level 1 (the summit-hill climb scene is disabled)
   }
 }
 
@@ -5728,7 +5728,7 @@ function drawClimb() {
   ctx.textAlign = "left";
 }
 
-// The Level-1 checkpoint: a planted, waving mountain flag (2-frame) where the
+// The Level-1 checkpoint: a planted rectangular flag-on-a-stick where the
 // summit climb begins. Appears once all gear + 20 carabiners are collected.
 function drawSummitMarker() {
   if (!summitReady || inClimb || state !== "playing") return;
@@ -5742,10 +5742,9 @@ function drawSummitMarker() {
   }
   const gy = surfaceY(summitGateX);
   if (imgLoaded.summitFlag) {
-    const img = images.summitFlag, cw = img.naturalWidth / 2, ch = img.naturalHeight;
+    const img = images.summitFlag, cw = img.naturalWidth, ch = img.naturalHeight;
     const fh = 104, fw = fh * cw / ch;
-    const fi = Math.floor(performance.now() / 320) % 2;        // 2-frame wave
-    ctx.drawImage(img, fi * cw, 0, cw, ch, sx - fw * 0.097, gy - fh + 3, fw, fh);  // pole (frac 0.097) planted at the checkpoint
+    ctx.drawImage(img, sx - fw * 0.067, gy - fh + 3, fw, fh);  // single-frame flag; pole (frac 0.067) planted at the checkpoint
   } else {
     ctx.fillStyle = "#caa24a"; ctx.fillRect(sx - 2, gy - 92, 4, 92);
     ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.moveTo(sx + 2, gy - 92); ctx.lineTo(sx + 42, gy - 80); ctx.lineTo(sx + 2, gy - 68); ctx.closePath(); ctx.fill();
