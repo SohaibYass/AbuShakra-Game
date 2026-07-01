@@ -5775,8 +5775,15 @@ function drawInfoIcons() {   // world space (inside the camera transform)
     const bob = Math.sin(t * 2 + i) * 4, S = 46;
     ctx.drawImage(images.infoIcon, sx - S / 2, base + bob - S / 2, S, S);
     if (infoNear === i && infoOpen < 0 && imgLoaded.infoBtn) {
-      const B = 26;                                   // "i" prompt just below the scroll icon
-      ctx.drawImage(images.infoBtn, sx - B / 2, base + bob + S / 2 - 2, B, B);
+      const B = 26, gap = 4, cy = base + bob + S / 2 - 2;   // "Press [i]" prompt just below the scroll icon
+      ctx.font = "bold 14px Segoe UI, Arial";
+      const label = "Press", tw = ctx.measureText(label).width;
+      const startX = sx - (tw + gap + B) / 2;              // center "Press" + icon together
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillText(label, startX + 1, cy + B / 2 + 1);   // shadow
+      ctx.fillStyle = "#ffe07a"; ctx.fillText(label, startX, cy + B / 2);
+      ctx.drawImage(images.infoBtn, startX + tw + gap, cy, B, B);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
   }
 }
