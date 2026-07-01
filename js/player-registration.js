@@ -55,24 +55,26 @@
     s.textContent = `
     .abu-modal,.abu-lb-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;
       justify-content:center;background:rgba(6,10,20,.86);font-family:"Segoe UI",Arial,sans-serif;padding:16px}
-    .abu-card,.abu-lb-card{background:#141a2b;border:1px solid rgba(255,255,255,.18);border-radius:14px;
+    .abu-card,.abu-lb-card{background:#0e1d3a;border:1px solid rgba(174,138,74,.5);border-radius:14px;
       box-shadow:0 12px 40px rgba(0,0,0,.6);color:#eaf2ff;width:min(440px,94vw);max-height:92vh;overflow:auto;padding:22px}
     .abu-lb-card{width:min(560px,96vw)}
-    .abu-card h2,.abu-lb-title{margin:0 0 6px;color:#9fe6ff;font-size:24px}
+    .abu-card h2,.abu-lb-title{margin:0 0 6px;color:#c9a75e;font-size:24px}
     .abu-sub{color:#9fb6c8;font-size:13px;margin:0 0 16px;line-height:1.4}
+    .abu-logo{display:block;width:min(300px,82%);height:auto;margin:0 auto 16px;
+      background:#fff;border-radius:10px;padding:8px 12px;box-sizing:border-box}
     .abu-field{margin:12px 0}
     .abu-field label{display:block;font-size:13px;color:#c7d6e6;margin-bottom:5px}
     .abu-field input,.abu-field select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;
-      border:1px solid rgba(255,255,255,.22);background:#0e1424;color:#fff;font-size:15px}
+      border:1px solid rgba(174,138,74,.35);background:#0a1730;color:#fff;font-size:15px}
     .abu-row{display:flex;gap:10px}.abu-row>div{flex:1}
     .abu-consent{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:#c7d6e6;margin:14px 0}
     .abu-consent input{margin-top:2px}
-    .abu-consent a{color:#9fe6ff}
+    .abu-consent a{color:#c9a75e}
     .abu-err{color:#ff8a7a;font-size:13px;min-height:18px;margin:6px 0 2px}
-    .abu-btn{width:100%;padding:12px;border:none;border-radius:9px;background:#2e8b57;color:#fff;
+    .abu-btn{width:100%;padding:12px;border:none;border-radius:9px;background:#b8945a;color:#0b1730;
       font-size:16px;font-weight:700;cursor:pointer;margin-top:6px}
     .abu-btn:disabled{opacity:.6;cursor:default}
-    .abu-btn.alt{background:#33405a;margin-top:8px}
+    .abu-btn.alt{background:#1c3057;color:#eaf2ff;margin-top:8px}
     .abu-link{display:block;text-align:center;color:#9fb6c8;font-size:12.5px;margin-top:12px;cursor:pointer}
     .abu-lb-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
     .abu-lb-close,.abu-lb-btn{background:#33405a;color:#fff;border:none;border-radius:8px;cursor:pointer}
@@ -140,6 +142,9 @@
   /* ---- the registration form ---- */
   function buildForm(resolve) {
     const card = el("div", "abu-card"); card.dir = "rtl"; card.lang = "ar";
+    const logo = el("img", "abu-logo"); logo.src = "aiknowmads_logo.png"; logo.alt = "AiKnowmads";
+    logo.onerror = function () { logo.remove(); };   // hide gracefully if the file isn't present yet
+    card.appendChild(logo);
     card.appendChild(el("h2", null, "انضم إلى المسابقة"));
     card.appendChild(el("p", "abu-sub",
       "أدخل بياناتك للانضمام إلى المسابقة. يظهر اسمك المعروض فقط للعامة — وتبقى بقية البيانات خاصة."));
