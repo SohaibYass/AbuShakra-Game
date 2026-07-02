@@ -5159,13 +5159,29 @@ function drawStartScreen() {
     const w = img.naturalWidth * s, h = img.naturalHeight * s;
     ctx.drawImage(img, (VIEW_W - w) / 2, (VIEW_H - h) / 2, w, h);
   }
-  if (Math.floor(performance.now() / 500) % 2 === 0) {   // blinking prompt (outlined, no dimming)
-    ctx.textAlign = "center"; ctx.font = "bold 20px Segoe UI, Arial";
-    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.85)";
-    ctx.strokeText("Press SPACE or tap to start", VIEW_W / 2, VIEW_H - 12);
-    ctx.fillStyle = "#9fe6ff"; ctx.fillText("Press SPACE or tap to start", VIEW_W / 2, VIEW_H - 12);
-    ctx.textAlign = "left";
-  }
+  // Only Level 1 (Germany / Zugspitze) is active — a pulsing "Start" button points at its flag.
+  // Pressing / tapping anywhere starts the game (handled by the global pointer/key listeners).
+  drawStartButton();
+}
+// A pulsing "Start" call-to-action above the Germany flag on the cover (Level 1 is the only active peak).
+function drawStartButton() {
+  const fx = 271;                                    // Germany flag centre-x
+  const bw = 80, bh = 30, r = 9, bx = fx - bw / 2, by = 328;   // a touch bigger; no arrow
+  const pulse = 0.62 + 0.38 * Math.abs(Math.sin(performance.now() / 360));
+  ctx.save();
+  ctx.fillStyle = "rgba(63,191,111," + pulse + ")";   // vivid green, pulsing
+  // rounded button (arrow removed)
+  ctx.beginPath();
+  ctx.moveTo(bx + r, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, r);
+  ctx.arcTo(bx + bw, by + bh, bx, by + bh, r); ctx.arcTo(bx, by + bh, bx, by, r);
+  ctx.arcTo(bx, by, bx + bw, by, r); ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 17px Segoe UI, Arial"; ctx.fillStyle = "#ffffff";
+  ctx.fillText("ابدأ", fx, by + bh / 2 + 1);
+  ctx.restore();
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 
 // Game explanation shown for HOWTO_SECONDS before play begins, then auto-starts.
