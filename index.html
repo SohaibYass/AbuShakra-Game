@@ -288,6 +288,7 @@ const ASSETS = {
   infoCard6:    "info_point6.png?v=1",       // Level 1 seq6 "The Cave & the Wolf" info card (Arabic)
   infoCard7:    "info_point7.png?v=1",       // Level 1 seq7 "The Lake & the Crocodile" info card (Arabic)
   infoBtn:      "infoicon_button.png?v=1",   // "i" prompt shown by the checkpoint icon
+  infoBtnBlack: "iconBlack.png?v=2",         // black key-style "i" (white "i" glyph) shown beside the "Press" prompt
   planeAbu:     "plane_only.png?v=1",                            // 2-frame plane (banner drawn separately as an Arabic text flag)
   energyBottle: "Abu_Energy_Bottle_384.png?v=1",                 // stamina pickup (refills Level-1 power)
   abuPowerup:   "Abu_Energy_Powerup_3frames.png?v=1",            // 3-frame drink->surge->flex transformation
@@ -5780,7 +5781,7 @@ function drawInfoIcons() {   // world space (inside the camera transform)
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillText(label, startX + 1, midY + 1);   // shadow
       ctx.fillStyle = "#ffe07a"; ctx.fillText(label, startX, midY);
-      if (imgLoaded.infoBtn) ctx.drawImage(images.infoBtn, startX + tw + gap, ty, b, b);
+      if (imgLoaded.infoBtnBlack) ctx.drawImage(images.infoBtnBlack, startX + tw + gap, ty, b, b);
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     }
   }
