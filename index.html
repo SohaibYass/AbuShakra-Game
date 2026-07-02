@@ -542,12 +542,15 @@ const LEVELS = [
                    { x0: 2227, x1: 2315, top: 315 },   // seq2 mid ledge
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
+    // Standalone red snakes (ledge-patrol like the gear guard) placed by config.
+    redSnakes: [{ x: 9945, top: 365, w: 110 }],   // seq8 ground
     // Placed striking cobras (stationary): sway idle, rear & strike + hiss when Abu nears.
     cobras: [{ x: 733, top: 326 },    // seq1 (moved from x486)
              { x: 978, top: 286 }],   // seq1 (moved from x1168)
     // Patrolling wolf guard (seq6): paces [x0,x1] on the arch top; when Abu reaches
     // `trigger` it charges + lunges (attack frames). Needs `hp` knife/carabiner hits.
-    wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true }],
+    wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true },
+             { x0: 9739, x1: 9899, top: 403, trigger: 9819, hp: 1 }],   // seq8 ground wolf, 1 heart
     crocs: [{ x0: 8360, x1: 9320, bottom: 452, surf: 360, hp: 1 }],   // seq7 lake: crocodile lurks at the bottom, lunges up at a swimmer (1 harpoon kills)
     weaponSpots: [{ x: 8090, top: 246 }],   // speargun on the seq6 rock before the lake
     // Parachute: collect the canopy in seq8, then it auto-deploys at the seq9 launch ledge
@@ -635,7 +638,8 @@ const LEVELS = [
     // Energy-bottle pickups (each refills stamina).
     energySpots: [{ x: 4399, top: 388 },       // seq4 lower ledge
                   { x: 4992, top: 398 }],      // seq4 void foothold
-    shelterSpots: [{ x: 3550, top: 271 }],   // shelter (stamina refill) on the seq3 arch top
+    shelterSpots: [{ x: 3550, top: 271 },    // shelter (stamina refill) on the seq3 arch top
+                   { x: 10181, top: 322 }],   // shelter on the seq8 ground (also a stamina-refill rest spot)
     stepRocks: [{ img: "stepRock5", x: 1953, top: -26 },    // floating stepping rocks across the seq 2 gap
                 { img: "stepRock4", x: 2110, top: 25 },
                 { img: "stepRock3", x: 2012, top: 117 },
@@ -1173,6 +1177,7 @@ function startAtLevel(idx) {
   generateAhead();
   spawnGearForLevel();               // one shoes/rope/helmet on the main path
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  spawnRedSnakes();                  // standalone red snakes (Level 1)
   spawnCobras();                     // placed striking cobras (Level 1)
   spawnWolves();                     // patrolling wolf guards (Level 1)
   spawnCrocs();                      // lake crocodiles (Level 1 seq7)
@@ -1878,6 +1883,12 @@ function spawnGuardSnake(cx, top, ledgeW) {
     x0: cx - ledgeW / 2 - 12, x1: cx + ledgeW / 2 + 12, dir: 1, ledgeTop: top,   // small overhang at the ledge edges
     alive: true, hp: 1, points: STOMP_POINTS, color: "#d22", phase: Math.random() * 6.28, hitFlash: 0,
     frames: { key: "enemySnakeRedWalk", count: 2, fps: 6 } });
+}
+// Standalone red snakes (lvl.redSnakes = [{x, top, w}]) — same ledge-patrol as the gear guard.
+function spawnRedSnakes() {
+  const lvl = currentLevel();
+  if (!ENEMIES_ENABLED || !lvl.redSnakes) return;
+  for (const s of lvl.redSnakes) spawnGuardSnake(s.x, s.top, s.w || 110);
 }
 // Green patrol snakes placed by config (lvl.patrolSnakes = [{x0,x1,top}]). They use
 // the same ledge-patrol behaviour as the red guard, but with the distinct 3-frame
@@ -5400,6 +5411,7 @@ function resetGame() {
   generateAhead();
   spawnGearForLevel();
   spawnPatrolSnakes();               // green patrol snakes (Level 1)
+  spawnRedSnakes();                  // standalone red snakes (Level 1)
   spawnCobras();                     // placed striking cobras (Level 1)
   spawnWolves();                     // patrolling wolf guards (Level 1)
   spawnCrocs();                      // lake crocodiles (Level 1 seq7)
