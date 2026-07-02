@@ -543,8 +543,8 @@ const LEVELS = [
                    { x0: 2667, x1: 2770, top: 122 },   // seq2/seq3 wood bridge
                    { x0: 3891, x1: 3971, top: 164 }],  // seq3 upper ledge
     // Placed striking cobras (stationary): sway idle, rear & strike + hiss when Abu nears.
-    cobras: [{ x: 486,  top: 366 },    // seq1
-             { x: 1168, top: 190 }],
+    cobras: [{ x: 733, top: 326 },    // seq1 (moved from x486)
+             { x: 978, top: 286 }],   // seq1 (moved from x1168)
     // Patrolling wolf guard (seq6): paces [x0,x1] on the arch top; when Abu reaches
     // `trigger` it charges + lunges (attack frames). Needs `hp` knife/carabiner hits.
     wolves: [{ x0: 7028, x1: 7238, top: 236, trigger: 7262, hp: 3, caveFloor: true }],
@@ -611,7 +611,7 @@ const LEVELS = [
                 { id: "helmet", x: 1950, top: -22, guard: false }],   // helmet up on seq2's highest stepping rock (no ground guard; the seq2 eagle hovers nearby)
     startKnives: 0,   // Abu starts Level 1 with no throwable knives — collect them along the way
     // Info checkpoints: a scroll icon floats at each x; press I nearby to open the info card.
-    infoPoints: [{ x: 210,  card: "infoCard1" },     // seq1: "The Climb Begins"
+    infoPoints: [{ x: 280,  card: "infoCard1" },     // seq1: "The Climb Begins"
                  { x: 1180, card: "infoCard2" },     // seq1->seq2: "Cross the Heights"
                  { x: 2850, card: "infoCard3" },     // seq3: "Traverse & Rest"
                  { x: 4250, card: "infoCard4" },     // seq4: "The Void & the Surge"
@@ -5171,18 +5171,19 @@ function drawStartScreen() {
 // Game explanation shown for HOWTO_SECONDS before play begins, then auto-starts.
 function drawInstructions() {
   ctx.fillStyle = "rgba(8,12,22,0.93)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  ctx.textAlign = "center";
+  ctx.textAlign = "center"; ctx.direction = "rtl";               // Arabic (right-to-left) instructions
   ctx.fillStyle = "#9fe6ff"; ctx.font = "bold 34px Segoe UI, Arial";
-  ctx.fillText("HOW TO PLAY", VIEW_W / 2, 64);
+  ctx.fillText("كيفية اللعب", VIEW_W / 2, 64);
 
   const lines = [
-    { t: "Move:  ← →  /  A D         Jump:  Space / ↑ / W", c: "#ffffff" },
-    { t: "Throw knife:  F          Grab descent rope:  ↓", c: "#ffffff" },
-    { t: "On phones, use the on-screen buttons", c: "#9fb6c8" },
-    { t: "Carabiners +" + CARABINER_POINTS + "   ·   Stomp / knife enemies +" + STOMP_POINTS + "   →  your Score", c: "#cfe8ff" },
-    { t: "To finish Level 1: collect 20 carabiners + 3 gear", c: "#ffe08a" },
-    { t: "(shoes · rope · helmet), then reach the flag at the summit!", c: "#ffe08a" },
-    { t: "Watch your POWER — rest at the cabin.  Conquer the Zugspitze!", c: "#ffd27a" }
+    { t: "التحرك:  ← →  /  A D          القفز:  Space / ↑ / W", c: "#ffffff" },
+    { t: "رمي السكين:  F          حبل النزول:  ↓", c: "#ffffff" },
+    { t: "مشروب الطاقة: اجمعه ثم اضغط E لتفعيله", c: "#ffffff" },
+    { t: "تُلعب على الهاتف والحاسوب — على الهاتف استخدم الأزرار على الشاشة", c: "#9fb6c8" },
+    { t: "الكارابينات +" + CARABINER_POINTS + "   ·   دهس/طعن الأعداء +" + STOMP_POINTS + "   ←  نقاطك", c: "#cfe8ff" },
+    { t: "لإنهاء المرحلة 1: اجمع 20 كارابينة + 3 معدّات", c: "#ffe08a" },
+    { t: "(حذاء · حبل · خوذة) ثم اصعد إلى العلم في القمة!", c: "#ffe08a" },
+    { t: "انتبه لطاقتك — استرح في الكوخ. واغزُ قمة تسوغشبيتسه!", c: "#ffd27a" }
   ];
   ctx.font = "19px Segoe UI, Arial";
   let y = 118;
@@ -5190,8 +5191,8 @@ function drawInstructions() {
 
   const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 380));
   ctx.fillStyle = "rgba(123,211,106," + pulse + ")"; ctx.font = "bold 24px Segoe UI, Arial";
-  ctx.fillText(isTouch ? "Tap to start" : "Press JUMP / Enter to start", VIEW_W / 2, VIEW_H - 40);
-  ctx.textAlign = "left";
+  ctx.fillText(isTouch ? "انقر للبدء" : "اضغط القفز / Enter للبدء", VIEW_W / 2, VIEW_H - 40);
+  ctx.textAlign = "left"; ctx.direction = "ltr";                 // reset for the rest of the frame
 }
 function drawGameOver() {
   const lines = [
