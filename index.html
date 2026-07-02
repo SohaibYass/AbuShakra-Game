@@ -528,7 +528,7 @@ const LEVELS = [
     fgYAdjust: { fgZug4: 16, fgZug5: 64, fgZug6: 64, fgZug7: 150 },   // per-sequence vertical nudge (art + collision); seq6 dropped to match seq5; seq7 waterline at ~y353
     fgAnim: { fgZug7: { keys: ["fgZug7", "fgZug7b"], fps: 2 } },   // seq7 lake animates between two full-frame paintings
     fgFlats: [{ x0: 8100, x1: 8217, surf: [244.2,244.5,245.0,245.6,246.1,246.5,246.8,246.9,246.8,246.7,246.5,246.3,246.1,246.1,246.3,246.6,247.0,247.4,247.9,248.4,249.0,249.7,250.9,252.9,256.4,261.2,266.9,272.4,276.9,279.8,281.6,282.6,283.3,283.8,284.3,284.7,285.4,287.0,289.9,294.3,299.5,304.5,308.4,310.9,312.3,313.3,314.1,314.8,315.3,315.7,315.9,316.2,316.5,316.9,317.3,317.9,319.2,321.9,326.6,333.2,340.8,348.3,353.0,353.0] }],   // seq7: cliff-platform collision profile (follows the basalt steps down to the water's edge at x8217)
-    waterZones: [{ x0: 8218, x1: 9450, top: 353 }],   // seq7 deep water: Abu swims from the cliff's water edge on
+    waterZones: [{ x0: 8218, x1: 9450, top: 353, riseCap: 370 }],   // seq7 deep water: Abu swims from the cliff's water edge on; riseCap = highest his feet can rise (Up holds him here)
     fgSurf: { fgZug: ZUG_PANO_SURF1, fgZug2: ZUG_PANO_SURF2, fgZug3: ZUG_PANO_SURF3, fgZug4: ZUG_PANO_SURF4, fgZug5: ZUG_PANO_SURF5, fgZug6: ZUG_PANO_SURF6, fgZug7: ZUG_PANO_SURF7 },   // each sequence's collision follows its own green line
     bridges: [{ x0: 1272, x1: 1385, top: 140 },    // wood bridge on the seq1/seq2 mesa tops
               { x0: 2556, x1: 2628, top: 92 },     // small wood bridge between two seq2 spire tops
@@ -634,7 +634,8 @@ const LEVELS = [
                      { x: 5024, top: 110 }, { x: 5183, top: 356 },   // seq4: void foothold + terrain ledge
                      { x: 7134, top: 415 },   // seq6 cave floor: carabiner by the rope gear
                      { x: 7150, top: 420 }, { x: 7330, top: 421 }, { x: 7510, top: 424 }, { x: 7690, top: 426 },   // seq6 cave lower floor (4, for the wolf)
-                     { x: 8450, top: 384 }, { x: 8830, top: 388 }, { x: 9210, top: 385 }],   // seq7 lake (collect while swimming)
+                     { x: 8450, top: 384 }, { x: 8830, top: 388 }, { x: 9210, top: 385 },   // seq7 lake (collect while swimming)
+                     { x: 11050, top: 150 }, { x: 11250, top: 170 }, { x: 11450, top: 190 }, { x: 11650, top: 208 }, { x: 11850, top: 216 }],   // seq9 parachute glide: 5 to catch mid-air along the drift path
     // Energy-bottle pickups (each refills stamina).
     energySpots: [{ x: 4399, top: 388 },       // seq4 lower ledge
                   { x: 4992, top: 398 }],      // seq4 void foothold
@@ -833,6 +834,11 @@ const DRINK_KEYS = ["KeyE"];               // drink a stored energy bottle (refi
 window.addEventListener("keydown", (e) => {
   keys[e.code] = true;
   if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+  // O = toggle the level-design position/tracing tool (debug helper). Off clears the marks.
+  if (e.code === "KeyO" && !e.repeat) {
+    DEBUG_CLICK = !DEBUG_CLICK;
+    if (!DEBUG_CLICK) _dbgPts = [];
+  }
   // I = open/close the info card (only when standing at a checkpoint).
   if (e.code === "KeyI" && !e.repeat && state === "playing") {
     if (infoOpen >= 0) closeInfoCard();
@@ -1287,7 +1293,7 @@ let squatHoldT = 0;        // seconds Abu has held Down while standing still (dr
 // While DEBUG_CLICK is on, click anywhere during play to print the WORLD
 // position under the cursor (worldX along the 0..5400 panorama, the surface-Y
 // there, and which sequence it is). Use these numbers to place enemies/gear.
-const DEBUG_CLICK = true;
+let DEBUG_CLICK = false;   // level-design position tool — OFF by default; press O in-game to toggle
 let _dbgPts = [];   // up to two points: [FROM, TO]; a 3rd click starts a fresh pair
 function _dbgPoint(e) {
   const r = canvas.getBoundingClientRect();
@@ -2421,10 +2427,14 @@ function updateWater(dt) {
   if (move) player.facing = move;
   player.vx = move * SWIM_SPEED; player.x += player.vx * dt; if (player.x < 0) player.x = 0;
   // vertical: spring toward a resting float depth (head/shoulders out), Up rises, Down dives; water damping
-  const floatFeet = z.top + 38 + (down ? 80 : 0) - (up ? 70 : 0);   // resting depth: body immersed at the surface
+  let floatFeet = z.top + 38 + (down ? 80 : 0) - (up ? 70 : 0);   // resting depth: body immersed at the surface
+  if (z.riseCap != null) floatFeet = Math.max(floatFeet, z.riseCap);   // Up can't raise Abu above the cap — he holds at riseCap
   player.vy += (floatFeet - feet) * 10 * dt;
   player.vy *= (1 - 5 * dt);
   player.y += player.vy * dt;
+  if (z.riseCap != null && player.y + player.h < z.riseCap) {   // hard cap: feet never rise above riseCap
+    player.y = z.riseCap - player.h; if (player.vy < 0) player.vy = 0;
+  }
   player.onGround = false; player.exhausted = false; player.collapsed = false;
   player.swimPhase = (player.swimPhase || 0) + dt * (move ? 9 : 5);
   // FX: per-stroke hand splashes (synced to the animation) + a steady rising bubble trail
