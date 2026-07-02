@@ -592,8 +592,7 @@ const LEVELS = [
     // Rectangular cuts through the foreground (the painting isn't drawn, so the far
     // Zugspitze background shows through). `surf` = collision height inside the cut:
     // 9999/omit = a bottomless hole (falling costs a life); a number = a flat floor.
-    fgHoles: [{ x0: 4715, x1: 4805, surf: 211 },      // seq4: cut showing background, solid ledge at y211 just before the void
-              { x0: 4797, x1: 5157, surf: 9999 },     // seq4: death zone — only background shows, falling = death
+    fgHoles: [{ x0: 4715, x1: 5157, surf: 9999, hardL: true },     // seq4: death void — painted islands cut out (only background shows), no floor -> falling = death; hardL keeps the cliff face crisp
               { x0: 6519, x1: 6932, surf: 9999 }],     // seq5/6 open vista: no floor -> falling = death (collapsing foothold at x6848 inside)
     // Cave lower-terrain layer (seq6): surfaceY is the arch (walk over); when Abu drops
     // to the floor he walks this lower cave floor instead. Player-only (enemies use surfaceY).
@@ -3006,6 +3005,7 @@ function respawnAtSeqStart() {
   player.y = surfaceY(x) - player.h; player.fatalFalling = false; player.airPeakY = player.y;
   lastSafeX = x; lastSafeFeetY = surfaceY(x);
   power = POWER_MAX; player.exhausted = false; player.collapsed = false;   // respawn with full stamina
+  player.poweredT = 0; player.powerupAnimT = 0;   // lose the energy-drink buff on death — come back normal
   invulnTimer = INVULN_TIME;
 }
 // Recover inside a shelter; run the exhaustion/collapse state machine.
@@ -3867,9 +3867,11 @@ function drawParallaxScene(lvl) {
           if (!(h.surf == null || h.surf >= 9000)) continue;   // skip solid-floor ledges
           const a = h.x0 - cameraX, b = h.x1 - cameraX;
           if (b < -FEATHER || a > VIEW_W + FEATHER) continue;
-          const gL = tctx.createLinearGradient(a - FEATHER, 0, a, 0);   // left edge: kept -> gone toward the cut
-          gL.addColorStop(0, "rgba(0,0,0,0)"); gL.addColorStop(1, "rgba(0,0,0,1)");
-          tctx.fillStyle = gL; tctx.fillRect(a - FEATHER, 0, FEATHER, VIEW_H);
+          if (!h.hardL) {   // `hardL`: keep a crisp left edge (e.g. a cliff face dropping into the void) — no fade
+            const gL = tctx.createLinearGradient(a - FEATHER, 0, a, 0);   // left edge: kept -> gone toward the cut
+            gL.addColorStop(0, "rgba(0,0,0,0)"); gL.addColorStop(1, "rgba(0,0,0,1)");
+            tctx.fillStyle = gL; tctx.fillRect(a - FEATHER, 0, FEATHER, VIEW_H);
+          }
           const gR = tctx.createLinearGradient(b, 0, b + FEATHER, 0);   // right edge: gone -> kept after the cut
           gR.addColorStop(0, "rgba(0,0,0,1)"); gR.addColorStop(1, "rgba(0,0,0,0)");
           tctx.fillStyle = gR; tctx.fillRect(b, 0, FEATHER, VIEW_H);
