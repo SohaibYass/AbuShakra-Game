@@ -920,7 +920,7 @@ function advanceFromScreen() {
   // Cover -> "How to Play" (read it, then press/tap to begin — no auto-start).
   // Win/Game-over -> back to the cover.
   if (state === "cutscene") { endCutscene(); return; }   // tap to skip the cutscene
-  if (state === "start") { state = "instructions"; Music.start(); }
+  if (state === "start") { startCutscene(INTRO_VIDEO, { next: "instructions", music: true }); }   // cover -> intro video -> instructions
   else if (state === "instructions") { state = "playing"; if (window.AbuTracking) AbuTracking.levelStart(); }   // press to start
   else if (state === "levelcomplete") { advanceLevel(); }
   else if (state === "won" || state === "gameover") { resetGame(); state = "start"; }
@@ -1349,6 +1349,7 @@ const HOWTO_SECONDS = 5;   // how long the "How to Play" screen holds before pla
 let howtoTimer = 0;
 // Per-level victory cutscene: an mp4 drawn onto the canvas after a level is
 // finished (before the dashboard). Hidden off-canvas <video>, played + drawn.
+const INTRO_VIDEO = "Simulate_yellow_line_rotate_202607021410.mp4";   // plays between the cover and the instructions
 const cutsceneVideo = document.createElement("video");
 cutsceneVideo.preload = "auto"; cutsceneVideo.playsInline = true;
 cutsceneVideo.setAttribute("playsinline", "");
@@ -5342,11 +5343,17 @@ function drawWin() {
 
 // Start a level's victory cutscene: pause the music, play + draw the video.
 // Falls back to muted (then to skipping) if autoplay is blocked.
-function startCutscene(path) {
+let cutsceneNext = "levelcomplete";   // state to enter when the cutscene ends/skips
+// opts.next  -> state after the cutscene (default "levelcomplete")
+// opts.music -> mute the video and play the level track over it (intro), else use the video's own audio
+function startCutscene(path, opts) {
+  opts = opts || {};
   cutsceneDone = false;
+  cutsceneNext = opts.next || "levelcomplete";
   if (cutsceneVideo.dataset.path !== path) { cutsceneVideo.src = path; cutsceneVideo.dataset.path = path; }
   try { cutsceneVideo.currentTime = 0; } catch (e) {}
-  Music.stop();
+  if (opts.music) { cutsceneVideo.muted = true; Music.start(); }   // play the level mp3 over the (silent) intro video
+  else Music.stop();
   state = "cutscene";
   const pr = cutsceneVideo.play();
   if (pr && pr.catch) pr.catch(() => {
@@ -5359,7 +5366,7 @@ function endCutscene() {
   if (cutsceneDone) return; cutsceneDone = true;
   try { cutsceneVideo.pause(); } catch (e) {}
   Music.start();
-  state = "levelcomplete";   // continue to the Mountain Progress dashboard
+  state = cutsceneNext;
 }
 function drawCutscene() {
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
